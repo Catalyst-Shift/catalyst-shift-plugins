@@ -1,7 +1,6 @@
 ---
 name: catalyst-shift-docs
 description: Generate branded Catalyst Shift business documents — sales proposals, statements of work (SOWs), discovery/diagnostic reports, sales decks, client deliverables, case studies, one-pagers, and internal docs. Use whenever Kevin, Lucas, or Keith asks for a CS-branded document, proposal, deck, SOW, writeup, leave-behind, deliverable, or any client-facing or internal CS material. Supports HTML, PDF, PPTX, DOCX, and Markdown output.
-user-invocable: true
 ---
 
 # Catalyst Shift — Document Generation

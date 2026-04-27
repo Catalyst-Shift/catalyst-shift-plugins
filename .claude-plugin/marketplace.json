@@ -4,11 +4,11 @@
     "name": "Catalyst Shift",
     "email": "kevin@catalystshift.ai"
   },
-  "description": "Internal Claude Code plugins for the team",
+  "description": "Internal Catalyst Shift plugins for Claude Cowork and Claude Code.",
   "plugins": [
     {
       "name": "design-skill",
-      "description": "Team design skill",
+      "description": "Catalyst Shift branded document generation skill.",
       "version": "1.0.0",
       "source": {
         "type": "local",

@@ -1,5 +1,11 @@
 {
   "name": "design-skill",
   "version": "1.0.0",
-  "description": "Team design skill"
+  "description": "Catalyst Shift branded business document generation — proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, and internal docs. Outputs HTML, PDF, PPTX, DOCX, and Markdown.",
+  "author": {
+    "name": "Catalyst Shift",
+    "email": "kevin@catalystshift.ai"
+  },
+  "homepage": "https://github.com/Catalyst-Shift/catalyst-shift-plugins",
+  "repository": "https://github.com/Catalyst-Shift/catalyst-shift-plugins"
 }
