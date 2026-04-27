@@ -6,99 +6,355 @@
   flexes to any phase deliverable.
 -->
 <html lang="en" data-theme="light">
-<head>
-<meta charset="utf-8">
-<title>{{DELIVERABLE_TITLE}} — {{CLIENT_NAME}} — Catalyst Shift</title>
-<link rel="stylesheet" href="../assets/colors_and_type.css">
-<style>
-  *{box-sizing:border-box;}
-  html,body{margin:0;background:var(--bg);color:var(--text-primary);font-family:var(--font-body);}
-  .page{max-width:780px;margin:0 auto;padding:80px 56px 120px;}
-  .masthead{border-top:2px solid var(--gold);padding-top:20px;margin-bottom:64px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);line-height:1.6;}
-  .masthead .lockup{display:inline-flex;align-items:center;gap:10px;text-decoration:none;}
-  .masthead .lockup .mark{height:24px;width:24px;display:block;flex-shrink:0;}
-  .masthead .lockup .wordmark{font-family:var(--font-display);font-weight:700;font-size:22px;letter-spacing:-.02em;text-transform:none;display:inline-flex;align-items:baseline;gap:2px;line-height:1;}
-  .masthead .lockup .cat{color:var(--text-primary);}
-  .masthead .lockup .sh{color:var(--gold);}
-  .doc-kicker{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:16px;}
-  h1.doc{font-family:var(--font-display);font-weight:700;font-size:clamp(40px,5vw,60px);letter-spacing:-.03em;line-height:1.04;margin:0 0 24px;}
-  .lede{font-family:var(--font-display);font-weight:500;font-size:20px;line-height:1.5;color:var(--text-secondary);max-width:600px;margin:0 0 56px;}
-  .toc{border:1px solid var(--border);background:var(--surface);padding:24px 28px;margin:0 0 64px;border-radius:2px;}
-  .toc .label{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
-  .toc ol{padding-left:0;margin:0;list-style:none;}
-  .toc li{display:grid;grid-template-columns:48px 1fr;gap:12px;font-size:14px;padding:6px 0;border-top:1px dashed var(--border-subtle);}
-  .toc li:first-child{border-top:none;}
-  .toc li .n{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);letter-spacing:.08em;}
-  .toc li a{color:var(--text-secondary);text-decoration:none;}
-  .toc li a:hover{color:var(--gold);}
-  h2.sec{font-family:var(--font-display);font-weight:700;font-size:clamp(26px,2.8vw,36px);letter-spacing:-.02em;line-height:1.1;margin:80px 0 8px;}
-  h2.sec .num{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--gold);margin-bottom:10px;font-weight:500;text-transform:uppercase;}
-  h3{font-family:var(--font-display);font-weight:600;font-size:20px;margin:32px 0 8px;color:var(--text-primary);}
-  h4{font-family:var(--font-mono);font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:24px 0 8px;}
-  p{font-size:16px;line-height:1.7;color:var(--text-secondary);margin:0 0 16px;max-width:600px;}
-  p strong{color:var(--text-primary);font-weight:600;}
-  ul,ol{padding-left:18px;margin:0 0 16px;color:var(--text-secondary);max-width:600px;}
-  li{font-size:15px;line-height:1.65;margin:0 0 6px;}
-  ul li::marker{color:var(--gold);}
-  .callout{background:rgba(200,169,110,.05);border:1px solid rgba(200,169,110,.18);padding:20px 24px;margin:24px 0;border-radius:2px;}
-  .callout .label{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;}
-  .callout p{margin:0;color:var(--text-primary);font-size:15px;}
-  .colophon{margin-top:80px;padding-top:24px;border-top:2px solid var(--gold);font-family:var(--font-mono);font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;}
-  @page{size:Letter;margin:0.7in;}
-  @media print{.page{padding:0;max-width:none;}h2.sec{page-break-after:avoid;}}
-</style>
-</head>
-<body>
-<div class="page">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{DELIVERABLE_TITLE}} — {{CLIENT_NAME}} — Catalyst Shift</title>
+    <link rel="stylesheet" href="../assets/colors_and_type.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text-primary);
+        font-family: var(--font-body);
+      }
+      .page {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 80px 56px 120px;
+      }
+      .masthead {
+        border-top: 2px solid var(--gold);
+        padding-top: 20px;
+        margin-bottom: 64px;
+        display: flex;
+        justify-content: space-between;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+      .masthead .lockup {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+      }
+      .masthead .lockup .mark {
+        height: 24px;
+        width: 24px;
+        display: block;
+        flex-shrink: 0;
+      }
+      .masthead .lockup .wordmark {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+        text-transform: none;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 2px;
+        line-height: 1;
+      }
+      .masthead .lockup .cat {
+        color: var(--text-primary);
+      }
+      .masthead .lockup .sh {
+        color: var(--gold);
+      }
+      .doc-kicker {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 16px;
+      }
+      h1.doc {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: clamp(40px, 5vw, 60px);
+        letter-spacing: -0.03em;
+        line-height: 1.04;
+        margin: 0 0 24px;
+      }
+      .lede {
+        font-family: var(--font-display);
+        font-weight: 500;
+        font-size: 20px;
+        line-height: 1.5;
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin: 0 0 56px;
+      }
+      .toc {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        padding: 24px 28px;
+        margin: 0 0 64px;
+        border-radius: 2px;
+      }
+      .toc .label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 14px;
+      }
+      .toc ol {
+        padding-left: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .toc li {
+        display: grid;
+        grid-template-columns: 48px 1fr;
+        gap: 12px;
+        font-size: 14px;
+        padding: 6px 0;
+        border-top: 1px dashed var(--border-subtle);
+      }
+      .toc li:first-child {
+        border-top: none;
+      }
+      .toc li .n {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
+      }
+      .toc li a {
+        color: var(--text-secondary);
+        text-decoration: none;
+      }
+      .toc li a:hover {
+        color: var(--gold);
+      }
+      h2.sec {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: clamp(26px, 2.8vw, 36px);
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        margin: 80px 0 8px;
+      }
+      h2.sec .num {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        color: var(--gold);
+        margin-bottom: 10px;
+        font-weight: 500;
+        text-transform: uppercase;
+      }
+      h3 {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 20px;
+        margin: 32px 0 8px;
+        color: var(--text-primary);
+      }
+      h4 {
+        font-family: var(--font-mono);
+        font-weight: 500;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin: 24px 0 8px;
+      }
+      p {
+        font-size: 16px;
+        line-height: 1.7;
+        color: var(--text-secondary);
+        margin: 0 0 16px;
+        max-width: 600px;
+      }
+      p strong {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+      ul,
+      ol {
+        padding-left: 18px;
+        margin: 0 0 16px;
+        color: var(--text-secondary);
+        max-width: 600px;
+      }
+      li {
+        font-size: 15px;
+        line-height: 1.65;
+        margin: 0 0 6px;
+      }
+      ul li::marker {
+        color: var(--gold);
+      }
+      .callout {
+        background: rgba(200, 169, 110, 0.05);
+        border: 1px solid rgba(200, 169, 110, 0.18);
+        padding: 20px 24px;
+        margin: 24px 0;
+        border-radius: 2px;
+      }
+      .callout .label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 8px;
+      }
+      .callout p {
+        margin: 0;
+        color: var(--text-primary);
+        font-size: 15px;
+      }
+      .colophon {
+        margin-top: 80px;
+        padding-top: 24px;
+        border-top: 2px solid var(--gold);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-muted);
+        display: flex;
+        justify-content: space-between;
+      }
+      @page {
+        size: Letter;
+        margin: 0.7in;
+      }
+      @media print {
+        .page {
+          padding: 0;
+          max-width: none;
+        }
+        h2.sec {
+          page-break-after: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <div class="lockup">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            class="mark"
+            width="24"
+            height="24"
+            aria-hidden="true"
+          >
+            <rect
+              x="2"
+              y="16.5"
+              width="13"
+              height="3"
+              rx="0.75"
+              fill="#1A9E7A"
+              opacity="0.45"
+            />
+            <rect
+              x="4"
+              y="10.5"
+              width="13"
+              height="3"
+              rx="0.75"
+              fill="#1A9E7A"
+            />
+            <rect
+              x="6"
+              y="4.5"
+              width="13"
+              height="3"
+              rx="0.75"
+              fill="#A08545"
+            />
+          </svg>
+          <span class="wordmark"
+            ><span class="cat">Catalyst</span
+            ><span class="sh">Shift</span></span
+          >
+        </div>
+        <div>{{DELIVERABLE_TYPE}} · {{ISSUE_DATE}}</div>
+      </header>
 
-  <header class="masthead">
-    <div class="lockup">
-      <img src="../assets/mark-light.svg" alt="" class="mark">
-      <span class="wordmark"><span class="cat">Catalyst</span><span class="sh">Shift</span></span>
+      <div class="doc-kicker">{{ENGAGEMENT_PHASE}} · {{CLIENT_NAME}}</div>
+      <h1 class="doc">{{DELIVERABLE_TITLE}}</h1>
+      <p class="lede">
+        {{ONE_PARAGRAPH_FRAMING_WHAT_THIS_DOC_IS_AND_WHO_ITS_FOR_INTERNALLY_AT_THE_CLIENT}}
+      </p>
+
+      <nav class="toc" aria-label="Contents">
+        <div class="label">Contents</div>
+        <ol>
+          <li>
+            <span class="n">§ 01</span><a href="#s1">{{SECTION_1_TITLE}}</a>
+          </li>
+          <li>
+            <span class="n">§ 02</span><a href="#s2">{{SECTION_2_TITLE}}</a>
+          </li>
+          <li>
+            <span class="n">§ 03</span><a href="#s3">{{SECTION_3_TITLE}}</a>
+          </li>
+          <li>
+            <span class="n">§ 04</span><a href="#s4">{{SECTION_4_TITLE}}</a>
+          </li>
+          <li>
+            <span class="n">§ 05</span><a href="#s5">{{SECTION_5_TITLE}}</a>
+          </li>
+        </ol>
+      </nav>
+
+      <h2 class="sec" id="s1">
+        <span class="num">§ 01</span>{{SECTION_1_TITLE}}
+      </h2>
+      <p>{{SECTION_1_BODY}}</p>
+
+      <h2 class="sec" id="s2">
+        <span class="num">§ 02</span>{{SECTION_2_TITLE}}
+      </h2>
+      <p>{{SECTION_2_BODY}}</p>
+
+      <h2 class="sec" id="s3">
+        <span class="num">§ 03</span>{{SECTION_3_TITLE}}
+      </h2>
+      <p>{{SECTION_3_BODY}}</p>
+
+      <h2 class="sec" id="s4">
+        <span class="num">§ 04</span>{{SECTION_4_TITLE}}
+      </h2>
+      <p>{{SECTION_4_BODY}}</p>
+
+      <h2 class="sec" id="s5">
+        <span class="num">§ 05</span>{{SECTION_5_TITLE}}
+      </h2>
+      <p>{{SECTION_5_BODY}}</p>
+
+      <div class="callout">
+        <div class="label">How to use this document</div>
+        <p>
+          {{ONE_PARAGRAPH_ON_HOW_THE_CLIENT_TEAM_SHOULD_USE_THIS_INTERNALLY_WHO_OWNS_WHAT_AND_WHEN_TO_REVISIT}}
+        </p>
+      </div>
+
+      <div class="colophon">
+        <span
+          >Catalyst Shift · catalystshift.ai · Prepared for
+          {{CLIENT_NAME}}</span
+        >
+        <span>{{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}}</span>
+      </div>
     </div>
-    <div>{{DELIVERABLE_TYPE}} · {{ISSUE_DATE}}</div>
-  </header>
-
-  <div class="doc-kicker">{{ENGAGEMENT_PHASE}} · {{CLIENT_NAME}}</div>
-  <h1 class="doc">{{DELIVERABLE_TITLE}}</h1>
-  <p class="lede">{{ONE_PARAGRAPH_FRAMING_WHAT_THIS_DOC_IS_AND_WHO_ITS_FOR_INTERNALLY_AT_THE_CLIENT}}</p>
-
-  <nav class="toc" aria-label="Contents">
-    <div class="label">Contents</div>
-    <ol>
-      <li><span class="n">§ 01</span><a href="#s1">{{SECTION_1_TITLE}}</a></li>
-      <li><span class="n">§ 02</span><a href="#s2">{{SECTION_2_TITLE}}</a></li>
-      <li><span class="n">§ 03</span><a href="#s3">{{SECTION_3_TITLE}}</a></li>
-      <li><span class="n">§ 04</span><a href="#s4">{{SECTION_4_TITLE}}</a></li>
-      <li><span class="n">§ 05</span><a href="#s5">{{SECTION_5_TITLE}}</a></li>
-    </ol>
-  </nav>
-
-  <h2 class="sec" id="s1"><span class="num">§ 01</span>{{SECTION_1_TITLE}}</h2>
-  <p>{{SECTION_1_BODY}}</p>
-
-  <h2 class="sec" id="s2"><span class="num">§ 02</span>{{SECTION_2_TITLE}}</h2>
-  <p>{{SECTION_2_BODY}}</p>
-
-  <h2 class="sec" id="s3"><span class="num">§ 03</span>{{SECTION_3_TITLE}}</h2>
-  <p>{{SECTION_3_BODY}}</p>
-
-  <h2 class="sec" id="s4"><span class="num">§ 04</span>{{SECTION_4_TITLE}}</h2>
-  <p>{{SECTION_4_BODY}}</p>
-
-  <h2 class="sec" id="s5"><span class="num">§ 05</span>{{SECTION_5_TITLE}}</h2>
-  <p>{{SECTION_5_BODY}}</p>
-
-  <div class="callout">
-    <div class="label">How to use this document</div>
-    <p>{{ONE_PARAGRAPH_ON_HOW_THE_CLIENT_TEAM_SHOULD_USE_THIS_INTERNALLY_WHO_OWNS_WHAT_AND_WHEN_TO_REVISIT}}</p>
-  </div>
-
-  <div class="colophon">
-    <span>Catalyst Shift · catalystshift.ai · Prepared for {{CLIENT_NAME}}</span>
-    <span>{{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}}</span>
-  </div>
-
-</div>
-</body>
+  </body>
 </html>

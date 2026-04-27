@@ -1,6 +1,6 @@
 {
   "name": "design-skill",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Catalyst Shift branded business document generation — proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, and internal docs. Outputs HTML, PDF, PPTX, DOCX, and Markdown.",
   "author": {
     "name": "Catalyst Shift",

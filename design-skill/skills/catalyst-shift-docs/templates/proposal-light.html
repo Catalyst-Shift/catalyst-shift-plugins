@@ -12,213 +12,603 @@
   ============================================================
 -->
 <html lang="en" data-theme="light">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Proposal — {{CLIENT_NAME}} — Catalyst Shift</title>
-<link rel="stylesheet" href="../assets/colors_and_type.css">
-<style>
-  *{box-sizing:border-box;}
-  html,body{margin:0;background:var(--bg);color:var(--text-primary);font-family:var(--font-body);-webkit-font-smoothing:antialiased;}
-  ::selection{background:rgba(200,169,110,.25);color:var(--text-primary);}
-  .page{max-width:760px;margin:0 auto;padding:80px 56px 120px;}
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Proposal — {{CLIENT_NAME}} — Catalyst Shift</title>
+    <link rel="stylesheet" href="../assets/colors_and_type.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text-primary);
+        font-family: var(--font-body);
+        -webkit-font-smoothing: antialiased;
+      }
+      ::selection {
+        background: rgba(200, 169, 110, 0.25);
+        color: var(--text-primary);
+      }
+      .page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 80px 56px 120px;
+      }
 
-  /* Masthead */
-  .masthead{border-top:2px solid var(--gold);padding-top:20px;margin-bottom:64px;display:flex;justify-content:space-between;align-items:center;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);line-height:1.6;}
-  .masthead .lockup{display:inline-flex;align-items:center;gap:10px;text-decoration:none;}
-  .masthead .lockup .mark{height:24px;width:24px;display:block;flex-shrink:0;}
-  .masthead .lockup .wordmark{font-family:var(--font-display);font-weight:700;font-size:22px;letter-spacing:-.02em;text-transform:none;display:inline-flex;align-items:baseline;gap:2px;line-height:1;}
-  .masthead .lockup .cat{color:var(--text-primary);}
-  .masthead .lockup .sh{color:var(--gold);}
-  .masthead .meta{text-align:right;line-height:1.5;}
-  .masthead .meta div + div{margin-top:4px;color:var(--text-muted);}
+      /* Masthead */
+      .masthead {
+        border-top: 2px solid var(--gold);
+        padding-top: 20px;
+        margin-bottom: 64px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+      .masthead .lockup {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+      }
+      .masthead .lockup .mark {
+        height: 24px;
+        width: 24px;
+        display: block;
+        flex-shrink: 0;
+      }
+      .masthead .lockup .wordmark {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+        text-transform: none;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 2px;
+        line-height: 1;
+      }
+      .masthead .lockup .cat {
+        color: var(--text-primary);
+      }
+      .masthead .lockup .sh {
+        color: var(--gold);
+      }
+      .masthead .meta {
+        text-align: right;
+        line-height: 1.5;
+      }
+      .masthead .meta div + div {
+        margin-top: 4px;
+        color: var(--text-muted);
+      }
 
-  /* Cover */
-  .doc-kicker{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:16px;}
-  h1.doc{font-family:var(--font-display);font-weight:700;font-size:clamp(40px,5vw,64px);letter-spacing:-.03em;line-height:1.04;margin:0 0 24px;}
-  .lede{font-family:var(--font-display);font-weight:500;font-size:clamp(18px,1.7vw,22px);line-height:1.5;letter-spacing:-.01em;color:var(--text-secondary);max-width:600px;margin:0 0 56px;}
+      /* Cover */
+      .doc-kicker {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 16px;
+      }
+      h1.doc {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: clamp(40px, 5vw, 64px);
+        letter-spacing: -0.03em;
+        line-height: 1.04;
+        margin: 0 0 24px;
+      }
+      .lede {
+        font-family: var(--font-display);
+        font-weight: 500;
+        font-size: clamp(18px, 1.7vw, 22px);
+        line-height: 1.5;
+        letter-spacing: -0.01em;
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin: 0 0 56px;
+      }
 
-  /* Section heads */
-  h2.sec{font-family:var(--font-display);font-weight:700;font-size:clamp(26px,2.6vw,34px);letter-spacing:-.02em;line-height:1.1;margin:80px 0 8px;scroll-margin-top:24px;}
-  h2.sec .num{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--gold);margin-bottom:10px;font-weight:500;text-transform:uppercase;}
+      /* Section heads */
+      h2.sec {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: clamp(26px, 2.6vw, 34px);
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        margin: 80px 0 8px;
+        scroll-margin-top: 24px;
+      }
+      h2.sec .num {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        color: var(--gold);
+        margin-bottom: 10px;
+        font-weight: 500;
+        text-transform: uppercase;
+      }
 
-  /* Body type */
-  h3{font-family:var(--font-display);font-weight:600;font-size:20px;letter-spacing:-.01em;margin:32px 0 8px;color:var(--text-primary);}
-  h4{font-family:var(--font-mono);font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:24px 0 8px;}
-  p{font-size:16px;line-height:1.7;color:var(--text-secondary);margin:0 0 16px;max-width:580px;}
-  p strong{color:var(--text-primary);font-weight:600;}
-  p em{font-style:normal;color:var(--gold);}
-  ul,ol{padding-left:18px;margin:0 0 16px;color:var(--text-secondary);max-width:580px;}
-  li{font-size:15px;line-height:1.65;margin:0 0 6px;}
-  ul li::marker{color:var(--gold);}
-  hr{border:none;border-top:1px solid var(--border);margin:48px 0;}
+      /* Body type */
+      h3 {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 20px;
+        letter-spacing: -0.01em;
+        margin: 32px 0 8px;
+        color: var(--text-primary);
+      }
+      h4 {
+        font-family: var(--font-mono);
+        font-weight: 500;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin: 24px 0 8px;
+      }
+      p {
+        font-size: 16px;
+        line-height: 1.7;
+        color: var(--text-secondary);
+        margin: 0 0 16px;
+        max-width: 580px;
+      }
+      p strong {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+      p em {
+        font-style: normal;
+        color: var(--gold);
+      }
+      ul,
+      ol {
+        padding-left: 18px;
+        margin: 0 0 16px;
+        color: var(--text-secondary);
+        max-width: 580px;
+      }
+      li {
+        font-size: 15px;
+        line-height: 1.65;
+        margin: 0 0 6px;
+      }
+      ul li::marker {
+        color: var(--gold);
+      }
+      hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 48px 0;
+      }
 
-  /* Pricing card */
-  .pricing{display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:baseline;background:var(--surface);border:1px solid var(--border);border-left:2px solid var(--gold);padding:28px 32px;margin:24px 0 12px;border-radius:2px;}
-  .pricing .tier{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);}
-  .pricing .what{font-family:var(--font-display);font-weight:600;font-size:18px;color:var(--text-primary);}
-  .pricing .what small{display:block;font-family:var(--font-body);font-weight:400;font-size:13px;color:var(--text-muted);margin-top:4px;}
-  .pricing .fee{font-family:var(--font-display);font-weight:700;font-size:24px;color:var(--text-primary);text-align:right;}
-  .pricing .fee small{display:block;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-top:4px;}
+      /* Pricing card */
+      .pricing {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 24px;
+        align-items: baseline;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 2px solid var(--gold);
+        padding: 28px 32px;
+        margin: 24px 0 12px;
+        border-radius: 2px;
+      }
+      .pricing .tier {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--gold);
+      }
+      .pricing .what {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 18px;
+        color: var(--text-primary);
+      }
+      .pricing .what small {
+        display: block;
+        font-family: var(--font-body);
+        font-weight: 400;
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-top: 4px;
+      }
+      .pricing .fee {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 24px;
+        color: var(--text-primary);
+        text-align: right;
+      }
+      .pricing .fee small {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 4px;
+      }
 
-  /* Guarantee block */
-  .guarantee{background:rgba(45,212,168,.05);border:1px solid rgba(45,212,168,.18);padding:24px 28px;margin:32px 0;border-radius:2px;}
-  .guarantee .label{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin-bottom:10px;}
-  .guarantee p{margin:0 0 8px;font-size:15px;line-height:1.6;color:var(--text-primary);}
-  .guarantee p:last-child{margin:0;}
+      /* Guarantee block */
+      .guarantee {
+        background: rgba(45, 212, 168, 0.05);
+        border: 1px solid rgba(45, 212, 168, 0.18);
+        padding: 24px 28px;
+        margin: 32px 0;
+        border-radius: 2px;
+      }
+      .guarantee .label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--teal);
+        margin-bottom: 10px;
+      }
+      .guarantee p {
+        margin: 0 0 8px;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--text-primary);
+      }
+      .guarantee p:last-child {
+        margin: 0;
+      }
 
-  /* Differentiator pull */
-  .pull{font-family:var(--font-display);font-weight:600;font-size:24px;line-height:1.3;color:var(--text-primary);margin:32px 0;padding-left:20px;border-left:2px solid var(--gold);max-width:600px;letter-spacing:-.01em;}
-  .pull .a{color:var(--gold);}
-  .pull .b{color:var(--teal);}
+      /* Differentiator pull */
+      .pull {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 24px;
+        line-height: 1.3;
+        color: var(--text-primary);
+        margin: 32px 0;
+        padding-left: 20px;
+        border-left: 2px solid var(--gold);
+        max-width: 600px;
+        letter-spacing: -0.01em;
+      }
+      .pull .a {
+        color: var(--gold);
+      }
+      .pull .b {
+        color: var(--teal);
+      }
 
-  /* Outcomes table */
-  table.outcomes{width:100%;border-collapse:collapse;margin:16px 0 24px;font-size:14px;}
-  table.outcomes th, table.outcomes td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top;}
-  table.outcomes th{font-family:var(--font-mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);background:var(--surface);}
-  table.outcomes td{color:var(--text-secondary);}
-  table.outcomes td.metric{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--text-primary);white-space:nowrap;}
+      /* Outcomes table */
+      table.outcomes {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0 24px;
+        font-size: 14px;
+      }
+      table.outcomes th,
+      table.outcomes td {
+        text-align: left;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      table.outcomes th {
+        font-family: var(--font-mono);
+        font-weight: 500;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        background: var(--surface);
+      }
+      table.outcomes td {
+        color: var(--text-secondary);
+      }
+      table.outcomes td.metric {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
 
-  /* Sign-off */
-  .signoff{margin-top:80px;padding-top:32px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:48px;}
-  .signoff .col h4{margin-top:0;}
-  .signoff .sigline{margin-top:48px;border-top:1px solid var(--border);padding-top:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--text-muted);}
+      /* Sign-off */
+      .signoff {
+        margin-top: 80px;
+        padding-top: 32px;
+        border-top: 1px solid var(--border);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 48px;
+      }
+      .signoff .col h4 {
+        margin-top: 0;
+      }
+      .signoff .sigline {
+        margin-top: 48px;
+        border-top: 1px solid var(--border);
+        padding-top: 8px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+      }
 
-  /* Colophon */
-  .colophon{margin-top:96px;padding-top:24px;border-top:2px solid var(--gold);font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--text-muted);display:flex;justify-content:space-between;}
+      /* Colophon */
+      .colophon {
+        margin-top: 96px;
+        padding-top: 24px;
+        border-top: 2px solid var(--gold);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        display: flex;
+        justify-content: space-between;
+      }
 
-  /* Print */
-  @page{size:Letter;margin:0.7in;}
-  @media print{
-    .page{padding:0;max-width:none;}
-    h2.sec{page-break-after:avoid;}
-    .pricing,.guarantee,.signoff{page-break-inside:avoid;}
-    a{color:inherit;text-decoration:none;}
-  }
-</style>
-</head>
-<body>
-<div class="page">
+      /* Print */
+      @page {
+        size: Letter;
+        margin: 0.7in;
+      }
+      @media print {
+        .page {
+          padding: 0;
+          max-width: none;
+        }
+        h2.sec {
+          page-break-after: avoid;
+        }
+        .pricing,
+        .guarantee,
+        .signoff {
+          page-break-inside: avoid;
+        }
+        a {
+          color: inherit;
+          text-decoration: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <!-- =============== MASTHEAD =============== -->
+      <header class="masthead">
+        <div class="lockup">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            class="mark"
+            width="24"
+            height="24"
+            aria-hidden="true"
+          >
+            <rect
+              x="2"
+              y="16.5"
+              width="13"
+              height="3"
+              rx="0.75"
+              fill="#1A9E7A"
+              opacity="0.45"
+            />
+            <rect
+              x="4"
+              y="10.5"
+              width="13"
+              height="3"
+              rx="0.75"
+              fill="#1A9E7A"
+            />
+            <rect
+              x="6"
+              y="4.5"
+              width="13"
+              height="3"
+              rx="0.75"
+              fill="#A08545"
+            />
+          </svg>
+          <span class="wordmark"
+            ><span class="cat">Catalyst</span
+            ><span class="sh">Shift</span></span
+          >
+        </div>
+        <div class="meta">
+          <div>Proposal · {{DOC_NUMBER}}</div>
+          <div>{{ISSUE_DATE}}</div>
+        </div>
+      </header>
 
-  <!-- =============== MASTHEAD =============== -->
-  <header class="masthead">
-    <div class="lockup">
-      <img src="../assets/mark-light.svg" alt="" class="mark">
-      <span class="wordmark"><span class="cat">Catalyst</span><span class="sh">Shift</span></span>
+      <!-- =============== COVER =============== -->
+      <div class="doc-kicker">Proposal · Prepared for {{CLIENT_NAME}}</div>
+      <h1 class="doc">{{ENGAGEMENT_HEADLINE}}</h1>
+      <p class="lede">{{ONE_LINE_SUMMARY_OF_WHAT_WE_RECOMMEND_AND_WHY}}</p>
+
+      <!-- =============== § 01 — CONTEXT =============== -->
+      <h2 class="sec"><span class="num">§ 01 · Context</span>What we heard</h2>
+      <p>
+        {{2-3_SENTENCES_RESTATING_THE_CLIENTS_PROBLEM_IN_THEIR_OWN_LANGUAGE_FROM_THE_DISCOVERY_CALL}}
+      </p>
+      <p>{{1-2_SENTENCES_NAMING_THE_UNDERLYING_PROBLEM_BEHIND_THE_SYMPTOMS}}</p>
+
+      <!-- =============== § 02 — RECOMMENDATION =============== -->
+      <h2 class="sec">
+        <span class="num">§ 02 · Recommendation</span>What we propose
+      </h2>
+      <p>
+        We recommend the <strong>{{TIER_NAME}}</strong> engagement:
+        {{ONE_LINE_DESCRIPTION_OF_TIER_OUTCOME}}.
+      </p>
+
+      <div class="pricing">
+        <div class="tier">{{TIER_CODE}}</div>
+        <div class="what">{{TIER_NAME}}<small>{{TIER_ONE_LINE}}</small></div>
+        <div class="fee">${{FEE}}<small>{{DURATION}}</small></div>
+      </div>
+
+      <p>
+        <strong>Most engagements continue</strong> on a platform retainer of
+        {{RETAINER_RANGE}} per month after implementation. Optional, scoped
+        after handoff.
+      </p>
+
+      <!-- =============== § 03 — APPROACH =============== -->
+      <h2 class="sec"><span class="num">§ 03 · Approach</span>How we work</h2>
+
+      <p class="pull">
+        <span class="a">Kevin builds the engine that generates leads.</span>
+        <span class="b">Lucas builds the engine that closes them.</span>
+      </p>
+
+      <p>
+        {{1-2_SENTENCES_ON_HOW_THE_PAIR_APPLIES_TO_THIS_SPECIFIC_CLIENT_PROBLEM}}
+      </p>
+
+      <h3>What gets installed</h3>
+      <ul>
+        <li>
+          <strong>{{DELIVERABLE_1_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}
+        </li>
+        <li>
+          <strong>{{DELIVERABLE_2_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}
+        </li>
+        <li>
+          <strong>{{DELIVERABLE_3_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}
+        </li>
+        <li>
+          <strong>{{DELIVERABLE_4_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}
+        </li>
+      </ul>
+
+      <h3>Timeline</h3>
+      <h4>Week 0 — Onboarding</h4>
+      <p>{{WHAT_HAPPENS_BEFORE_WORK_BEGINS}}</p>
+      <h4>Weeks 1–{{X}} — {{PHASE_NAME}}</h4>
+      <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
+      <h4>Weeks {{X+1}}–{{Y}} — {{PHASE_NAME}}</h4>
+      <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
+      <h4>Week {{FINAL}} — Handoff</h4>
+      <p>{{WHAT_THE_CLIENT_OWNS_AT_HANDOFF_AND_HOW_WE_TRANSITION}}</p>
+
+      <!-- =============== § 04 — OUTCOMES & GUARANTEE =============== -->
+      <h2 class="sec">
+        <span class="num">§ 04 · Outcomes</span>What success looks like — in
+        writing
+      </h2>
+
+      <p>
+        Every Catalyst Shift engagement defines measurable outcomes before the
+        work begins. If we miss them, we keep working at no cost until we hit
+        them. Here's what we're committing to for {{CLIENT_NAME}}:
+      </p>
+
+      <table class="outcomes">
+        <thead>
+          <tr>
+            <th>Outcome</th>
+            <th>Metric</th>
+            <th>By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{OUTCOME_1}}</td>
+            <td class="metric">{{TARGET_1}}</td>
+            <td class="metric">{{DEADLINE_1}}</td>
+          </tr>
+          <tr>
+            <td>{{OUTCOME_2}}</td>
+            <td class="metric">{{TARGET_2}}</td>
+            <td class="metric">{{DEADLINE_2}}</td>
+          </tr>
+          <tr>
+            <td>{{OUTCOME_3}}</td>
+            <td class="metric">{{TARGET_3}}</td>
+            <td class="metric">{{DEADLINE_3}}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="guarantee">
+        <div class="label">Guarantee · in writing</div>
+        <p>
+          If we have not delivered on the outcomes above by {{FINAL_DEADLINE}},
+          we continue the engagement at no additional cost until the metrics are
+          met or both parties agree to stop.
+        </p>
+      </div>
+
+      <!-- =============== § 05 — INVESTMENT =============== -->
+      <h2 class="sec">
+        <span class="num">§ 05 · Investment</span>Fees and terms
+      </h2>
+
+      <h4>Implementation</h4>
+      <p>
+        <strong>${{FEE}}</strong>, fixed fee. {{PAYMENT_SCHEDULE_DEFAULT_50_50}}
+      </p>
+
+      <h4>Platform retainer (optional, post-handoff)</h4>
+      <p>
+        <strong>{{RETAINER_RANGE}}/month.</strong> Scoped during the final two
+        weeks of implementation. Cancel with 30 days' notice.
+      </p>
+
+      <h4>What's not included</h4>
+      <p>{{ANY_THIRD_PARTY_TOOLING_AD_SPEND_OR_SCOPE_EXCLUSIONS}}</p>
+
+      <!-- =============== § 06 — NEXT STEPS =============== -->
+      <h2 class="sec">
+        <span class="num">§ 06 · Next steps</span>To move forward
+      </h2>
+      <ol>
+        <li>
+          Confirm acceptance of this proposal in writing (reply to this email or
+          sign below).
+        </li>
+        <li>
+          We send a Statement of Work mirroring the scope and outcomes above.
+        </li>
+        <li>Onboarding call scheduled within 5 business days of signing.</li>
+        <li>Implementation begins {{TARGET_START_DATE}}.</li>
+      </ol>
+
+      <!-- =============== SIGN-OFF =============== -->
+      <div class="signoff">
+        <div class="col">
+          <h4>For Catalyst Shift</h4>
+          <p>{{CS_LEAD_NAME}}<br />{{CS_LEAD_ROLE}}<br />{{CS_LEAD_EMAIL}}</p>
+          <div class="sigline">Signature · Date</div>
+        </div>
+        <div class="col">
+          <h4>For {{CLIENT_NAME}}</h4>
+          <p>{{CLIENT_SIGNER_NAME}}<br />{{CLIENT_SIGNER_ROLE}}</p>
+          <div class="sigline">Signature · Date</div>
+        </div>
+      </div>
+
+      <!-- =============== COLOPHON =============== -->
+      <div class="colophon">
+        <span>Catalyst Shift · catalystshift.ai</span>
+        <span>Proposal · {{DOC_NUMBER}}</span>
+      </div>
     </div>
-    <div class="meta">
-      <div>Proposal · {{DOC_NUMBER}}</div>
-      <div>{{ISSUE_DATE}}</div>
-    </div>
-  </header>
-
-  <!-- =============== COVER =============== -->
-  <div class="doc-kicker">Proposal · Prepared for {{CLIENT_NAME}}</div>
-  <h1 class="doc">{{ENGAGEMENT_HEADLINE}}</h1>
-  <p class="lede">{{ONE_LINE_SUMMARY_OF_WHAT_WE_RECOMMEND_AND_WHY}}</p>
-
-  <!-- =============== § 01 — CONTEXT =============== -->
-  <h2 class="sec"><span class="num">§ 01 · Context</span>What we heard</h2>
-  <p>{{2-3_SENTENCES_RESTATING_THE_CLIENTS_PROBLEM_IN_THEIR_OWN_LANGUAGE_FROM_THE_DISCOVERY_CALL}}</p>
-  <p>{{1-2_SENTENCES_NAMING_THE_UNDERLYING_PROBLEM_BEHIND_THE_SYMPTOMS}}</p>
-
-  <!-- =============== § 02 — RECOMMENDATION =============== -->
-  <h2 class="sec"><span class="num">§ 02 · Recommendation</span>What we propose</h2>
-  <p>We recommend the <strong>{{TIER_NAME}}</strong> engagement: {{ONE_LINE_DESCRIPTION_OF_TIER_OUTCOME}}.</p>
-
-  <div class="pricing">
-    <div class="tier">{{TIER_CODE}}</div>
-    <div class="what">{{TIER_NAME}}<small>{{TIER_ONE_LINE}}</small></div>
-    <div class="fee">${{FEE}}<small>{{DURATION}}</small></div>
-  </div>
-
-  <p><strong>Most engagements continue</strong> on a platform retainer of {{RETAINER_RANGE}} per month after implementation. Optional, scoped after handoff.</p>
-
-  <!-- =============== § 03 — APPROACH =============== -->
-  <h2 class="sec"><span class="num">§ 03 · Approach</span>How we work</h2>
-
-  <p class="pull"><span class="a">Kevin builds the engine that generates leads.</span> <span class="b">Lucas builds the engine that closes them.</span></p>
-
-  <p>{{1-2_SENTENCES_ON_HOW_THE_PAIR_APPLIES_TO_THIS_SPECIFIC_CLIENT_PROBLEM}}</p>
-
-  <h3>What gets installed</h3>
-  <ul>
-    <li><strong>{{DELIVERABLE_1_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
-    <li><strong>{{DELIVERABLE_2_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
-    <li><strong>{{DELIVERABLE_3_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
-    <li><strong>{{DELIVERABLE_4_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
-  </ul>
-
-  <h3>Timeline</h3>
-  <h4>Week 0 — Onboarding</h4>
-  <p>{{WHAT_HAPPENS_BEFORE_WORK_BEGINS}}</p>
-  <h4>Weeks 1–{{X}} — {{PHASE_NAME}}</h4>
-  <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
-  <h4>Weeks {{X+1}}–{{Y}} — {{PHASE_NAME}}</h4>
-  <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
-  <h4>Week {{FINAL}} — Handoff</h4>
-  <p>{{WHAT_THE_CLIENT_OWNS_AT_HANDOFF_AND_HOW_WE_TRANSITION}}</p>
-
-  <!-- =============== § 04 — OUTCOMES & GUARANTEE =============== -->
-  <h2 class="sec"><span class="num">§ 04 · Outcomes</span>What success looks like — in writing</h2>
-
-  <p>Every Catalyst Shift engagement defines measurable outcomes before the work begins. If we miss them, we keep working at no cost until we hit them. Here's what we're committing to for {{CLIENT_NAME}}:</p>
-
-  <table class="outcomes">
-    <thead><tr><th>Outcome</th><th>Metric</th><th>By</th></tr></thead>
-    <tbody>
-      <tr><td>{{OUTCOME_1}}</td><td class="metric">{{TARGET_1}}</td><td class="metric">{{DEADLINE_1}}</td></tr>
-      <tr><td>{{OUTCOME_2}}</td><td class="metric">{{TARGET_2}}</td><td class="metric">{{DEADLINE_2}}</td></tr>
-      <tr><td>{{OUTCOME_3}}</td><td class="metric">{{TARGET_3}}</td><td class="metric">{{DEADLINE_3}}</td></tr>
-    </tbody>
-  </table>
-
-  <div class="guarantee">
-    <div class="label">Guarantee · in writing</div>
-    <p>If we have not delivered on the outcomes above by {{FINAL_DEADLINE}}, we continue the engagement at no additional cost until the metrics are met or both parties agree to stop.</p>
-  </div>
-
-  <!-- =============== § 05 — INVESTMENT =============== -->
-  <h2 class="sec"><span class="num">§ 05 · Investment</span>Fees and terms</h2>
-
-  <h4>Implementation</h4>
-  <p><strong>${{FEE}}</strong>, fixed fee. {{PAYMENT_SCHEDULE_DEFAULT_50_50}}</p>
-
-  <h4>Platform retainer (optional, post-handoff)</h4>
-  <p><strong>{{RETAINER_RANGE}}/month.</strong> Scoped during the final two weeks of implementation. Cancel with 30 days' notice.</p>
-
-  <h4>What's not included</h4>
-  <p>{{ANY_THIRD_PARTY_TOOLING_AD_SPEND_OR_SCOPE_EXCLUSIONS}}</p>
-
-  <!-- =============== § 06 — NEXT STEPS =============== -->
-  <h2 class="sec"><span class="num">§ 06 · Next steps</span>To move forward</h2>
-  <ol>
-    <li>Confirm acceptance of this proposal in writing (reply to this email or sign below).</li>
-    <li>We send a Statement of Work mirroring the scope and outcomes above.</li>
-    <li>Onboarding call scheduled within 5 business days of signing.</li>
-    <li>Implementation begins {{TARGET_START_DATE}}.</li>
-  </ol>
-
-  <!-- =============== SIGN-OFF =============== -->
-  <div class="signoff">
-    <div class="col">
-      <h4>For Catalyst Shift</h4>
-      <p>{{CS_LEAD_NAME}}<br>{{CS_LEAD_ROLE}}<br>{{CS_LEAD_EMAIL}}</p>
-      <div class="sigline">Signature · Date</div>
-    </div>
-    <div class="col">
-      <h4>For {{CLIENT_NAME}}</h4>
-      <p>{{CLIENT_SIGNER_NAME}}<br>{{CLIENT_SIGNER_ROLE}}</p>
-      <div class="sigline">Signature · Date</div>
-    </div>
-  </div>
-
-  <!-- =============== COLOPHON =============== -->
-  <div class="colophon">
-    <span>Catalyst Shift · catalystshift.ai</span>
-    <span>Proposal · {{DOC_NUMBER}}</span>
-  </div>
-
-</div>
-</body>
+  </body>
 </html>

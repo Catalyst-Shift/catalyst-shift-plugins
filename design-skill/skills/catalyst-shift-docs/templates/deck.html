@@ -5,166 +5,504 @@
   Use scripts/make_pptx.py to convert to .pptx.
 -->
 <html lang="en" data-theme="light">
-<head>
-<meta charset="utf-8">
-<title>Sales Deck — Catalyst Shift</title>
-<link rel="stylesheet" href="../assets/colors_and_type.css">
-<style>
-  *{box-sizing:border-box;}
-  html,body{margin:0;background:#1a1a1f;font-family:var(--font-body);}
-  .deck{display:flex;flex-direction:column;align-items:center;gap:32px;padding:48px 0;}
-  section[data-slide]{
-    width:1280px;height:720px;background:var(--bg);color:var(--text-primary);
-    position:relative;display:flex;flex-direction:column;justify-content:center;
-    padding:80px 96px;overflow:hidden;
-  }
-  section[data-slide][data-bg="light"]{background:#F5F2ED;color:#1A1A1F;}
-  section[data-slide][data-bg="gold"]{background:#C8A96E;color:#1A1A1F;}
-  .slide-num{position:absolute;top:32px;right:48px;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--text-muted);text-transform:uppercase;}
-  .slide-mark{position:absolute;top:32px;left:48px;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;}
-  .slide-mark img{height:14px;vertical-align:middle;}
-  .cover-lockup{position:absolute;top:48px;left:96px;display:inline-flex;align-items:center;gap:14px;}
-  .cover-lockup .mark{height:36px;width:36px;display:block;flex-shrink:0;}
-  .cover-lockup .wordmark{font-family:var(--font-display);font-weight:700;font-size:32px;letter-spacing:-.02em;display:inline-flex;align-items:baseline;gap:3px;line-height:1;}
-  .cover-lockup .cat{color:var(--text-primary);}
-  .cover-lockup .sh{color:var(--gold);}
-  section[data-slide][data-bg="light"] .cover-lockup .cat{color:#1A1A1F;}
-  section[data-slide][data-bg="light"] .cover-lockup .sh{color:#A88547;}
-  .kicker{font-family:var(--font-mono);font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:24px;}
-  h1{font-family:var(--font-display);font-weight:700;font-size:88px;letter-spacing:-.03em;line-height:.98;margin:0 0 24px;max-width:1000px;}
-  h2{font-family:var(--font-display);font-weight:700;font-size:64px;letter-spacing:-.025em;line-height:1.05;margin:0 0 24px;max-width:1000px;}
-  p.lede{font-family:var(--font-display);font-weight:500;font-size:28px;line-height:1.4;color:var(--text-secondary);max-width:900px;margin:0;}
-  p{font-size:22px;line-height:1.55;color:var(--text-secondary);max-width:900px;}
-  ul{padding-left:24px;}
-  ul li{font-size:22px;line-height:1.55;color:var(--text-secondary);margin:0 0 12px;max-width:900px;}
-  ul li::marker{color:var(--gold);}
-  .pull{font-family:var(--font-display);font-weight:600;font-size:48px;line-height:1.2;letter-spacing:-.02em;max-width:1000px;}
-  .pull .a{color:var(--gold);}
-  .pull .b{color:var(--teal);}
-  .threecol{display:grid;grid-template-columns:1fr 1fr 1fr;gap:48px;margin-top:32px;}
-  .threecol .col{}
-  .threecol .col .num{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-bottom:12px;}
-  .threecol .col h3{font-family:var(--font-display);font-weight:600;font-size:28px;letter-spacing:-.01em;margin:0 0 12px;color:var(--text-primary);}
-  .threecol .col p{font-size:18px;line-height:1.55;color:var(--text-secondary);margin:0;}
-  .pricing-row{display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:baseline;background:var(--surface);border:1px solid var(--border);border-left:2px solid var(--gold);padding:24px 32px;margin:12px 0;border-radius:2px;}
-  .pricing-row .tier{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;}
-  .pricing-row .name{font-family:var(--font-display);font-weight:600;font-size:24px;color:var(--text-primary);}
-  .pricing-row .name small{display:block;font-family:var(--font-body);font-weight:400;font-size:16px;color:var(--text-muted);margin-top:4px;}
-  .pricing-row .fee{font-family:var(--font-display);font-weight:700;font-size:28px;color:var(--text-primary);}
-  .footnote{position:absolute;bottom:32px;left:96px;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--text-muted);}
-  @media print{
-    @page{size:1280px 720px;margin:0;}
-    body{background:#fff;}
-    .deck{padding:0;gap:0;}
-    section[data-slide]{page-break-after:always;}
-  }
-</style>
-</head>
-<body>
-<div class="deck">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sales Deck — Catalyst Shift</title>
+    <link rel="stylesheet" href="../assets/colors_and_type.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: #1a1a1f;
+        font-family: var(--font-body);
+      }
+      .deck {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 32px;
+        padding: 48px 0;
+      }
+      section[data-slide] {
+        width: 1280px;
+        height: 720px;
+        background: var(--bg);
+        color: var(--text-primary);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 80px 96px;
+        overflow: hidden;
+      }
+      section[data-slide][data-bg="light"] {
+        background: #f5f2ed;
+        color: #1a1a1f;
+      }
+      section[data-slide][data-bg="gold"] {
+        background: #c8a96e;
+        color: #1a1a1f;
+      }
+      .slide-num {
+        position: absolute;
+        top: 32px;
+        right: 48px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        color: var(--text-muted);
+        text-transform: uppercase;
+      }
+      .slide-mark {
+        position: absolute;
+        top: 32px;
+        left: 48px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        color: var(--gold);
+        text-transform: uppercase;
+      }
+      .slide-mark img {
+        height: 14px;
+        vertical-align: middle;
+      }
+      .cover-lockup {
+        position: absolute;
+        top: 48px;
+        left: 96px;
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .cover-lockup .mark {
+        height: 36px;
+        width: 36px;
+        display: block;
+        flex-shrink: 0;
+      }
+      .cover-lockup .wordmark {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 32px;
+        letter-spacing: -0.02em;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 3px;
+        line-height: 1;
+      }
+      .cover-lockup .cat {
+        color: var(--text-primary);
+      }
+      .cover-lockup .sh {
+        color: var(--gold);
+      }
+      section[data-slide][data-bg="light"] .cover-lockup .cat {
+        color: #1a1a1f;
+      }
+      section[data-slide][data-bg="light"] .cover-lockup .sh {
+        color: #a88547;
+      }
+      .kicker {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 24px;
+      }
+      h1 {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 88px;
+        letter-spacing: -0.03em;
+        line-height: 0.98;
+        margin: 0 0 24px;
+        max-width: 1000px;
+      }
+      h2 {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 64px;
+        letter-spacing: -0.025em;
+        line-height: 1.05;
+        margin: 0 0 24px;
+        max-width: 1000px;
+      }
+      p.lede {
+        font-family: var(--font-display);
+        font-weight: 500;
+        font-size: 28px;
+        line-height: 1.4;
+        color: var(--text-secondary);
+        max-width: 900px;
+        margin: 0;
+      }
+      p {
+        font-size: 22px;
+        line-height: 1.55;
+        color: var(--text-secondary);
+        max-width: 900px;
+      }
+      ul {
+        padding-left: 24px;
+      }
+      ul li {
+        font-size: 22px;
+        line-height: 1.55;
+        color: var(--text-secondary);
+        margin: 0 0 12px;
+        max-width: 900px;
+      }
+      ul li::marker {
+        color: var(--gold);
+      }
+      .pull {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 48px;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        max-width: 1000px;
+      }
+      .pull .a {
+        color: var(--gold);
+      }
+      .pull .b {
+        color: var(--teal);
+      }
+      .threecol {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 48px;
+        margin-top: 32px;
+      }
+      .threecol .col {
+      }
+      .threecol .col .num {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        color: var(--gold);
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+      .threecol .col h3 {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 28px;
+        letter-spacing: -0.01em;
+        margin: 0 0 12px;
+        color: var(--text-primary);
+      }
+      .threecol .col p {
+        font-size: 18px;
+        line-height: 1.55;
+        color: var(--text-secondary);
+        margin: 0;
+      }
+      .pricing-row {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 24px;
+        align-items: baseline;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 2px solid var(--gold);
+        padding: 24px 32px;
+        margin: 12px 0;
+        border-radius: 2px;
+      }
+      .pricing-row .tier {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        color: var(--gold);
+        text-transform: uppercase;
+      }
+      .pricing-row .name {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 24px;
+        color: var(--text-primary);
+      }
+      .pricing-row .name small {
+        display: block;
+        font-family: var(--font-body);
+        font-weight: 400;
+        font-size: 16px;
+        color: var(--text-muted);
+        margin-top: 4px;
+      }
+      .pricing-row .fee {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 28px;
+        color: var(--text-primary);
+      }
+      .footnote {
+        position: absolute;
+        bottom: 32px;
+        left: 96px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+      }
+      @media print {
+        @page {
+          size: 1280px 720px;
+          margin: 0;
+        }
+        body {
+          background: #fff;
+        }
+        .deck {
+          padding: 0;
+          gap: 0;
+        }
+        section[data-slide] {
+          page-break-after: always;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="deck">
+      <!-- =============== SLIDE 01 — COVER =============== -->
+      <section data-slide data-bg="dark">
+        <div class="cover-lockup">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            class="mark"
+            width="24"
+            height="24"
+            aria-hidden="true"
+          >
+            <rect
+              x="2"
+              y="16.5"
+              width="13"
+              height="3"
+              rx="0.75"
+              fill="#2DD4A8"
+              opacity="0.45"
+            />
+            <rect
+              x="4"
+              y="10.5"
+              width="13"
+              height="3"
+              rx="0.75"
+              fill="#2DD4A8"
+            />
+            <rect
+              x="6"
+              y="4.5"
+              width="13"
+              height="3"
+              rx="0.75"
+              fill="#C8A96E"
+            />
+          </svg>
+          <span class="wordmark"
+            ><span class="cat">Catalyst</span
+            ><span class="sh">Shift</span></span
+          >
+        </div>
+        <div class="slide-num">01 / {{TOTAL}}</div>
+        <div class="kicker">For {{CLIENT_NAME}} · {{DATE}}</div>
+        <h1>{{DECK_HEADLINE_ONE_LINE_HOOK}}</h1>
+        <p class="lede">{{ONE_LINE_SUBHEAD_NAMING_THE_OFFER_OR_THESIS}}</p>
+      </section>
 
-<!-- =============== SLIDE 01 — COVER =============== -->
-<section data-slide data-bg="dark">
-  <div class="cover-lockup">
-    <img src="../assets/mark-dark.svg" alt="" class="mark">
-    <span class="wordmark"><span class="cat">Catalyst</span><span class="sh">Shift</span></span>
-  </div>
-  <div class="slide-num">01 / {{TOTAL}}</div>
-  <div class="kicker">For {{CLIENT_NAME}} · {{DATE}}</div>
-  <h1>{{DECK_HEADLINE_ONE_LINE_HOOK}}</h1>
-  <p class="lede">{{ONE_LINE_SUBHEAD_NAMING_THE_OFFER_OR_THESIS}}</p>
-</section>
+      <!-- =============== SLIDE 02 — THE PROBLEM =============== -->
+      <section data-slide>
+        <div class="slide-mark">§ 02 · The problem</div>
+        <div class="slide-num">02 / {{TOTAL}}</div>
+        <h2>{{PROBLEM_HEADLINE_NAMING_WHAT_THE_PROSPECT_FEELS}}</h2>
+        <p class="lede">
+          {{2_SENTENCE_DESCRIPTION_OF_THE_PROBLEM_IN_THEIR_LANGUAGE}}
+        </p>
+      </section>
 
-<!-- =============== SLIDE 02 — THE PROBLEM =============== -->
-<section data-slide>
-  <div class="slide-mark">§ 02 · The problem</div>
-  <div class="slide-num">02 / {{TOTAL}}</div>
-  <h2>{{PROBLEM_HEADLINE_NAMING_WHAT_THE_PROSPECT_FEELS}}</h2>
-  <p class="lede">{{2_SENTENCE_DESCRIPTION_OF_THE_PROBLEM_IN_THEIR_LANGUAGE}}</p>
-</section>
+      <!-- =============== SLIDE 03 — WHO WE ARE =============== -->
+      <section data-slide>
+        <div class="slide-mark">§ 03 · Who we are</div>
+        <div class="slide-num">03 / {{TOTAL}}</div>
+        <div class="kicker">Catalyst Shift</div>
+        <h2>We build growth systems.</h2>
+        <p class="lede">
+          We install the infrastructure that grows your business — whether
+          you're paying attention or not.
+        </p>
+      </section>
 
-<!-- =============== SLIDE 03 — WHO WE ARE =============== -->
-<section data-slide>
-  <div class="slide-mark">§ 03 · Who we are</div>
-  <div class="slide-num">03 / {{TOTAL}}</div>
-  <div class="kicker">Catalyst Shift</div>
-  <h2>A growth firm, not a tech firm.</h2>
-  <p class="lede">We install the infrastructure that grows your business — whether you're paying attention or not.</p>
-</section>
+      <!-- =============== SLIDE 04 — DIFFERENTIATOR =============== -->
+      <section data-slide data-bg="light">
+        <div class="slide-mark">§ 04 · The pair</div>
+        <div class="slide-num">04 / {{TOTAL}}</div>
+        <p class="pull">
+          <span class="a">Kevin builds the engine that generates leads.</span
+          ><br /><span class="b"
+            >Lucas builds the engine that closes them.</span
+          >
+        </p>
+        <p
+          style="
+            margin-top: 32px;
+            color: #5c5850;
+            font-size: 20px;
+            max-width: 900px;
+          "
+        >
+          Most firms do one. We do both, integrated, on a platform you own.
+        </p>
+      </section>
 
-<!-- =============== SLIDE 04 — DIFFERENTIATOR =============== -->
-<section data-slide data-bg="light">
-  <div class="slide-mark">§ 04 · The pair</div>
-  <div class="slide-num">04 / {{TOTAL}}</div>
-  <p class="pull"><span class="a">Kevin builds the engine that generates leads.</span><br><span class="b">Lucas builds the engine that closes them.</span></p>
-  <p style="margin-top:32px;color:#5C5850;font-size:20px;max-width:900px;">Most firms do one. We do both, integrated, on a platform you own.</p>
-</section>
+      <!-- =============== SLIDE 05 — WHAT WE BUILD =============== -->
+      <section data-slide>
+        <div class="slide-mark">§ 05 · What we build</div>
+        <div class="slide-num">05 / {{TOTAL}}</div>
+        <h2>People · Process · Platform</h2>
+        <div class="threecol">
+          <div class="col">
+            <div class="num">01 · People</div>
+            <h3>Senior partners only</h3>
+            <p>
+              Kevin, Lucas, and Keith on every engagement. No junior account
+              managers, no offshore handoff.
+            </p>
+          </div>
+          <div class="col">
+            <div class="num">02 · Process</div>
+            <h3>60–90 days, fixed fee</h3>
+            <p>
+              Install lead-gen and revenue ops infrastructure on a defined
+              timeline, with measurable outcomes guaranteed in writing.
+            </p>
+          </div>
+          <div class="col">
+            <div class="num">03 · Platform</div>
+            <h3>Catalyst OS</h3>
+            <p>
+              The operating layer that runs the systems we install. Yours after
+              handoff.
+            </p>
+          </div>
+        </div>
+      </section>
 
-<!-- =============== SLIDE 05 — WHAT WE BUILD =============== -->
-<section data-slide>
-  <div class="slide-mark">§ 05 · What we build</div>
-  <div class="slide-num">05 / {{TOTAL}}</div>
-  <h2>People · Process · Platform</h2>
-  <div class="threecol">
-    <div class="col"><div class="num">01 · People</div><h3>Senior partners only</h3><p>Kevin, Lucas, and Keith on every engagement. No junior account managers, no offshore handoff.</p></div>
-    <div class="col"><div class="num">02 · Process</div><h3>60–90 days, fixed fee</h3><p>Install lead-gen and revenue ops infrastructure on a defined timeline, with measurable outcomes guaranteed in writing.</p></div>
-    <div class="col"><div class="num">03 · Platform</div><h3>Catalyst OS</h3><p>The operating layer that runs the systems we install. Yours after handoff.</p></div>
-  </div>
-</section>
+      <!-- =============== SLIDE 06 — APPROACH =============== -->
+      <section data-slide>
+        <div class="slide-mark">§ 06 · Approach</div>
+        <div class="slide-num">06 / {{TOTAL}}</div>
+        <h2>How the engagement runs</h2>
+        <ul>
+          <li>
+            <strong>Weeks 1–2 · Onboarding.</strong> Audit current stack, lock
+            outcomes in writing, map the install sequence.
+          </li>
+          <li>
+            <strong>Weeks 3–{{X}} · Build.</strong> Install lead-gen + revenue
+            ops infrastructure. Weekly check-ins, end-of-phase summaries.
+          </li>
+          <li>
+            <strong>Weeks {{X+1}}–{{Y}} · Operate.</strong> Run the systems with
+            your team alongside ours. Tune, document, train.
+          </li>
+          <li>
+            <strong>Final week · Handoff.</strong> Documentation, access,
+            training. You own the infrastructure.
+          </li>
+        </ul>
+      </section>
 
-<!-- =============== SLIDE 06 — APPROACH =============== -->
-<section data-slide>
-  <div class="slide-mark">§ 06 · Approach</div>
-  <div class="slide-num">06 / {{TOTAL}}</div>
-  <h2>How the engagement runs</h2>
-  <ul>
-    <li><strong>Weeks 1–2 · Onboarding.</strong> Audit current stack, lock outcomes in writing, map the install sequence.</li>
-    <li><strong>Weeks 3–{{X}} · Build.</strong> Install lead-gen + revenue ops infrastructure. Weekly check-ins, end-of-phase summaries.</li>
-    <li><strong>Weeks {{X+1}}–{{Y}} · Operate.</strong> Run the systems with your team alongside ours. Tune, document, train.</li>
-    <li><strong>Final week · Handoff.</strong> Documentation, access, training. You own the infrastructure.</li>
-  </ul>
-</section>
+      <!-- =============== SLIDE 07 — PRICING =============== -->
+      <section data-slide>
+        <div class="slide-mark">§ 07 · Engagements</div>
+        <div class="slide-num">07 / {{TOTAL}}</div>
+        <h2>Three ways to start</h2>
+        <div class="pricing-row">
+          <div class="tier">01 · Diagnostic</div>
+          <div class="name">
+            Diagnostic<small>30-day assessment + 90-day plan</small>
+          </div>
+          <div class="fee">$12K</div>
+        </div>
+        <div class="pricing-row">
+          <div class="tier">02 · Foundation</div>
+          <div class="name">
+            Foundation<small>Lead-gen + sales close systems installed</small>
+          </div>
+          <div class="fee">$35K</div>
+        </div>
+        <div class="pricing-row">
+          <div class="tier">03 · Operating Layer</div>
+          <div class="name">
+            Operating Layer<small
+              >Foundation + Catalyst OS, fully integrated</small
+            >
+          </div>
+          <div class="fee">$45K+</div>
+        </div>
+        <p style="margin-top: 24px; font-size: 18px">
+          Most engagements continue on a $3–8K/month platform retainer after
+          implementation.
+        </p>
+      </section>
 
-<!-- =============== SLIDE 07 — PRICING =============== -->
-<section data-slide>
-  <div class="slide-mark">§ 07 · Engagements</div>
-  <div class="slide-num">07 / {{TOTAL}}</div>
-  <h2>Three ways to start</h2>
-  <div class="pricing-row"><div class="tier">01 · Diagnostic</div><div class="name">Diagnostic<small>30-day assessment + 90-day plan</small></div><div class="fee">$12K</div></div>
-  <div class="pricing-row"><div class="tier">02 · Foundation</div><div class="name">Foundation<small>Lead-gen + sales close systems installed</small></div><div class="fee">$35K</div></div>
-  <div class="pricing-row"><div class="tier">03 · Operating Layer</div><div class="name">Operating Layer<small>Foundation + Catalyst OS, fully integrated</small></div><div class="fee">$45K+</div></div>
-  <p style="margin-top:24px;font-size:18px;">Most engagements continue on a $3–8K/month platform retainer after implementation.</p>
-</section>
+      <!-- =============== SLIDE 08 — GUARANTEE =============== -->
+      <section data-slide data-bg="light">
+        <div class="slide-mark" style="color: #a04830">§ 08 · Guarantee</div>
+        <div class="slide-num" style="color: #5c5850">08 / {{TOTAL}}</div>
+        <h2 style="color: #1a1a1f">Outcomes guaranteed in writing.</h2>
+        <p class="lede" style="color: #5c5850">
+          Every engagement defines measurable outcomes before we start. If we
+          miss them, we keep working at no cost until we hit them.
+        </p>
+      </section>
 
-<!-- =============== SLIDE 08 — GUARANTEE =============== -->
-<section data-slide data-bg="light">
-  <div class="slide-mark" style="color:#A04830;">§ 08 · Guarantee</div>
-  <div class="slide-num" style="color:#5C5850;">08 / {{TOTAL}}</div>
-  <h2 style="color:#1A1A1F;">Outcomes guaranteed in writing.</h2>
-  <p class="lede" style="color:#5C5850;">Every engagement defines measurable outcomes before we start. If we miss them, we keep working at no cost until we hit them.</p>
-</section>
+      <!-- =============== SLIDE 09 — RECOMMENDATION =============== -->
+      <section data-slide>
+        <div class="slide-mark">§ 09 · For {{CLIENT_NAME}}</div>
+        <div class="slide-num">09 / {{TOTAL}}</div>
+        <h2>{{RECOMMENDATION_HEADLINE}}</h2>
+        <p class="lede">
+          We'd recommend starting with
+          <strong style="color: var(--gold)">{{TIER_NAME}}</strong>.
+          {{ONE_LINE_WHY_THIS_TIER_FITS_THIS_CLIENT}}.
+        </p>
+      </section>
 
-<!-- =============== SLIDE 09 — RECOMMENDATION =============== -->
-<section data-slide>
-  <div class="slide-mark">§ 09 · For {{CLIENT_NAME}}</div>
-  <div class="slide-num">09 / {{TOTAL}}</div>
-  <h2>{{RECOMMENDATION_HEADLINE}}</h2>
-  <p class="lede">We'd recommend starting with <strong style="color:var(--gold);">{{TIER_NAME}}</strong>. {{ONE_LINE_WHY_THIS_TIER_FITS_THIS_CLIENT}}.</p>
-</section>
-
-<!-- =============== SLIDE 10 — NEXT STEPS =============== -->
-<section data-slide>
-  <div class="slide-mark">§ 10 · Next</div>
-  <div class="slide-num">10 / {{TOTAL}}</div>
-  <h2>Three steps to start</h2>
-  <ul>
-    <li><strong>This week.</strong> Confirm direction. We send a proposal mirroring this scope.</li>
-    <li><strong>Next week.</strong> Sign SOW with outcomes locked in writing.</li>
-    <li><strong>Two weeks out.</strong> Onboarding call. Implementation begins {{TARGET_START_DATE}}.</li>
-  </ul>
-  <div class="footnote">{{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}} · catalystshift.ai</div>
-</section>
-
-</div>
-</body>
+      <!-- =============== SLIDE 10 — NEXT STEPS =============== -->
+      <section data-slide>
+        <div class="slide-mark">§ 10 · Next</div>
+        <div class="slide-num">10 / {{TOTAL}}</div>
+        <h2>Three steps to start</h2>
+        <ul>
+          <li>
+            <strong>This week.</strong> Confirm direction. We send a proposal
+            mirroring this scope.
+          </li>
+          <li>
+            <strong>Next week.</strong> Sign SOW with outcomes locked in
+            writing.
+          </li>
+          <li>
+            <strong>Two weeks out.</strong> Onboarding call. Implementation
+            begins {{TARGET_START_DATE}}.
+          </li>
+        </ul>
+        <div class="footnote">
+          {{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}} · catalystshift.ai
+        </div>
+      </section>
+    </div>
+  </body>
 </html>
