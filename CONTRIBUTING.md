@@ -10,10 +10,7 @@ Three of us maintain this repo: Kevin, Lucas, Keith. Anyone can edit the skill; 
 
 ## Bump the version on every merge
 
-Both files must match. Bump them in the same PR as the change.
-
-- `design-skill/.claude-plugin/plugin.json` → `version`
-- `.claude-plugin/marketplace.json` → `plugins[0].version`
+Bump `version` in `design-skill/.claude-plugin/plugin.json` in the same PR as the change. (`marketplace.json` no longer carries a version field — Cowork's schema doesn't expect one there, only in the plugin manifest.)
 
 Use [semver](https://semver.org/):
 

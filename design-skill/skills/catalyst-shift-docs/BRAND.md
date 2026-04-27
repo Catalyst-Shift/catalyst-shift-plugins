@@ -4,7 +4,7 @@ Distilled from the full `CLAUDE.md` at the project root. Read this before writin
 
 ## Who Catalyst Shift is
 
-A **growth strategy firm**, not a tech firm. Three people:
+**Catalyst Shift builds growth systems.** Three people:
 - **Kevin Townsend** — founder, growth systems. Builds the engine that generates leads.
 - **Lucas Dowd** — revenue ops, 15yr cybersecurity sales. Builds the engine that closes them.
 - **Keith Maselli** — delivery partner, former agency owner. Runs the engagement.
@@ -24,7 +24,7 @@ The implementation is the entry point. The retainer is the default continuation.
 
 ## Locked positioning rules
 
-- **Growth firm, not tech firm.** AI is *how* we work, not *what* we sell. AI never appears in headlines, only in methodology.
+- **Growth systems, not tech.** AI is *how* we work, not *what* we sell. AI never appears in headlines, only in methodology.
 - **Proof over promises.** Pre-revenue, zero retainer clients, no real testimonials yet. Do not fabricate. The honest "no testimonials yet — here's what we stand on" stance is deliberate.
 - **Pricing in public.** Fixed fees, disclosed. No "book a call to discuss investment."
 - **Guarantee in writing.** Every engagement defines measurable outcomes before start. Miss them, we keep working at no cost.
