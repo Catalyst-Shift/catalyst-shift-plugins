@@ -1,0 +1,274 @@
+/* ============================================================
+   Catalyst Shift — Colors & Type Foundations
+   ------------------------------------------------------------
+   Import this in any HTML artifact:
+     <link rel="stylesheet" href="colors_and_type.css" />
+   Then use the CSS vars (--gold, --teal, --bg, etc.) and
+   semantic classes (.h1, .eyebrow, .mono, etc.).
+   ============================================================ */
+
+/* ── Fonts ───────────────────────────────────────────────────
+   General Sans is self-hosted from fonts/ (brand-supplied woff2).
+   DM Sans + IBM Plex Mono are loaded from Google Fonts.
+   ------------------------------------------------------------ */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+@font-face {
+  font-family: 'General Sans';
+  src: url('fonts/GeneralSans-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'General Sans';
+  src: url('fonts/GeneralSans-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'General Sans';
+  src: url('fonts/GeneralSans-Semibold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'General Sans';
+  src: url('fonts/GeneralSans-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ── Backgrounds ── */
+  --bg:                 #0B0B0F; /* page — warm black */
+  --surface:            #12121A; /* cards, elevated content */
+  --surface-elevated:   #1A1A24; /* modals, popovers, card headers */
+
+  /* ── Borders ── */
+  --border:             #252530;
+  --border-subtle:      #1C1C28;
+
+  /* ── Text ── */
+  --text-primary:       #F0ECE4; /* headings — warm linen */
+  --text-secondary:     #9E998F; /* body — aged stone */
+  --text-muted:         #8A8580; /* captions, metadata */
+
+  /* ── Gold — premium/trust layer ── */
+  --gold:               #C8A96E;
+  --gold-hover:         #D4B87A;
+  --gold-muted:         rgba(200, 169, 110, 0.10);
+
+  /* ── Teal — operational intelligence ── */
+  --teal:               #2DD4A8;
+  --teal-dim:           rgba(45, 212, 168, 0.15);
+  --teal-glow:          rgba(45, 212, 168, 0.06);
+
+  /* ── Action — terracotta/urgency ── */
+  --action:             #C05A3C;
+  --action-hover:       #D4664A;
+  --terracotta:         #C05A3C; /* alias for --action */
+
+  /* ── Semantic ── */
+  --success:            #2DD4A8;
+  --warning:            #D4A03C;
+  --error:              #C05A3C;
+  --info:               #6B8FA3;
+
+  /* ── Grid lines ── */
+  --grid-line:          rgba(45, 212, 168, 0.08);
+
+  /* ── Gradients ── */
+  --grad-intelligence:  linear-gradient(90deg, transparent, rgba(45,212,168,0.20), transparent);
+  --grad-gold-divider:  linear-gradient(90deg, transparent, rgba(200,169,110,0.20), transparent);
+  --grad-edge-accent:   linear-gradient(180deg, #C8A96E, #2DD4A8);
+  --grid-mask:          radial-gradient(ellipse 80% 60% at 50% 40%, black 20%, transparent 70%);
+
+  /* ── Font stacks ── */
+  --font-display: 'General Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body:    'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  /* ── Type scale (fluid) ── */
+  --text-hero:  clamp(2.5rem, 5vw, 4rem);       /* 40 → 64 */
+  --text-h1:    clamp(1.75rem, 3.5vw, 2.5rem);  /* 28 → 40 */
+  --text-h2:    clamp(1.25rem, 2.5vw, 1.75rem); /* 20 → 28 */
+  --text-h3:    1.25rem;                        /* 20 */
+  --text-body:  1.0625rem;                      /* 17 */
+  --text-small: 0.875rem;                       /* 14 */
+  --text-label: 0.6875rem;                      /* 11 */
+
+  /* ── Spacing scale (8px base) ── */
+  --space-2xs: 2px;
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 80px;
+  --space-5xl: 120px;
+
+  /* ── Radii ── */
+  --radius-sm: 6px;   /* buttons, inputs */
+  --radius-md: 8px;   /* alerts */
+  --radius-lg: 10px;  /* data / system cards */
+  --radius-xl: 12px;  /* main cards, pricing */
+  --radius-pill: 999px;
+
+  /* ── Elevation (used sparingly — dark theme relies on borders) ── */
+  --shadow-gold-glow:   0 0 24px rgba(200,169,110,0.30);
+  --shadow-teal-glow:   0 0 24px rgba(45,212,168,0.20);
+  --shadow-action-glow: 0 0 24px rgba(192,90,60,0.25);
+  --shadow-card:        0 1px 0 rgba(255,255,255,0.02) inset, 0 20px 40px -20px rgba(0,0,0,0.6);
+
+  /* ── Motion ── */
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit:  cubic-bezier(0.4, 0, 1, 1);
+  --ease-move:  cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-micro:  100ms;
+  --dur-short:  200ms;
+  --dur-medium: 250ms;
+  --dur-long:   400ms;
+
+  /* ── Containers ── */
+  --container-max: 1200px;
+  --body-measure:  580px;
+}
+
+/* ── Light Theme ─────────────────────────────────────────────
+   Opt in via <html data-theme="light"> or a parent container.
+   ------------------------------------------------------------ */
+[data-theme="light"] {
+  --bg:               #F5F2ED;
+  --surface:          #FFFFFF;
+  --surface-elevated: #FAFAF7;
+  --border:           #E0DCD4;
+  --border-subtle:    #EAE7E0;
+  --text-primary:     #1A1A1F;
+  --text-secondary:   #5C5850;
+  --text-muted:       #8C8780;
+  --gold:             #A08545;
+  --teal:             #1A9E7A;
+  --action:           #A04830;
+  --terracotta:       #A04830;
+}
+
+/* ── Base ──────────────────────────────────────────────────── */
+html { color-scheme: dark; }
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Semantic type classes ─────────────────────────────────── */
+.hero,
+h1.hero {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-hero);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--text-primary);
+}
+.h1, h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-h1);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text-primary);
+}
+.h2, h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-h2);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text-primary);
+}
+.h3, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-h3);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+.body, p {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.small, small {
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.eyebrow, .label {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+.mono, code, kbd, samp, pre {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Utility: accent colors ─────────────────────────────────── */
+.text-gold   { color: var(--gold); }
+.text-teal   { color: var(--teal); }
+.text-action { color: var(--action); }
+.text-primary   { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted     { color: var(--text-muted); }
+
+/* ── Dividers ──────────────────────────────────────────────── */
+.divider-intelligence { height: 1px; background: var(--grad-intelligence); }
+.divider-gold         { height: 1px; background: var(--grad-gold-divider); }
+
+/* ── Pulsing status dot ────────────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.status-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: var(--teal);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* ── Grain overlay (apply to any container) ────────────────── */
+.grain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.025;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Reduced motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

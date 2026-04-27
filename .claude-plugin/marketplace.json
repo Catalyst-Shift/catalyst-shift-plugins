@@ -1,0 +1,19 @@
+{
+  "name": "catalyst-shift-plugins",
+  "owner": {
+    "name": "Catalyst Shift",
+    "email": "kevin@catalystshift.ai"
+  },
+  "description": "Internal Claude Code plugins for the team",
+  "plugins": [
+    {
+      "name": "design-skill",
+      "description": "Team design skill",
+      "version": "1.0.0",
+      "source": {
+        "type": "local",
+        "path": "./design-skill"
+      }
+    }
+  ]
+}

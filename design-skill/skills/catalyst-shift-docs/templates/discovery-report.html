@@ -1,0 +1,115 @@
+<!doctype html>
+<!--
+  Catalyst Shift — Discovery / Diagnostic Report Template
+  Sent after a discovery call. Reflects what we heard, names the underlying
+  problem, recommends a path. Should feel like the prospect was understood,
+  not pitched at.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Discovery — {{CLIENT_NAME}} — Catalyst Shift</title>
+<link rel="stylesheet" href="../assets/colors_and_type.css">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text-primary);font-family:var(--font-body);}
+  .page{max-width:760px;margin:0 auto;padding:80px 56px 120px;}
+  .masthead{border-top:2px solid var(--gold);padding-top:20px;margin-bottom:64px;display:flex;justify-content:space-between;align-items:center;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);line-height:1.6;}
+  .masthead .lockup{display:inline-flex;align-items:center;gap:10px;text-decoration:none;}
+  .masthead .lockup .mark{height:24px;width:24px;display:block;flex-shrink:0;}
+  .masthead .lockup .wordmark{font-family:var(--font-display);font-weight:700;font-size:22px;letter-spacing:-.02em;text-transform:none;display:inline-flex;align-items:baseline;gap:2px;line-height:1;}
+  .masthead .lockup .cat{color:var(--text-primary);}
+  .masthead .lockup .sh{color:var(--gold);}
+  .masthead .meta{text-align:right;line-height:1.5;}
+  .doc-kicker{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin-bottom:16px;}
+  h1.doc{font-family:var(--font-display);font-weight:700;font-size:clamp(40px,5vw,60px);letter-spacing:-.03em;line-height:1.04;margin:0 0 24px;}
+  .lede{font-family:var(--font-display);font-weight:500;font-size:20px;line-height:1.5;color:var(--text-secondary);max-width:600px;margin:0 0 56px;}
+  h2.sec{font-family:var(--font-display);font-weight:700;font-size:clamp(24px,2.6vw,32px);letter-spacing:-.02em;line-height:1.1;margin:72px 0 8px;}
+  h2.sec .num{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--gold);margin-bottom:10px;font-weight:500;text-transform:uppercase;}
+  h3{font-family:var(--font-display);font-weight:600;font-size:20px;margin:28px 0 6px;color:var(--text-primary);}
+  h4{font-family:var(--font-mono);font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:24px 0 6px;}
+  p{font-size:16px;line-height:1.7;color:var(--text-secondary);margin:0 0 16px;max-width:600px;}
+  p strong{color:var(--text-primary);font-weight:600;}
+  ul{padding-left:18px;margin:0 0 14px;color:var(--text-secondary);max-width:600px;}
+  li{font-size:15px;line-height:1.65;margin:0 0 6px;}
+  ul li::marker{color:var(--gold);}
+  blockquote{margin:24px 0;padding:16px 24px;border-left:2px solid var(--gold);font-family:var(--font-display);font-style:normal;font-size:18px;line-height:1.5;color:var(--text-primary);max-width:600px;}
+  blockquote cite{display:block;margin-top:8px;font-family:var(--font-mono);font-size:11px;font-style:normal;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);}
+  .findings{display:grid;gap:0;margin:16px 0 24px;}
+  .finding{display:grid;grid-template-columns:60px 1fr;gap:24px;padding:18px 0;border-top:1px solid var(--border);}
+  .finding:last-child{border-bottom:1px solid var(--border);}
+  .finding .n{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--gold);}
+  .finding .name{font-family:var(--font-display);font-weight:600;font-size:17px;color:var(--text-primary);margin:0 0 4px;}
+  .finding .what{font-size:14px;line-height:1.6;color:var(--text-secondary);margin:0;}
+  .recommend{background:var(--surface);border:1px solid var(--border);border-left:2px solid var(--teal);padding:24px 28px;margin:24px 0;border-radius:2px;}
+  .recommend .label{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin-bottom:10px;}
+  .recommend .tier{font-family:var(--font-display);font-weight:600;font-size:22px;color:var(--text-primary);margin:0 0 6px;}
+  .recommend .why{font-size:14px;line-height:1.6;color:var(--text-secondary);margin:0;}
+  .colophon{margin-top:80px;padding-top:24px;border-top:2px solid var(--gold);font-family:var(--font-mono);font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;}
+  @page{size:Letter;margin:0.7in;}
+  @media print{.page{padding:0;max-width:none;}}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="masthead">
+    <div class="lockup">
+      <img src="../assets/mark-dark.svg" alt="" class="mark">
+      <span class="wordmark"><span class="cat">Catalyst</span><span class="sh">Shift</span></span>
+    </div>
+    <div class="meta"><div>Discovery · {{DOC_NUMBER}}</div><div>{{ISSUE_DATE}}</div></div>
+  </header>
+
+  <div class="doc-kicker">Discovery report · {{CLIENT_NAME}}</div>
+  <h1 class="doc">{{HEADLINE_RESTATING_THE_CORE_PROBLEM}}</h1>
+  <p class="lede">{{ONE_PARAGRAPH_FRAMING_WHAT_THIS_DOC_IS_AND_WHY_WE_WROTE_IT_AFTER_THE_CALL}}</p>
+
+  <h2 class="sec"><span class="num">§ 01 · What we heard</span>In your words</h2>
+  <p>{{1-2_SENTENCES_RESTATING_THEIR_SITUATION_FROM_THE_CALL}}</p>
+  <blockquote>"{{DIRECT_QUOTE_FROM_THE_PROSPECT_THAT_CRYSTALLIZES_THE_PROBLEM}}"<cite>{{NAME}} · Discovery call · {{DATE}}</cite></blockquote>
+  <p>{{1-2_SENTENCES_ON_WHY_THIS_QUOTE_MATTERS_AND_WHAT_IT_POINTS_TO}}</p>
+
+  <h2 class="sec"><span class="num">§ 02 · The pattern underneath</span>What's actually happening</h2>
+  <p>{{2-3_SENTENCES_NAMING_THE_UNDERLYING_PROBLEM_DISTINCT_FROM_THE_SYMPTOMS}}</p>
+  <p>{{1-2_SENTENCES_ON_WHY_THE_OBVIOUS_FIXES_HAVENT_WORKED_OR_WONT}}</p>
+
+  <h2 class="sec"><span class="num">§ 03 · Findings</span>What we observed</h2>
+  <div class="findings">
+    <div class="finding"><span class="n">F.01</span><div><p class="name">{{FINDING_1_NAME}}</p><p class="what">{{FINDING_1_DETAIL_2_SENTENCES_MAX}}</p></div></div>
+    <div class="finding"><span class="n">F.02</span><div><p class="name">{{FINDING_2_NAME}}</p><p class="what">{{FINDING_2_DETAIL}}</p></div></div>
+    <div class="finding"><span class="n">F.03</span><div><p class="name">{{FINDING_3_NAME}}</p><p class="what">{{FINDING_3_DETAIL}}</p></div></div>
+    <div class="finding"><span class="n">F.04</span><div><p class="name">{{FINDING_4_NAME}}</p><p class="what">{{FINDING_4_DETAIL}}</p></div></div>
+  </div>
+
+  <h2 class="sec"><span class="num">§ 04 · Recommendation</span>Where to start</h2>
+  <p>{{1-2_SENTENCES_ON_THE_RECOMMENDED_PATH_AND_WHY_IT_FITS_THIS_CLIENT}}</p>
+  <div class="recommend">
+    <div class="label">Recommended engagement</div>
+    <p class="tier">{{TIER_NAME}} — ${{FEE}} / {{DURATION}}</p>
+    <p class="why">{{ONE_LINE_ON_WHY_THIS_TIER_OVER_THE_OTHERS}}</p>
+  </div>
+  <p><strong>Most engagements continue</strong> on a platform retainer ({{RETAINER_RANGE}}/month) after implementation. We'd scope that with you in the final two weeks if and only if it makes sense.</p>
+
+  <h2 class="sec"><span class="num">§ 05 · What success looks like</span>Outcomes we'd commit to</h2>
+  <p>If we move forward, here's what we'd guarantee in writing for {{CLIENT_NAME}}:</p>
+  <ul>
+    <li><strong>{{OUTCOME_1}}</strong> — by {{DEADLINE_1}}</li>
+    <li><strong>{{OUTCOME_2}}</strong> — by {{DEADLINE_2}}</li>
+    <li><strong>{{OUTCOME_3}}</strong> — by {{DEADLINE_3}}</li>
+  </ul>
+  <p>If we don't hit them, we keep working at no cost until we do.</p>
+
+  <h2 class="sec"><span class="num">§ 06 · Next steps</span>Two paths from here</h2>
+  <p><strong>Path A — Move forward.</strong> Reply to confirm and we'll send a proposal mirroring this scope within 2 business days.</p>
+  <p><strong>Path B — Take it to your team.</strong> This document is yours. Use it however helps internally. We'll follow up on {{FOLLOWUP_DATE}} unless you tell us otherwise.</p>
+
+  <div class="colophon">
+    <span>Catalyst Shift · catalystshift.ai</span>
+    <span>{{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}}</span>
+  </div>
+
+</div>
+</body>
+</html>
