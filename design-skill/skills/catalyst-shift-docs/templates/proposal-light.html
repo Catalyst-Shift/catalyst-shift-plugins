@@ -366,6 +366,11 @@
         margin: 0.7in;
       }
       @media print {
+        html,
+        body {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
         .page {
           padding: 0;
           max-width: none;
