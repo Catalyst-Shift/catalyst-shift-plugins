@@ -1,12 +1,14 @@
 # Contributing
 
-Three of us maintain this repo: Kevin, Lucas, Keith. Anyone can edit the skill; the rules below keep us from breaking each other's flow.
+Kevin maintains this repo solo for now; Lucas and Keith use the plugin in Cowork but don't review GitHub PRs. The branch + PR flow below is kept for hygiene (forces self-review of the diff, gives you an easy revert handle) — not as a review gate.
 
 ## Branch + PR
 
 - Work on a branch named `<your-initials>/<short-description>` (e.g. `kp/tighten-sow-template`).
-- Open a PR. **At least one of the other two reviews before merge.** This is the brand/tone catch — the whole point of the skill is consistency, so a second pair of eyes on prose changes is non-negotiable.
+- Open a PR. **Self-review the diff in the GitHub UI before merging** — it's much easier to catch brand-tone drift in the rendered diff than in the editor. Treat your past-self as the second pair of eyes.
 - Squash-merge to `main`.
+
+If a change is trivial (typo, single-line copy fix), commit straight to `main`. The PR ceremony is for anything substantive.
 
 ## Bump the version on every merge
 
@@ -26,7 +28,7 @@ There is no release artifact to build. `main` is the release.
 
 1. Merge the PR (with the version bump).
 2. `git push origin main` (if it isn't already).
-3. Post a one-line summary in `#design` so Lucas and Keith know to **Sync** in Cowork → Customize → plugins.
+3. Tell Lucas and Keith (Slack, text, however) to hit **Sync** in Cowork → Customize → plugins. Cowork will also surface the update on next session even without manual sync.
 
 Optional but nice: tag the commit so it's easy to refer back to.
 
