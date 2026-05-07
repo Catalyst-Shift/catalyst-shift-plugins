@@ -1,33 +1,46 @@
 # Brand reference
 
-Distilled from the full `CLAUDE.md` at the project root. Read this before writing any copy.
+Aligned to **Strategy v4.3** (effective 2026-05-07). Read this before writing any copy.
 
 ## Who Catalyst Shift is
 
-A **growth strategy firm**, not a tech firm. Three people:
-- **Kevin Townsend** — founder, growth systems. Builds the engine that generates leads.
-- **Lucas Dowd** — revenue ops, 15yr cybersecurity sales. Builds the engine that closes them.
-- **Keith Maselli** — delivery partner, former agency owner. Runs the engagement.
+A **vertical-first, product-led firm** for U.S. MSPs. Three principals:
 
-**The differentiator (use this verbatim when introducing the pair):**
+- **Kevin Townsend** — Founder, Product & Engineering. Owns Catalyst OS architecture, module engineering, technical delivery, customer integration.
+- **Lucas Dowd** — Founder, Revenue Operations. Owns sales motion, customer relationships, partnerships, pricing, revenue operations. Full-time on CS, no parallel work.
+- **Keith Maselli** — Co-Founder, COO + technical-delivery backfill. Owns operations, customer onboarding, project coordination, integration delivery. Operator credibility on customer calls.
+
+**The differentiator (use verbatim when introducing the pair):**
 > Kevin builds the engine that generates leads. Lucas builds the engine that closes them.
+
+## Positioning
+
+**Headline:** *"The operating layer built for modern MSPs."* (or: *"Managed AI for MSPs."*)
+
+**Tagline:** *"You built a world-class service operation. We build the business infrastructure around it."*
+
+**Positioning statement:** Catalyst Shift is a vertical-first, product-led firm. Our offer is a modular AI operating layer — **Catalyst OS** — that runs the five operations and revenue workflows MSPs lose money on every quarter.
+
+**The category we're claiming:** the **MSP business layer** — the five operational systems above the technical stack (PSA, RMM, ticketing) and below the ceiling of what an MSP can reach without infrastructure. Not a SaaS competitor to ConnectWise/Kaseya; a layer that sits above their technical OS and runs the business operations they don't address.
 
 ## Strategic model
 
-Two-step engagement:
-1. **Implementation** — 60–90 days, $12K–$45K. Install the growth infrastructure.
-2. **Platform retainer** — $3K–$8K/month. Ongoing optimization on **Catalyst OS**, our proprietary operating layer. Most engagements continue here.
+**Catalyst OS** is a modular platform with five modules, sold in three tiers:
 
-The implementation is the entry point. The retainer is the default continuation.
+- **Foundation** (Operations · M.01–M.03): $12,500 setup / $3,200 MRR
+- **Growth** (Revenue · M.04–M.05): $5,500 setup / $1,600 MRR
+- **Full Stack** (all five): $16,500 setup / $4,500 MRR — conservative Year 1 value $95K–$130K
 
-**Moat:** people + process + platform in one solution, at a price point no one else offers all three.
+See `PRICING.md` for the module-level breakdown.
 
-## Locked positioning rules
+## Critical positioning rules (v4.3)
 
-- **Growth firm, not tech firm.** AI is *how* we work, not *what* we sell. AI never appears in headlines, only in methodology.
-- **Proof over promises.** Pre-revenue, zero retainer clients, no real testimonials yet. Do not fabricate. The honest "no testimonials yet — here's what we stand on" stance is deliberate.
-- **Pricing in public.** Fixed fees, disclosed. No "book a call to discuss investment."
+- **AI lives in methodology, never in headlines.** "AI-powered" does not appear in customer-facing material.
+- **Lead with business outcomes, not technology.** Specificity (numbers, timelines, named outputs) beats vague capability claims.
+- **Pricing in public.** Fees are published, fixed, no "investment to be discussed."
 - **Guarantee in writing.** Every engagement defines measurable outcomes before start. Miss them, we keep working at no cost.
+- **Honesty about build state.** Catalyst OS is in active development; we ship modules with our founding cohort. Don't claim a finished platform.
+- **Portability gate.** Every module ships multi-tenant, config-only, no custom code per customer at GA.
 
 ## Locked glossary phrases
 
@@ -35,46 +48,59 @@ Use these verbatim. Do not paraphrase.
 
 | Phrase | Where it goes |
 |---|---|
-| **Operating layer** | Replaces "system" in strategic positions (subhead, platform tier, principles, process phase 04). |
-| **Install the infrastructure** | Replaces "build the systems" as the verb+noun pair. |
-| **Most engagements continue** | The retainer framing — plants retainer as default without overclaiming. |
+| **Operating layer** | The product framing — what Catalyst OS is. |
+| **Install the infrastructure** | The verb+noun pair for what we deliver. |
+| **Most engagements continue** | Module expansion framing. |
 | **Kevin builds the engine that generates leads. Lucas builds the engine that closes them.** | The differentiator. |
 | **In writing** | Always paired with "guarantee." |
-| **Whether you're paying attention or not** | The ideal-state phrase — what the operating layer does for the founder. |
-
-New phrases enter the glossary only when an existing one cannot carry the weight.
+| **Whether you're paying attention or not** | The ideal-state phrase. |
 
 ## Voice rules
 
-- **Lead with outcomes, not technology.** "X new qualified leads / month" beats "AI-powered pipeline."
+- **Lead with outcomes, not technology.** "Renewal rate up 12pp in 90 days" beats "AI-powered retention engine."
 - **AI lives in methodology.** Mention AI when describing *how* we do the work, never as the value prop.
 - **Monospace is texture, not voice.** Mono is for data, metrics, labels, system-style language. Bracket it with plain English.
-- **Every sentence earns its place.** Cut filler: "measurable results," "real systems," "real results," "transformative," "synergize." If we say "results," we say *which* results.
+- **Every sentence earns its place.** Cut filler: "transformative," "world-class," "synergize," "measurable results." If we say "results," we say *which* results.
 - **Specificity beats abstraction.** Numbers, timelines, named outputs > vague promises.
 - **No exclamation marks.** Restraint is part of the brand.
 - **No emoji** unless the teammate explicitly asks.
 
-## Target audience
+## Target audience (v4.3 ICP)
 
-Founder-led businesses, **$200K–$10M revenue**, services / industrial / GovCon. Four personas:
+**U.S. MSPs.**
 
-- **The Overwhelmed Expert** — technical founder, drowning in delivery, no time to sell.
-- **The Scaling Service Provider** — growing fast, needs ops infrastructure to keep up.
-- **The Agency Owner** — wants to scale the firm but stuck in the founder-as-rainmaker trap.
-- **The DIB Contractor** — defense industrial base, navigating GovCon pipelines.
+- **Primary target:** $500K–$3M annual revenue. Sharpest product-market fit, owner-reachable.
+- **Extended target:** $3M–$10M MSPs where the buyer is the owner or COO.
+- 50–500 managed endpoints, 5–50 employees scaled to MSP size.
+- Operating on ConnectWise / Halo PSA / Autotask + NinjaOne / Datto / Atera / equivalent.
+- Owner-led decision authority.
 
-Common traits: skeptical of agencies, tired of strategy decks, respond to proof over promises.
+**Out of scope:** Sub-$500K MSPs (technician-buyer, no budget). Above-$10M MSPs (entrenched ops, drift to enterprise tooling).
+
+## Sales process (4 stages)
+
+1. **Listen / Discovery** — 30-minute friendly-MSP call. Pitch the modular framework, ask the three discovery questions.
+2. **Design-partner conversation** — for qualified prospects. Module selection, integration scope, design-partner terms.
+3. **SOW with outcomes in writing** — module scope, integration plan, measurable outcomes, timeline, guarantee.
+4. **Onboarding within 5 business days** of signing. First module outcome inside 30 days.
 
 ## Things we explicitly do NOT do
 
-- No stock testimonials, no fabricated logos, no invented case studies.
-- No emoji.
-- No "AI-powered" anywhere user-facing.
-- No "strategy deck" clichés ("Most firms hand you a deck and wish you luck" — cut, don't bring back).
-- No filler content. If a section feels empty, that's a layout problem, not a copy problem.
-- No purple/violet gradients, neural-net visuals, particle meshes, AI-glow tropes.
+- No "AI-powered" anywhere customer-facing.
+- No positioning AI agents, OpenClaw, or "AI employees" as something clients receive.
+- No "growth firm" framing (deprecated v3.x).
+- No three-stage offer (Signal Sprint / Install / Operator) — deprecated.
+- No fractional CRO — deprecated.
+- No DIB-direct services as primary GTM — held in reserve.
+- No PE/VC distribution channel — held in reserve.
+- No cold outbound — deprecated lead engine.
+- No claim that Catalyst OS is fully built and shipped.
+- No fabricated testimonials, case studies, logos, or metrics.
+- No emoji. No exclamation marks. No filler ("transformative," "world-class," "synergize").
+- No "strategy deck" clichés.
+- No purple/violet gradients on the logo mark — solid teal only. Violet (`--accent #8B7CF6`) is reserved for module IDs and the AI/automation register, never the lockup.
 - No bouncy springs, parallax, scroll-pinned chrome.
 
 ## Visual system (one-paragraph version)
 
-Dark-first, editorial. Display type **General Sans** for headlines. Body **DM Sans**. Mono **IBM Plex Mono** with `tabular-nums` and `snake_case` for system-style content. Palette is the v2 site palette: **`--signal #34E2C2`** (cyan — primary accent, status, key glows), **`--accent #8B7CF6`** (violet — module IDs, AI/automation register, secondary CTAs), **`--warm #FF6F4D`** (coral — closing CTAs, human moments). Surfaces are graphite (`--bg #08080B`, `--surface #101019`). Borders separate, not shadows. Document-style section numbers (`§ 01`). All tokens live in `assets/colors_and_type.css`. The v1 token names (`--gold`, `--teal`, `--action`, `--terracotta`) remain as aliases so older templates keep rendering — new work uses the v2 names.
+Dark-first, editorial. Display type **General Sans** for headlines. Body **DM Sans**. Mono **IBM Plex Mono** with `tabular-nums` and `snake_case` for system-style content. Palette: **`--signal #34E2C2`** (teal — primary accent, status, key glows, the logo mark), **`--accent #8B7CF6`** (violet — module IDs, AI/automation register, secondary CTAs), **`--warm #FF6F4D`** (coral — closing CTAs, human moments). Surfaces are graphite (`--bg #08080B`, `--surface #101019`). Borders separate, not shadows. Section numbers render as plain `01 / Title` — no glyph prefix. All tokens live in `assets/colors_and_type.css`; shared layout chrome in `assets/doc-shell.css`.
