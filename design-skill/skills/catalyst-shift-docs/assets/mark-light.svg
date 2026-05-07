@@ -1,6 +1,11 @@
-
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <rect x="2" y="16.5" width="13" height="3" rx="0.75" fill="#1A9E7A" opacity="0.45"></rect>
-  <rect x="4" y="10.5" width="13" height="3" rx="0.75" fill="#1A9E7A"></rect>
-  <rect x="6" y="4.5" width="13" height="3" rx="0.75" fill="#A08545"></rect>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-label="Catalyst Shift mark">
+  <defs>
+    <linearGradient id="cs-mark-grad-light" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1A9E7A"></stop>
+      <stop offset="1" stop-color="#5E4FD1"></stop>
+    </linearGradient>
+  </defs>
+  <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="url(#cs-mark-grad-light)" stroke-width="1.5" fill="none"></path>
+  <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="url(#cs-mark-grad-light)" opacity="0.35"></path>
+  <circle cx="12" cy="12" r="2" fill="url(#cs-mark-grad-light)"></circle>
 </svg>

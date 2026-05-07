@@ -28,15 +28,15 @@ catalyst-shift-docs/
 ├── INTAKE.md                 # questions to ask when context is thin
 ├── README.md                 # this file
 ├── assets/
-│   ├── colors_and_type.css   # design tokens (mirrors live site)
-│   ├── logo-inline.svg
-│   ├── logo-stacked.svg
-│   └── fonts/                # General Sans woff2 (self-hosted)
-├── templates/
+│   ├── colors_and_type.css   # design tokens (mirrors live site, v2)
+│   ├── doc-shell.css         # shared dark-doc shell — nav, hero, sections, module-frame
+│   ├── mark-dark.svg         # favicon / inline mark
+│   └── fonts/                # General Sans + DM Sans + Plex Mono (self-hosted)
+├── templates/                # dark, screen-first; print to white via Cmd/Ctrl+P
 │   ├── proposal.html
 │   ├── sow.html
 │   ├── discovery-report.html
-│   ├── deck.html
+│   ├── deck.html             # 1280×720 slides; export with the PPTX skill
 │   ├── one-pager.html
 │   ├── case-study.html
 │   ├── client-deliverable.html
@@ -157,4 +157,11 @@ If you're using the synced-Drive setup, push the change to Drive and everyone ge
 
 ## Built on
 
-The same design system as the live site: tokens in `colors_and_type.css`, General Sans / DM Sans / IBM Plex Mono, gold/teal/terracotta palette, document-style numbering. If the site evolves, mirror the change here.
+The same design system as the live site (v2). Hallmarks:
+
+- **Tokens** in `assets/colors_and_type.css` — graphite surfaces, signal cyan, accent violet, warm coral.
+- **Type** General Sans (display) · DM Sans (body) · IBM Plex Mono (UI/labels), all self-hosted in `assets/fonts/`.
+- **Document grammar** — sticky nav, hero with grid + glow, cover-strip, `§` section rails, module-frame product chrome with status dots, in-writing guarantee block.
+- **Dark-only, screen-first.** All templates render dark on screen and invert to clean white when printed via Cmd/Ctrl+P. There is no `-light` variant — that was an earlier iteration and has been removed.
+
+v1 token names (`--gold`, `--teal`, `--action`, `--terracotta`) remain as aliases inside `colors_and_type.css` so anything you wrote against the old palette keeps rendering. If the live site evolves, mirror the change here.

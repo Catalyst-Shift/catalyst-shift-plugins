@@ -1,375 +1,211 @@
 <!doctype html>
 <!--
-  Catalyst Shift — Case Study Template
-  ONLY USE WHEN: engagement closed, outcomes measured, client approval (named)
-  OR client approval to anonymize. If neither, do not write a case study.
+  Catalyst Shift — Case Study Template (site-fidelity, dark, screen-first)
+  ============================================================
+  USAGE FOR CLAUDE:
+    1. Case studies are written AFTER an engagement closes. Quote the client.
+    2. Replace every {{PLACEHOLDER}}. Never invent metrics — pull from the SOW outcomes table.
+    3. Section structure: § 01 Context · § 02 What we installed · § 03 Results · § 04 What changed.
+    4. Every metric needs a status dot (positive / signal). Don't show negatives in case studies.
+    5. Print via Cmd/Ctrl+P — print rules in doc-shell.css invert the canvas.
+  ============================================================
 -->
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Case Study — {{CLIENT_NAME}} — Catalyst Shift</title>
-    <link rel="stylesheet" href="../assets/colors_and_type.css" />
-    <style>
-      * {
-        box-sizing: border-box;
-      }
-      html,
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text-primary);
-        font-family: var(--font-body);
-      }
-      .page {
-        max-width: 780px;
-        margin: 0 auto;
-        padding: 80px 56px 120px;
-      }
-      .masthead {
-        border-top: 2px solid var(--gold);
-        padding-top: 20px;
-        margin-bottom: 64px;
-        display: flex;
-        justify-content: space-between;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        line-height: 1.6;
-      }
-      .masthead .lockup {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-      }
-      .masthead .lockup .mark {
-        height: 24px;
-        width: 24px;
-        display: block;
-        flex-shrink: 0;
-      }
-      .masthead .lockup .wordmark {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 22px;
-        letter-spacing: -0.02em;
-        text-transform: none;
-        display: inline-flex;
-        align-items: baseline;
-        gap: 2px;
-        line-height: 1;
-      }
-      .masthead .lockup .cat {
-        color: var(--text-primary);
-      }
-      .masthead .lockup .sh {
-        color: var(--gold);
-      }
-      .doc-kicker {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--teal);
-        margin-bottom: 16px;
-      }
-      h1.doc {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: clamp(40px, 5vw, 60px);
-        letter-spacing: -0.03em;
-        line-height: 1.04;
-        margin: 0 0 24px;
-        max-width: 680px;
-      }
-      .lede {
-        font-family: var(--font-display);
-        font-weight: 500;
-        font-size: 20px;
-        line-height: 1.5;
-        color: var(--text-secondary);
-        max-width: 600px;
-        margin: 0 0 48px;
-      }
-      .at-a-glance {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 24px;
-        border-top: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
-        padding: 24px 0;
-        margin: 0 0 56px;
-      }
-      .at-a-glance .stat .k {
-        font-family: var(--font-mono);
-        font-size: 10px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        margin-bottom: 6px;
-      }
-      .at-a-glance .stat .v {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 22px;
-        color: var(--text-primary);
-        letter-spacing: -0.01em;
-      }
-      .at-a-glance .stat.metric .v {
-        color: var(--gold);
-        font-variant-numeric: tabular-nums;
-      }
-      h2.sec {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: clamp(24px, 2.6vw, 32px);
-        letter-spacing: -0.02em;
-        line-height: 1.1;
-        margin: 64px 0 8px;
-      }
-      h2.sec .num {
-        display: block;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        color: var(--gold);
-        margin-bottom: 10px;
-        font-weight: 500;
-        text-transform: uppercase;
-      }
-      p {
-        font-size: 16px;
-        line-height: 1.7;
-        color: var(--text-secondary);
-        margin: 0 0 16px;
-        max-width: 600px;
-      }
-      p strong {
-        color: var(--text-primary);
-        font-weight: 600;
-      }
-      blockquote {
-        margin: 24px 0;
-        padding: 16px 24px;
-        border-left: 2px solid var(--gold);
-        font-family: var(--font-display);
-        font-size: 18px;
-        line-height: 1.5;
-        color: var(--text-primary);
-        max-width: 600px;
-      }
-      blockquote cite {
-        display: block;
-        margin-top: 8px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        font-style: normal;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-      }
-      table.results {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 16px 0 24px;
-        font-size: 14px;
-      }
-      table.results th,
-      table.results td {
-        text-align: left;
-        padding: 12px 14px;
-        border-bottom: 1px solid var(--border);
-      }
-      table.results th {
-        font-family: var(--font-mono);
-        font-weight: 500;
-        font-size: 10px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-      }
-      table.results td.metric {
-        font-family: var(--font-mono);
-        font-variant-numeric: tabular-nums;
-        color: var(--text-primary);
-      }
-      table.results td.delta {
-        color: var(--teal);
-        font-family: var(--font-mono);
-        font-variant-numeric: tabular-nums;
-      }
-      .colophon {
-        margin-top: 80px;
-        padding-top: 24px;
-        border-top: 2px solid var(--gold);
-        font-family: var(--font-mono);
-        font-size: 11px;
-        color: var(--text-muted);
-        display: flex;
-        justify-content: space-between;
-      }
-      @page {
-        size: Letter;
-        margin: 0.7in;
-      }
-      @media print {
-        html,
-        body {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-        .page {
-          padding: 0;
-          max-width: none;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="page">
-      <header class="masthead">
-        <div class="lockup">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            class="mark"
-            width="24"
-            height="24"
-            aria-hidden="true"
-          >
-            <rect
-              x="2"
-              y="16.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-              opacity="0.45"
-            />
-            <rect
-              x="4"
-              y="10.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-            />
-            <rect
-              x="6"
-              y="4.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#C8A96E"
-            />
-          </svg>
-          <span class="wordmark"
-            ><span class="cat">Catalyst</span
-            ><span class="sh">Shift</span></span
-          >
-        </div>
-        <div>Case study · {{ISSUE_DATE}}</div>
-      </header>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Case Study — {{CLIENT_NAME}} — Catalyst Shift</title>
+<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="stylesheet" href="../assets/colors_and_type.css">
+<link rel="stylesheet" href="../assets/doc-shell.css">
+<style>
+  .quote-hero {
+    margin: 28px 0 0; padding: 28px 32px;
+    border: 1px solid var(--border); border-left: 2px solid var(--signal);
+    border-radius: var(--r-3); background: var(--surface);
+    max-width: 880px;
+  }
+  .quote-hero p {
+    font-family: var(--font-display); font-weight: 500;
+    font-size: clamp(20px, 2.2vw, 26px); letter-spacing: -0.015em;
+    line-height: 1.3; color: var(--text); margin: 0 0 14px;
+  }
+  .quote-hero .who {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-mute);
+  }
+  .quote-hero .who strong { color: var(--text-dim); font-weight: 500; }
+</style>
+</head>
+<body>
 
-      <div class="doc-kicker">
-        Case study · {{CLIENT_NAME_OR_ANONYMIZED}} · {{INDUSTRY}}
-      </div>
-      <h1 class="doc">{{HEADLINE_NAMING_THE_OUTCOME}}</h1>
-      <p class="lede">
-        {{ONE_PARAGRAPH_SUMMARY_OF_PROBLEM_INTERVENTION_AND_RESULT}}
-      </p>
+<header class="nav">
+  <div class="nav-inner">
+    <a class="lockup" href="#">
+      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        
+        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
+        <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
+        <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
+      </svg>
+      <span class="wordmark">Catalyst<span class="sh">Shift</span></span>
+    </a>
+    <div class="nav-meta">
+      <span>Case study</span>
+      <span>{{ENGAGEMENT_END_DATE}}</span>
+    </div>
+  </div>
+</header>
 
-      <div class="at-a-glance">
-        <div class="stat">
-          <div class="k">Engagement</div>
-          <div class="v">{{TIER_NAME}}</div>
-        </div>
-        <div class="stat">
-          <div class="k">Duration</div>
-          <div class="v">{{DURATION}}</div>
-        </div>
-        <div class="stat metric">
-          <div class="k">Headline metric</div>
-          <div class="v">{{HERO_METRIC}}</div>
-        </div>
-        <div class="stat">
-          <div class="k">Status</div>
-          <div class="v">{{ON_RETAINER_OR_HANDED_OFF}}</div>
-        </div>
-      </div>
+<section class="hero">
+  <div class="grid-bg"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-inner">
+    <div class="pill"><span class="badge">Case study</span></div>
+    <div class="doc-kicker">{{TIER_NAME}} · {{DURATION}}</div>
+    <h1 class="doc">
+      {{HEADLINE_RESULT_IN_ONE_LINE}}<br>
+      <span class="subline">{{SUPPORTING_LINE_NAMING_THE_PROBLEM_THAT_WAS_SOLVED}}</span>
+    </h1>
+    <p class="lede">{{2_SENTENCE_LEDE_NAMING_THE_CLIENT_THE_PROBLEM_AND_THE_OUTCOME}}</p>
 
-      <h2 class="sec">
-        <span class="num">§ 01 · The situation</span>Where they started
-      </h2>
-      <p>{{2-3_SENTENCES_ON_THE_CLIENTS_SITUATION_BEFORE_THE_ENGAGEMENT}}</p>
-      <p>{{1-2_SENTENCES_ON_WHAT_THEY_HAD_TRIED_AND_WHY_IT_HADNT_WORKED}}</p>
+    <div class="cover-strip">
+      <div class="cell"><div class="label">Client</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
+      <div class="cell"><div class="label">Engagement</div><div class="value">{{TIER_NAME}}<small>{{DURATION}}</small></div></div>
+      <div class="cell"><div class="label">Headline metric</div><div class="value">{{HEADLINE_METRIC}}<small>{{HEADLINE_METRIC_LABEL}}</small></div></div>
+      <div class="cell"><div class="label">Status</div><div class="value">Live<small>Retainer · {{RETAINER_MONTHS}} months</small></div></div>
+    </div>
+  </div>
+</section>
 
-      <h2 class="sec">
-        <span class="num">§ 02 · What we installed</span>The intervention
-      </h2>
-      <p>{{2-3_SENTENCES_ON_THE_RECOMMENDED_PATH_AND_WHY}}</p>
-      <ul
-        style="
-          padding-left: 18px;
-          color: var(--text-secondary);
-          max-width: 600px;
-        "
-      >
-        <li><strong>{{INSTALL_1}}</strong> — {{ONE_LINE}}</li>
-        <li><strong>{{INSTALL_2}}</strong> — {{ONE_LINE}}</li>
-        <li><strong>{{INSTALL_3}}</strong> — {{ONE_LINE}}</li>
-      </ul>
+<!-- § 01 — CONTEXT -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">01</div>
+      <div class="s-eyebrow">Context</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">Where they were stuck.</h2>
+      <p>{{2-3_SENTENCES_DESCRIBING_THE_BUSINESS_AND_WHAT_WASNT_WORKING}}</p>
+      <p>{{1-2_SENTENCES_NAMING_THE_ROOT_CAUSE_FROM_DISCOVERY}}</p>
 
-      <h2 class="sec"><span class="num">§ 03 · Results</span>What changed</h2>
-      <table class="results">
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Before</th>
-            <th>After</th>
-            <th>Δ</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>{{METRIC_1}}</td>
-            <td class="metric">{{BEFORE_1}}</td>
-            <td class="metric">{{AFTER_1}}</td>
-            <td class="delta">{{DELTA_1}}</td>
-          </tr>
-          <tr>
-            <td>{{METRIC_2}}</td>
-            <td class="metric">{{BEFORE_2}}</td>
-            <td class="metric">{{AFTER_2}}</td>
-            <td class="delta">{{DELTA_2}}</td>
-          </tr>
-          <tr>
-            <td>{{METRIC_3}}</td>
-            <td class="metric">{{BEFORE_3}}</td>
-            <td class="metric">{{AFTER_3}}</td>
-            <td class="delta">{{DELTA_3}}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <blockquote>
-        "{{CLIENT_QUOTE}}"<cite>{{CLIENT_NAME_AND_ROLE}}</cite>
-      </blockquote>
-
-      <h2 class="sec">
-        <span class="num">§ 04 · What's next</span>Where they are now
-      </h2>
-      <p>
-        {{1-2_SENTENCES_ON_WHETHER_THEYRE_ON_THE_RETAINER_AND_WHATS_BEING_OPTIMIZED}}
-      </p>
-
-      <div class="colophon">
-        <span>Catalyst Shift · catalystshift.ai</span>
-        <span>{{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}}</span>
+      <div class="quote-hero">
+        <p>"{{CLIENT_VERBATIM_QUOTE_ABOUT_THE_PROBLEM}}"</p>
+        <span class="who"><strong>{{QUOTE_SPEAKER_NAME}}</strong> · {{QUOTE_SPEAKER_ROLE}}, {{CLIENT_NAME}}</span>
       </div>
     </div>
-  </body>
+  </div>
+</section>
+
+<!-- § 02 — WHAT WE INSTALLED -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">02</div>
+      <div class="s-eyebrow">Installed</div>
+      <div class="module-rail">
+        <div class="row active"><span class="id">{{TIER_CODE}}</span><span>{{TIER_NAME}}</span></div>
+        <div class="row"><span class="id">M.01</span><span>{{MODULE_1_SHORT}}</span></div>
+        <div class="row"><span class="id">M.02</span><span>{{MODULE_2_SHORT}}</span></div>
+        <div class="row"><span class="id">M.03</span><span>{{MODULE_3_SHORT}}</span></div>
+      </div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">What we installed.</h2>
+
+      <p class="pull">
+        <span class="a">Kevin built the engine that generates leads.</span>
+        <span class="b">Lucas built the engine that closes them.</span>
+      </p>
+
+      <h3>The build</h3>
+      <ul>
+        <li><strong>{{DELIVERABLE_1_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
+        <li><strong>{{DELIVERABLE_2_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
+        <li><strong>{{DELIVERABLE_3_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
+        <li><strong>{{DELIVERABLE_4_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
+      </ul>
+
+      <h3>Timeline</h3>
+      <p>{{2-3_SENTENCES_ON_HOW_THE_DURATION_WEEKS_BROKE_DOWN}}</p>
+    </div>
+  </div>
+</section>
+
+<!-- § 03 — RESULTS -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">03</div>
+      <div class="s-eyebrow">Results</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">What hit.</h2>
+      <p>The outcomes from the SOW, measured at handoff.</p>
+
+      <div class="module-frame" style="margin-top: 16px;">
+        <div class="chrome">
+          <span class="dots"><span></span><span></span><span></span></span>
+          <span class="crumb">catalyst&nbsp;os · {{CLIENT_SHORT}} · results</span>
+          <span class="right">M.OUT — DELIVERED</span>
+        </div>
+        <div class="data-toolbar">
+          <span class="module-id">M.OUT — OUTCOMES</span>
+          <span class="title">Delivered against target</span>
+          <span class="meta">measured {{MEASUREMENT_DATE}}</span>
+        </div>
+
+        <div class="sparkbar">
+          <div class="meta"><span class="label">{{PRIMARY_METRIC_LABEL}}</span><span class="delta">+{{ACTUAL_LIFT}}% delivered</span></div>
+          <svg width="220" height="32" viewBox="0 0 220 32" aria-hidden="true">
+            <path d="M0,28 L20,26 L40,26 L60,22 L80,18 L100,15 L120,12 L140,9 L160,7 L180,5 L200,4 L220,3"
+                  fill="none" stroke="#34E2C2" stroke-width="1.5"/>
+            <circle cx="220" cy="3" r="3" fill="#34E2C2"/>
+          </svg>
+        </div>
+
+        <table class="outcomes">
+          <thead><tr><th>Outcome</th><th>Status</th><th>Target</th><th>Delivered</th></tr></thead>
+          <tbody>
+            <tr><td class="outcome">{{OUTCOME_1}}</td><td><span class="dot positive">hit</span></td><td class="metric">{{TARGET_1}}</td><td class="metric">{{DELIVERED_1}}</td></tr>
+            <tr><td class="outcome">{{OUTCOME_2}}</td><td><span class="dot positive">hit</span></td><td class="metric">{{TARGET_2}}</td><td class="metric">{{DELIVERED_2}}</td></tr>
+            <tr><td class="outcome">{{OUTCOME_3}}</td><td><span class="dot signal">on track</span></td><td class="metric">{{TARGET_3}}</td><td class="metric">{{DELIVERED_3}}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- § 04 — WHAT CHANGED -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">04</div>
+      <div class="s-eyebrow">After</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">What changed inside the business.</h2>
+      <p>{{2-3_SENTENCES_ON_WHAT_THE_CLIENTS_DAY_LOOKS_LIKE_NOW_THAT_THE_OPERATING_LAYER_IS_INSTALLED}}</p>
+
+      <div class="quote-hero">
+        <p>"{{CLIENT_VERBATIM_QUOTE_ABOUT_THE_OUTCOME}}"</p>
+        <span class="who"><strong>{{QUOTE_SPEAKER_NAME}}</strong> · {{QUOTE_SPEAKER_ROLE}}, {{CLIENT_NAME}}</span>
+      </div>
+
+      <h3 style="margin-top: 36px;">What's next</h3>
+      <p>{{1-2_SENTENCES_ON_RETAINER_OR_NEXT_PHASE_OF_WORK}}</p>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="inner">
+    <span>Catalyst Shift · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
+    <span>Case study · {{CLIENT_NAME}} · {{ENGAGEMENT_END_DATE}}</span>
+  </div>
+</footer>
+
+</body>
 </html>

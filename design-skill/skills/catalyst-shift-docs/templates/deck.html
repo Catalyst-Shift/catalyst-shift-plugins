@@ -1,508 +1,484 @@
 <!doctype html>
 <!--
-  Catalyst Shift — Sales Deck Template (HTML, exportable to PPTX)
-  Each <section data-slide> = one slide. Keep slide count tight (10-15).
-  Use scripts/make_pptx.py to convert to .pptx.
+  Catalyst Shift — Sales Deck Template (site-fidelity, dark, screen-first)
+  ============================================================
+  USAGE FOR CLAUDE:
+    1. Each <section data-slide> is a single 1280×720 slide. Keep slide count tight (10–14).
+    2. Replace every {{PLACEHOLDER}}. Do not invent numbers.
+    3. Slides 04 (pair) and 08 (guarantee) use locked phrases — keep verbatim.
+    4. data-bg options: "dark" (default, graphite), "alt" (raised graphite), "spotlight" (signal glow + grid).
+    5. To export to PPTX: open in browser, use the "Export as PPTX (editable)" skill.
+       Print to PDF works via Cmd/Ctrl+P with the @page rules below.
+  ============================================================
 -->
-<html lang="en" data-theme="light">
-  <head>
-    <meta charset="utf-8" />
-    <title>Sales Deck — Catalyst Shift</title>
-    <link rel="stylesheet" href="../assets/colors_and_type.css" />
-    <style>
-      * {
-        box-sizing: border-box;
-      }
-      html,
-      body {
-        margin: 0;
-        background: #1a1a1f;
-        font-family: var(--font-body);
-      }
-      .deck {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 32px;
-        padding: 48px 0;
-      }
-      section[data-slide] {
-        width: 1280px;
-        height: 720px;
-        background: var(--bg);
-        color: var(--text-primary);
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: 80px 96px;
-        overflow: hidden;
-      }
-      section[data-slide][data-bg="light"] {
-        background: #f5f2ed;
-        color: #1a1a1f;
-      }
-      section[data-slide][data-bg="gold"] {
-        background: #c8a96e;
-        color: #1a1a1f;
-      }
-      .slide-num {
-        position: absolute;
-        top: 32px;
-        right: 48px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        color: var(--text-muted);
-        text-transform: uppercase;
-      }
-      .slide-mark {
-        position: absolute;
-        top: 32px;
-        left: 48px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        color: var(--gold);
-        text-transform: uppercase;
-      }
-      .slide-mark img {
-        height: 14px;
-        vertical-align: middle;
-      }
-      .cover-lockup {
-        position: absolute;
-        top: 48px;
-        left: 96px;
-        display: inline-flex;
-        align-items: center;
-        gap: 14px;
-      }
-      .cover-lockup .mark {
-        height: 36px;
-        width: 36px;
-        display: block;
-        flex-shrink: 0;
-      }
-      .cover-lockup .wordmark {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 32px;
-        letter-spacing: -0.02em;
-        display: inline-flex;
-        align-items: baseline;
-        gap: 3px;
-        line-height: 1;
-      }
-      .cover-lockup .cat {
-        color: var(--text-primary);
-      }
-      .cover-lockup .sh {
-        color: var(--gold);
-      }
-      section[data-slide][data-bg="light"] .cover-lockup .cat {
-        color: #1a1a1f;
-      }
-      section[data-slide][data-bg="light"] .cover-lockup .sh {
-        color: #a88547;
-      }
-      .kicker {
-        font-family: var(--font-mono);
-        font-size: 13px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--gold);
-        margin-bottom: 24px;
-      }
-      h1 {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 88px;
-        letter-spacing: -0.03em;
-        line-height: 0.98;
-        margin: 0 0 24px;
-        max-width: 1000px;
-      }
-      h2 {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 64px;
-        letter-spacing: -0.025em;
-        line-height: 1.05;
-        margin: 0 0 24px;
-        max-width: 1000px;
-      }
-      p.lede {
-        font-family: var(--font-display);
-        font-weight: 500;
-        font-size: 28px;
-        line-height: 1.4;
-        color: var(--text-secondary);
-        max-width: 900px;
-        margin: 0;
-      }
-      p {
-        font-size: 22px;
-        line-height: 1.55;
-        color: var(--text-secondary);
-        max-width: 900px;
-      }
-      ul {
-        padding-left: 24px;
-      }
-      ul li {
-        font-size: 22px;
-        line-height: 1.55;
-        color: var(--text-secondary);
-        margin: 0 0 12px;
-        max-width: 900px;
-      }
-      ul li::marker {
-        color: var(--gold);
-      }
-      .pull {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 48px;
-        line-height: 1.2;
-        letter-spacing: -0.02em;
-        max-width: 1000px;
-      }
-      .pull .a {
-        color: var(--gold);
-      }
-      .pull .b {
-        color: var(--teal);
-      }
-      .threecol {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 48px;
-        margin-top: 32px;
-      }
-      .threecol .col {
-      }
-      .threecol .col .num {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        color: var(--gold);
-        text-transform: uppercase;
-        margin-bottom: 12px;
-      }
-      .threecol .col h3 {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 28px;
-        letter-spacing: -0.01em;
-        margin: 0 0 12px;
-        color: var(--text-primary);
-      }
-      .threecol .col p {
-        font-size: 18px;
-        line-height: 1.55;
-        color: var(--text-secondary);
-        margin: 0;
-      }
-      .pricing-row {
-        display: grid;
-        grid-template-columns: auto 1fr auto;
-        gap: 24px;
-        align-items: baseline;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-left: 2px solid var(--gold);
-        padding: 24px 32px;
-        margin: 12px 0;
-        border-radius: 2px;
-      }
-      .pricing-row .tier {
-        font-family: var(--font-mono);
-        font-size: 12px;
-        letter-spacing: 0.14em;
-        color: var(--gold);
-        text-transform: uppercase;
-      }
-      .pricing-row .name {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 24px;
-        color: var(--text-primary);
-      }
-      .pricing-row .name small {
-        display: block;
-        font-family: var(--font-body);
-        font-weight: 400;
-        font-size: 16px;
-        color: var(--text-muted);
-        margin-top: 4px;
-      }
-      .pricing-row .fee {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 28px;
-        color: var(--text-primary);
-      }
-      .footnote {
-        position: absolute;
-        bottom: 32px;
-        left: 96px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        color: var(--text-muted);
-      }
-      @media print {
-        @page {
-          size: 1280px 720px;
-          margin: 0;
-        }
-        body {
-          background: #fff;
-        }
-        .deck {
-          padding: 0;
-          gap: 0;
-        }
-        section[data-slide] {
-          page-break-after: always;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="deck">
-      <!-- =============== SLIDE 01 — COVER =============== -->
-      <section data-slide data-bg="dark">
-        <div class="cover-lockup">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            class="mark"
-            width="24"
-            height="24"
-            aria-hidden="true"
-          >
-            <rect
-              x="2"
-              y="16.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-              opacity="0.45"
-            />
-            <rect
-              x="4"
-              y="10.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-            />
-            <rect
-              x="6"
-              y="4.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#C8A96E"
-            />
-          </svg>
-          <span class="wordmark"
-            ><span class="cat">Catalyst</span
-            ><span class="sh">Shift</span></span
-          >
-        </div>
-        <div class="slide-num">01 / {{TOTAL}}</div>
-        <div class="kicker">For {{CLIENT_NAME}} · {{DATE}}</div>
-        <h1>{{DECK_HEADLINE_ONE_LINE_HOOK}}</h1>
-        <p class="lede">{{ONE_LINE_SUBHEAD_NAMING_THE_OFFER_OR_THESIS}}</p>
-      </section>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sales Deck — Catalyst Shift</title>
+<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="stylesheet" href="../assets/colors_and_type.css">
+<style>
+  /* ── Stage / scaling ─────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; background: #050507; font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+  .deck { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 40px 24px; }
 
-      <!-- =============== SLIDE 02 — THE PROBLEM =============== -->
-      <section data-slide>
-        <div class="slide-mark">§ 02 · The problem</div>
-        <div class="slide-num">02 / {{TOTAL}}</div>
-        <h2>{{PROBLEM_HEADLINE_NAMING_WHAT_THE_PROSPECT_FEELS}}</h2>
-        <p class="lede">
-          {{2_SENTENCE_DESCRIPTION_OF_THE_PROBLEM_IN_THEIR_LANGUAGE}}
-        </p>
-      </section>
+  /* Each slide is a fixed-size 1280×720 frame, scaled to fit viewport */
+  .stage {
+    width: min(1280px, calc(100vw - 48px));
+    aspect-ratio: 1280 / 720;
+    position: relative;
+  }
+  section[data-slide] {
+    position: absolute; top: 0; left: 0;
+    width: 1280px; height: 720px;
+    transform-origin: top left;
+    transform: scale(var(--scale, 1));
+    background: var(--bg); color: var(--text);
+    overflow: hidden;
+    padding: 80px 96px;
+    display: flex; flex-direction: column; justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,0.6);
+  }
+  section[data-slide][data-bg="alt"]       { background: var(--bg-alt); }
+  section[data-slide][data-bg="spotlight"] { background: radial-gradient(ellipse 80% 60% at 50% 35%, rgba(52,226,194,0.10), transparent 70%), var(--bg); }
 
-      <!-- =============== SLIDE 03 — WHO WE ARE =============== -->
-      <section data-slide>
-        <div class="slide-mark">§ 03 · Who we are</div>
-        <div class="slide-num">03 / {{TOTAL}}</div>
-        <div class="kicker">Catalyst Shift</div>
-        <h2>We build growth systems.</h2>
-        <p class="lede">
-          We install the infrastructure that grows your business — whether
-          you're paying attention or not.
-        </p>
-      </section>
+  /* Spotlight: thin grid + glow */
+  section[data-slide][data-bg="spotlight"]::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask: radial-gradient(ellipse 70% 60% at 50% 35%, black 30%, transparent 75%);
+    -webkit-mask: radial-gradient(ellipse 70% 60% at 50% 35%, black 30%, transparent 75%);
+  }
+  section[data-slide][data-bg="spotlight"]::after {
+    content: ""; position: absolute; left: 50%; top: -160px; transform: translateX(-50%);
+    width: 1100px; height: 480px; pointer-events: none;
+    background: radial-gradient(ellipse 60% 50% at 50% 50%, var(--signal-glow), transparent 70%);
+    opacity: 0.55; filter: blur(40px);
+  }
+  section[data-slide] > * { z-index: 1; }
+  section[data-slide] > *:not(.slide-id):not(.slide-num):not(.deck-lockup):not(.footnote) { position: relative; }
 
-      <!-- =============== SLIDE 04 — DIFFERENTIATOR =============== -->
-      <section data-slide data-bg="light">
-        <div class="slide-mark">§ 04 · The pair</div>
-        <div class="slide-num">04 / {{TOTAL}}</div>
-        <p class="pull">
-          <span class="a">Kevin builds the engine that generates leads.</span
-          ><br /><span class="b"
-            >Lucas builds the engine that closes them.</span
-          >
-        </p>
-        <p
-          style="
-            margin-top: 32px;
-            color: #5c5850;
-            font-size: 20px;
-            max-width: 900px;
-          "
-        >
-          Most firms do one. We do both, integrated, on a platform you own.
-        </p>
-      </section>
+  /* ── Chrome (id, page count, lockup) ─────────────────────── */
+  .slide-id {
+    position: absolute; top: 32px; left: 96px; z-index: 2;
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 12px; letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--signal);
+  }
+  .slide-num {
+    position: absolute; top: 32px; right: 96px; z-index: 2;
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.10em;
+    text-transform: uppercase; color: var(--text-mute);
+  }
+  .deck-lockup {
+    position: absolute; bottom: 32px; left: 96px; z-index: 2;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .deck-lockup .mark { width: 22px; height: 22px; }
+  .deck-lockup .wm {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 16px; letter-spacing: -0.025em; color: var(--text);
+  }
+  .deck-lockup .wm .sh { color: var(--signal); }
+  .footnote {
+    position: absolute; bottom: 32px; right: 96px; z-index: 2;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    color: var(--text-mute);
+  }
 
-      <!-- =============== SLIDE 05 — WHAT WE BUILD =============== -->
-      <section data-slide>
-        <div class="slide-mark">§ 05 · What we build</div>
-        <div class="slide-num">05 / {{TOTAL}}</div>
-        <h2>People · Process · Platform</h2>
-        <div class="threecol">
-          <div class="col">
-            <div class="num">01 · People</div>
-            <h3>Senior partners only</h3>
-            <p>
-              Kevin, Lucas, and Keith on every engagement. No junior account
-              managers, no offshore handoff.
-            </p>
-          </div>
-          <div class="col">
-            <div class="num">02 · Process</div>
-            <h3>60–90 days, fixed fee</h3>
-            <p>
-              Install lead-gen and revenue ops infrastructure on a defined
-              timeline, with measurable outcomes guaranteed in writing.
-            </p>
-          </div>
-          <div class="col">
-            <div class="num">03 · Platform</div>
-            <h3>Catalyst OS</h3>
-            <p>
-              The operating layer that runs the systems we install. Yours after
-              handoff.
-            </p>
-          </div>
-        </div>
-      </section>
+  /* ── Type ────────────────────────────────────────────────── */
+  .kicker {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 13px; letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 28px;
+  }
+  h1.cover {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 88px; letter-spacing: -0.04em; line-height: 0.98;
+    margin: 0 0 24px; max-width: 1080px; color: var(--text);
+    text-wrap: balance; overflow-wrap: anywhere;
+  }
+  h1.cover .sub { display: block; color: var(--text-dim); font-weight: 600; }
+  h2.slide {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 64px; letter-spacing: -0.03em; line-height: 1.04;
+    margin: 0 0 24px; max-width: 1000px; color: var(--text);
+    text-wrap: balance;
+  }
+  p.lede {
+    font-family: var(--font-body); font-weight: 400;
+    font-size: 26px; line-height: 1.4; color: var(--text-dim);
+    max-width: 940px; margin: 0;
+  }
+  p.lede strong { color: var(--text); font-weight: 600; }
+  p.lede em { font-style: normal; color: var(--signal); }
 
-      <!-- =============== SLIDE 06 — APPROACH =============== -->
-      <section data-slide>
-        <div class="slide-mark">§ 06 · Approach</div>
-        <div class="slide-num">06 / {{TOTAL}}</div>
-        <h2>How the engagement runs</h2>
-        <ul>
-          <li>
-            <strong>Weeks 1–2 · Onboarding.</strong> Audit current stack, lock
-            outcomes in writing, map the install sequence.
-          </li>
-          <li>
-            <strong>Weeks 3–{{X}} · Build.</strong> Install lead-gen + revenue
-            ops infrastructure. Weekly check-ins, end-of-phase summaries.
-          </li>
-          <li>
-            <strong>Weeks {{X+1}}–{{Y}} · Operate.</strong> Run the systems with
-            your team alongside ours. Tune, document, train.
-          </li>
-          <li>
-            <strong>Final week · Handoff.</strong> Documentation, access,
-            training. You own the infrastructure.
-          </li>
-        </ul>
-      </section>
+  /* ── Pull quote (the differentiator) ─────────────────────── */
+  .pull-deck {
+    padding-left: 32px; border-left: 3px solid var(--signal);
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 56px; line-height: 1.15; letter-spacing: -0.025em;
+    max-width: 1080px; color: var(--text);
+  }
+  .pull-deck .a { color: var(--signal); display: block; }
+  .pull-deck .b { color: var(--accent); display: block; margin-top: 8px; }
 
-      <!-- =============== SLIDE 07 — PRICING =============== -->
-      <section data-slide>
-        <div class="slide-mark">§ 07 · Engagements</div>
-        <div class="slide-num">07 / {{TOTAL}}</div>
-        <h2>Three ways to start</h2>
-        <div class="pricing-row">
-          <div class="tier">01 · Diagnostic</div>
-          <div class="name">
-            Diagnostic<small>30-day assessment + 90-day plan</small>
-          </div>
-          <div class="fee">$12K</div>
-        </div>
-        <div class="pricing-row">
-          <div class="tier">02 · Foundation</div>
-          <div class="name">
-            Foundation<small>Lead-gen + sales close systems installed</small>
-          </div>
-          <div class="fee">$35K</div>
-        </div>
-        <div class="pricing-row">
-          <div class="tier">03 · Operating Layer</div>
-          <div class="name">
-            Operating Layer<small
-              >Foundation + Catalyst OS, fully integrated</small
-            >
-          </div>
-          <div class="fee">$45K+</div>
-        </div>
-        <p style="margin-top: 24px; font-size: 18px">
-          Most engagements continue on a $3–8K/month platform retainer after
-          implementation.
-        </p>
-      </section>
+  /* ── Three-up ────────────────────────────────────────────── */
+  .threecol { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 32px; }
+  .threecol .col {
+    border: 1px solid var(--border); border-radius: var(--r-3);
+    background: var(--surface); padding: 26px 28px;
+  }
+  .threecol .col .num {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 10px;
+  }
+  .threecol .col h3 {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 26px; letter-spacing: -0.02em; line-height: 1.15;
+    color: var(--text); margin: 0 0 10px;
+  }
+  .threecol .col p {
+    font-size: 16px; line-height: 1.5; color: var(--text-dim); margin: 0;
+  }
 
-      <!-- =============== SLIDE 08 — GUARANTEE =============== -->
-      <section data-slide data-bg="light">
-        <div class="slide-mark" style="color: #a04830">§ 08 · Guarantee</div>
-        <div class="slide-num" style="color: #5c5850">08 / {{TOTAL}}</div>
-        <h2 style="color: #1a1a1f">Outcomes guaranteed in writing.</h2>
-        <p class="lede" style="color: #5c5850">
-          Every engagement defines measurable outcomes before we start. If we
-          miss them, we keep working at no cost until we hit them.
-        </p>
-      </section>
+  /* ── List slide ──────────────────────────────────────────── */
+  ol.steps, ul.steps { list-style: none; padding: 0; margin: 12px 0 0; max-width: 1000px; }
+  ol.steps { counter-reset: cs; }
+  ol.steps li, ul.steps li {
+    position: relative; padding: 18px 0 18px 56px;
+    border-bottom: 1px solid var(--border);
+    font-size: 22px; line-height: 1.5; color: var(--text-dim);
+  }
+  ol.steps li:last-child, ul.steps li:last-child { border-bottom: none; }
+  ol.steps li { counter-increment: cs; }
+  ol.steps li::before {
+    content: counter(cs, decimal-leading-zero);
+    position: absolute; left: 0; top: 22px;
+    font-family: var(--font-mono); font-size: 14px; font-weight: 500;
+    letter-spacing: 0.06em; color: var(--signal);
+  }
+  ul.steps li::before {
+    content: ""; position: absolute; left: 16px; top: 30px;
+    width: 7px; height: 7px; border-radius: 999px; background: var(--signal);
+  }
+  ol.steps li strong, ul.steps li strong { color: var(--text); font-weight: 600; }
 
-      <!-- =============== SLIDE 09 — RECOMMENDATION =============== -->
-      <section data-slide>
-        <div class="slide-mark">§ 09 · For {{CLIENT_NAME}}</div>
-        <div class="slide-num">09 / {{TOTAL}}</div>
-        <h2>{{RECOMMENDATION_HEADLINE}}</h2>
-        <p class="lede">
-          We'd recommend starting with
-          <strong style="color: var(--gold)">{{TIER_NAME}}</strong>.
-          {{ONE_LINE_WHY_THIS_TIER_FITS_THIS_CLIENT}}.
-        </p>
-      </section>
+  /* ── Pricing rows ────────────────────────────────────────── */
+  .price-stack { display: flex; flex-direction: column; gap: 12px; max-width: 1080px; }
+  .price-row {
+    display: grid; grid-template-columns: 140px 1fr auto; gap: 24px;
+    align-items: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-3); padding: 22px 28px;
+  }
+  .price-row.featured {
+    border-color: var(--signal-soft);
+    background: linear-gradient(180deg, var(--surface-hi), var(--surface));
+    box-shadow: 0 0 80px -40px var(--signal-glow);
+  }
+  .price-row .tier-id {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--signal);
+  }
+  .price-row .name {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 26px; color: var(--text); letter-spacing: -0.02em; line-height: 1.15;
+  }
+  .price-row .name small {
+    display: block; margin-top: 4px;
+    font-family: var(--font-body); font-weight: 400; font-size: 16px;
+    letter-spacing: 0; color: var(--text-dim); line-height: 1.45;
+  }
+  .price-row .fee {
+    font-family: var(--font-display); font-weight: 600; font-size: 32px;
+    letter-spacing: -0.02em; color: var(--text);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
 
-      <!-- =============== SLIDE 10 — NEXT STEPS =============== -->
-      <section data-slide>
-        <div class="slide-mark">§ 10 · Next</div>
-        <div class="slide-num">10 / {{TOTAL}}</div>
-        <h2>Three steps to start</h2>
-        <ul>
-          <li>
-            <strong>This week.</strong> Confirm direction. We send a proposal
-            mirroring this scope.
-          </li>
-          <li>
-            <strong>Next week.</strong> Sign SOW with outcomes locked in
-            writing.
-          </li>
-          <li>
-            <strong>Two weeks out.</strong> Onboarding call. Implementation
-            begins {{TARGET_START_DATE}}.
-          </li>
-        </ul>
-        <div class="footnote">
-          {{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}} · catalystshift.ai
-        </div>
-      </section>
+  /* ── Module-frame (proof slide) ──────────────────────────── */
+  .deck-frame {
+    border: 1px solid var(--border); border-radius: var(--r-3);
+    background: var(--surface); overflow: hidden; max-width: 1080px;
+  }
+  .deck-frame .chrome {
+    display: flex; align-items: center; gap: 12px;
+    height: 38px; padding: 0 16px;
+    border-bottom: 1px solid var(--border); background: var(--surface-hi);
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em;
+    color: var(--text-mute);
+  }
+  .deck-frame .chrome .dots { display: inline-flex; gap: 6px; }
+  .deck-frame .chrome .dots span { width: 9px; height: 9px; border-radius: 999px; background: rgba(255,255,255,0.10); }
+  .deck-frame .chrome .right { margin-left: auto; color: var(--signal); }
+  .deck-frame table {
+    width: 100%; border-collapse: collapse; font-size: 16px;
+  }
+  .deck-frame th, .deck-frame td {
+    text-align: left; padding: 14px 20px;
+    border-bottom: 1px solid var(--border); vertical-align: middle;
+  }
+  .deck-frame thead th {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-mute);
+  }
+  .deck-frame tbody td.outcome { color: var(--text); font-weight: 500; }
+  .deck-frame tbody td.metric  { font-family: var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .deck-frame tbody tr:last-child td { border-bottom: none; }
+  .deck-frame .dot {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--font-mono); font-size: 12px;
+  }
+  .deck-frame .dot::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
+  .deck-frame .dot.positive { color: var(--positive); }
+  .deck-frame .dot.signal   { color: var(--signal); }
+  .deck-frame .dot.caution  { color: var(--caution); }
+
+  /* ── Guarantee slide ─────────────────────────────────────── */
+  .guarantee-card {
+    margin-top: 28px; padding: 28px 32px; max-width: 980px;
+    background: linear-gradient(180deg, rgba(52,226,194,0.08), rgba(52,226,194,0.02));
+    border: 1px solid var(--signal-soft); border-radius: var(--r-3);
+    position: relative; overflow: hidden;
+  }
+  .guarantee-card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: linear-gradient(180deg, var(--signal), transparent);
+  }
+  .guarantee-card .label {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--signal);
+    margin-bottom: 14px; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .guarantee-card .label::before {
+    content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--signal);
+    box-shadow: 0 0 8px var(--signal);
+  }
+  .guarantee-card p { margin: 0; font-size: 22px; line-height: 1.5; color: var(--text); }
+  .guarantee-card p strong { color: var(--signal); font-weight: 600; }
+
+  /* ── Print rules ─────────────────────────────────────────── */
+  @page { size: 1280px 720px; margin: 0; }
+  @media print {
+    html, body { background: #fff; }
+    .deck { padding: 0; gap: 0; }
+    .stage { width: 1280px !important; height: 720px !important; aspect-ratio: auto !important; }
+    section[data-slide] {
+      transform: none !important;
+      page-break-after: always; border-radius: 0; border: none; box-shadow: none;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- =============== 01 — COVER =============== -->
+<section data-slide data-bg="spotlight" data-screen-label="01 Cover">
+  <div class="slide-id">Catalyst Shift · Deck</div>
+  <div class="slide-num">01 / {{TOTAL}}</div>
+
+  <div class="kicker">For {{CLIENT_NAME}} · {{DATE}}</div>
+  <h1 class="cover">
+    {{DECK_HEADLINE_ONE_LINE_HOOK}}<br>
+    <span class="sub">{{HEADLINE_SUPPORTING_LINE}}</span>
+  </h1>
+  <p class="lede">{{ONE_LINE_SUBHEAD_NAMING_THE_OFFER_OR_THESIS}}</p>
+
+  <div class="deck-lockup">
+    <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      
+      <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
+      <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
+      <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
+    </svg>
+    <span class="wm">Catalyst<span class="sh">Shift</span></span>
+  </div>
+</section>
+
+<!-- =============== 02 — THE PROBLEM =============== -->
+<section data-slide data-screen-label="02 Problem">
+  <div class="slide-id">02 · The problem</div>
+  <div class="slide-num">02 / {{TOTAL}}</div>
+  <h2 class="slide">{{PROBLEM_HEADLINE_NAMING_WHAT_THE_PROSPECT_FEELS}}</h2>
+  <p class="lede">{{2_SENTENCE_DESCRIPTION_OF_THE_PROBLEM_IN_THEIR_LANGUAGE}}</p>
+</section>
+
+<!-- =============== 03 — WHO WE ARE =============== -->
+<section data-slide data-bg="alt" data-screen-label="03 Who">
+  <div class="slide-id">03 · Who we are</div>
+  <div class="slide-num">03 / {{TOTAL}}</div>
+  <div class="kicker">Catalyst Shift</div>
+  <h2 class="slide">The operating layer built for modern MSPs.</h2>
+  <p class="lede">A vertical-first, product-led firm. <strong>Catalyst OS</strong> is a modular AI operating layer that runs the five operations and revenue workflows MSPs lose money on every quarter — sitting above your PSA, RMM, and ticketing stack, running on your existing data.</p>
+</section>
+
+<!-- =============== 04 — DIFFERENTIATOR =============== -->
+<section data-slide data-bg="spotlight" data-screen-label="04 Pair">
+  <div class="slide-id">04 · The pair</div>
+  <div class="slide-num">04 / {{TOTAL}}</div>
+  <p class="pull-deck">
+    <span class="a">Kevin builds the engine that generates leads.</span>
+    <span class="b">Lucas builds the engine that closes them.</span>
+  </p>
+  <p style="margin-top:32px;color:var(--text-dim);font-size:22px;max-width:980px;line-height:1.5;">
+    Most firms do one. We do both, integrated, on a platform you own after handoff.
+  </p>
+</section>
+
+<!-- =============== 05 — WHAT WE BUILD =============== -->
+<section data-slide data-screen-label="05 Build">
+  <div class="slide-id">05 · The five modules</div>
+  <div class="slide-num">05 / {{TOTAL}}</div>
+  <h2 class="slide">Five modules. Three tiers. One operating layer.</h2>
+  <div class="deck-frame" style="margin-top:18px;max-width:1088px;">
+    <div class="chrome">
+      <span class="dots"><span></span><span></span><span></span></span>
+      <span>catalyst&nbsp;os · modules</span>
+      <span class="right">M.01–M.05</span>
     </div>
-  </body>
+    <table>
+      <thead><tr><th>Module</th><th>What it runs</th><th>Setup</th><th>MRR</th></tr></thead>
+      <tbody>
+        <tr><td class="outcome">M.01 QBR Automation</td><td>Quarterly business reviews delivered on time, every time</td><td class="metric">$4,500</td><td class="metric">$1,200/mo</td></tr>
+        <tr><td class="outcome">M.02 Churn Early Warning</td><td>Retention risk signals from your PSA + ticket data</td><td class="metric">$5,000</td><td class="metric">$1,500/mo</td></tr>
+        <tr><td class="outcome">M.03 Proposal Generation</td><td>Faster proposal velocity, consistent scope language</td><td class="metric">$5,500</td><td class="metric">$1,000/mo</td></tr>
+        <tr><td class="outcome">M.04 Pipeline Visibility</td><td>Deal velocity and forecast accuracy across your CRM</td><td class="metric">$3,500</td><td class="metric">$800/mo</td></tr>
+        <tr><td class="outcome">M.05 Content &amp; Authority</td><td>Market authority engine — the one we run on ourselves</td><td class="metric">$3,000</td><td class="metric">$1,000/mo</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- =============== 06 — APPROACH =============== -->
+<section data-slide data-bg="alt" data-screen-label="06 Approach">
+  <div class="slide-id">06 · Approach</div>
+  <div class="slide-num">06 / {{TOTAL}}</div>
+  <h2 class="slide">Four stages. No surprises.</h2>
+  <ol class="steps">
+    <li><strong>Listen · 30 minutes.</strong> A discovery call, not a pitch. We pressure-test the modular framework against your actual operation.</li>
+    <li><strong>Design-partner conversation.</strong> For qualified MSPs, we scope module selection, integration plan, and design-partner terms.</li>
+    <li><strong>SOW with outcomes in writing.</strong> Defined module scope, integration plan, measurable outcomes, timeline, guarantee.</li>
+    <li><strong>Onboarding within 5 business days.</strong> Stack credentials, baseline data, kickoff. First module outcome inside 30 days.</li>
+  </ol>
+</section>
+
+<!-- =============== 07 — PRICING =============== -->
+<section data-slide data-screen-label="07 Pricing">
+  <div class="slide-id">07 · Three tiers</div>
+  <div class="slide-num">07 / {{TOTAL}}</div>
+  <h2 class="slide">Pricing in public.</h2>
+  <div class="price-stack">
+    <div class="price-row">
+      <div class="tier-id">T.01 · Foundation</div>
+      <div class="name">Foundation — Operations<small>Modules 01–03 · QBR, churn warning, proposals</small></div>
+      <div class="fee">$12.5K + $3.2K/mo</div>
+    </div>
+    <div class="price-row">
+      <div class="tier-id">T.02 · Growth</div>
+      <div class="name">Growth — Revenue<small>Modules 04–05 · Pipeline visibility + content authority</small></div>
+      <div class="fee">$5.5K + $1.6K/mo</div>
+    </div>
+    <div class="price-row featured">
+      <div class="tier-id">T.03 · Full Stack</div>
+      <div class="name">Full Stack — All five modules<small>Conservative Year 1 value $95K–$130K · Priced like a junior ops hire, covering five functions one hire never could</small></div>
+      <div class="fee">$16.5K + $4.5K/mo</div>
+    </div>
+  </div>
+  <p style="margin-top:18px;font-size:16px;color:var(--text-dim);max-width:1080px;">Annual contracts, quarterly business reviews. Design-partner pricing reserved for the first 10 customers.</p>
+</section>
+
+<!-- =============== 08 — GUARANTEE =============== -->
+<section data-slide data-bg="spotlight" data-screen-label="08 Guarantee">
+  <div class="slide-id">08 · Guarantee</div>
+  <div class="slide-num">08 / {{TOTAL}}</div>
+  <h2 class="slide">Outcomes guaranteed in writing.</h2>
+  <p class="lede">Every engagement defines measurable outcomes before we start. If we miss them, we keep working at no cost until we hit them.</p>
+  <div class="guarantee-card">
+    <div class="label">Guarantee · in writing</div>
+    <p>Every Catalyst Shift SOW includes named metrics, a final deadline, and the same clause: <strong>we don't stop until they're hit.</strong></p>
+  </div>
+</section>
+
+<!-- =============== 09 — PROOF =============== -->
+<section data-slide data-bg="alt" data-screen-label="09 Proof">
+  <div class="slide-id">09 · Proof</div>
+  <div class="slide-num">09 / {{TOTAL}}</div>
+  <h2 class="slide">Founding cohort, in flight.</h2>
+  <p class="lede" style="font-size:20px;margin-bottom:24px;">Catalyst OS is shipping module-by-module with our design-partner cohort. Honest about build state — these are the engagements running today.</p>
+  <div class="deck-frame">
+    <div class="chrome">
+      <span class="dots"><span></span><span></span><span></span></span>
+      <span>catalyst&nbsp;os · founding cohort</span>
+      <span class="right">M.PROOF</span>
+    </div>
+    <table>
+      <thead><tr><th>MSP</th><th>Module</th><th>Status</th><th>Outcome</th></tr></thead>
+      <tbody>
+        <tr><td class="outcome">{{PROOF_1_CLIENT}}</td><td class="metric">{{PROOF_1_MODULE}}</td><td><span class="dot positive">delivered</span></td><td class="metric">{{PROOF_1_RESULT}}</td></tr>
+        <tr><td class="outcome">{{PROOF_2_CLIENT}}</td><td class="metric">{{PROOF_2_MODULE}}</td><td><span class="dot signal">in flight</span></td><td class="metric">{{PROOF_2_RESULT}}</td></tr>
+        <tr><td class="outcome">{{PROOF_3_CLIENT}}</td><td class="metric">{{PROOF_3_MODULE}}</td><td><span class="dot signal">in flight</span></td><td class="metric">{{PROOF_3_RESULT}}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- =============== 10 — RECOMMENDATION =============== -->
+<section data-slide data-screen-label="10 Recommend">
+  <div class="slide-id">10 · For {{CLIENT_NAME}}</div>
+  <div class="slide-num">10 / {{TOTAL}}</div>
+  <div class="kicker">Recommendation</div>
+  <h2 class="slide">{{RECOMMENDATION_HEADLINE}}</h2>
+  <p class="lede">We'd recommend starting with <strong><em>{{TIER_NAME}}</em></strong> — beginning with <strong>Module {{STARTING_MODULE}}</strong>. {{ONE_LINE_WHY_THIS_MODULE_FITS_THIS_MSP}}.</p>
+</section>
+
+<!-- =============== 11 — NEXT STEPS =============== -->
+<section data-slide data-bg="alt" data-screen-label="11 Next">
+  <div class="slide-id">11 · Next</div>
+  <div class="slide-num">11 / {{TOTAL}}</div>
+  <h2 class="slide">Three steps to start.</h2>
+  <ol class="steps">
+    <li><strong>This week.</strong> Confirm direction and starting module. We send an SOW mirroring this scope.</li>
+    <li><strong>Next week.</strong> Sign SOW with named outcomes, integration plan, and guarantee in writing.</li>
+    <li><strong>Within 5 business days.</strong> Onboarding kickoff — credentials, baseline data, integration begins. First module outcome inside 30 days.</li>
+  </ol>
+  <div class="footnote">{{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}} · catalystshift.ai</div>
+</section>
+
+</div>
+<script>
+  // Wrap each <section data-slide> in a <div class="stage"> for scaling.
+  (function() {
+    const deck = document.querySelector('.deck');
+    if (!deck) return;
+    [...deck.querySelectorAll('section[data-slide]')].forEach(slide => {
+      const stage = document.createElement('div');
+      stage.className = 'stage';
+      slide.parentNode.insertBefore(stage, slide);
+      stage.appendChild(slide);
+    });
+    // Set --scale on each .stage so the 1280×720 slide fits its container width.
+    function rescale() {
+      document.querySelectorAll('.stage').forEach(stage => {
+        const w = stage.clientWidth;
+        const scale = w / 1280;
+        const slide = stage.querySelector('section[data-slide]');
+        if (slide) slide.style.setProperty('--scale', scale);
+      });
+    }
+    rescale();
+    window.addEventListener('resize', rescale);
+  })();
+</script>
+</body>
 </html>

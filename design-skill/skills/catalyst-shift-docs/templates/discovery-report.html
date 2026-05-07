@@ -1,433 +1,298 @@
 <!doctype html>
 <!--
-  Catalyst Shift — Discovery / Diagnostic Report Template
-  Sent after a discovery call. Reflects what we heard, names the underlying
-  problem, recommends a path. Should feel like the prospect was understood,
-  not pitched at.
+  Catalyst Shift — Discovery Report Template (site-fidelity, dark, screen-first)
+  ============================================================
+  USAGE FOR CLAUDE:
+    1. The discovery report is delivered AFTER the discovery call, BEFORE the proposal.
+       Its purpose: prove we listened, name the real problem, and frame the recommendation.
+    2. Replace every {{PLACEHOLDER}}. Quote the client in their own words where called for.
+    3. Section structure: § 01 Context · § 02 What we heard · § 03 Symptoms vs. root cause ·
+       § 04 Diagnostic · § 05 Recommendation preview · § 06 Next step.
+    4. The recommendation here is a PREVIEW, not a commitment. The proposal is the commitment.
+    5. Print via Cmd/Ctrl+P — print rules in doc-shell.css invert the canvas.
+  ============================================================
 -->
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Discovery — {{CLIENT_NAME}} — Catalyst Shift</title>
-    <link rel="stylesheet" href="../assets/colors_and_type.css" />
-    <style>
-      * {
-        box-sizing: border-box;
-      }
-      html,
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text-primary);
-        font-family: var(--font-body);
-      }
-      .page {
-        max-width: 760px;
-        margin: 0 auto;
-        padding: 80px 56px 120px;
-      }
-      .masthead {
-        border-top: 2px solid var(--gold);
-        padding-top: 20px;
-        margin-bottom: 64px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        line-height: 1.6;
-      }
-      .masthead .lockup {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-      }
-      .masthead .lockup .mark {
-        height: 24px;
-        width: 24px;
-        display: block;
-        flex-shrink: 0;
-      }
-      .masthead .lockup .wordmark {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 22px;
-        letter-spacing: -0.02em;
-        text-transform: none;
-        display: inline-flex;
-        align-items: baseline;
-        gap: 2px;
-        line-height: 1;
-      }
-      .masthead .lockup .cat {
-        color: var(--text-primary);
-      }
-      .masthead .lockup .sh {
-        color: var(--gold);
-      }
-      .masthead .meta {
-        text-align: right;
-        line-height: 1.5;
-      }
-      .doc-kicker {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--teal);
-        margin-bottom: 16px;
-      }
-      h1.doc {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: clamp(40px, 5vw, 60px);
-        letter-spacing: -0.03em;
-        line-height: 1.04;
-        margin: 0 0 24px;
-      }
-      .lede {
-        font-family: var(--font-display);
-        font-weight: 500;
-        font-size: 20px;
-        line-height: 1.5;
-        color: var(--text-secondary);
-        max-width: 600px;
-        margin: 0 0 56px;
-      }
-      h2.sec {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: clamp(24px, 2.6vw, 32px);
-        letter-spacing: -0.02em;
-        line-height: 1.1;
-        margin: 72px 0 8px;
-      }
-      h2.sec .num {
-        display: block;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        color: var(--gold);
-        margin-bottom: 10px;
-        font-weight: 500;
-        text-transform: uppercase;
-      }
-      h3 {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 20px;
-        margin: 28px 0 6px;
-        color: var(--text-primary);
-      }
-      h4 {
-        font-family: var(--font-mono);
-        font-weight: 500;
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        margin: 24px 0 6px;
-      }
-      p {
-        font-size: 16px;
-        line-height: 1.7;
-        color: var(--text-secondary);
-        margin: 0 0 16px;
-        max-width: 600px;
-      }
-      p strong {
-        color: var(--text-primary);
-        font-weight: 600;
-      }
-      ul {
-        padding-left: 18px;
-        margin: 0 0 14px;
-        color: var(--text-secondary);
-        max-width: 600px;
-      }
-      li {
-        font-size: 15px;
-        line-height: 1.65;
-        margin: 0 0 6px;
-      }
-      ul li::marker {
-        color: var(--gold);
-      }
-      blockquote {
-        margin: 24px 0;
-        padding: 16px 24px;
-        border-left: 2px solid var(--gold);
-        font-family: var(--font-display);
-        font-style: normal;
-        font-size: 18px;
-        line-height: 1.5;
-        color: var(--text-primary);
-        max-width: 600px;
-      }
-      blockquote cite {
-        display: block;
-        margin-top: 8px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        font-style: normal;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-      }
-      .findings {
-        display: grid;
-        gap: 0;
-        margin: 16px 0 24px;
-      }
-      .finding {
-        display: grid;
-        grid-template-columns: 60px 1fr;
-        gap: 24px;
-        padding: 18px 0;
-        border-top: 1px solid var(--border);
-      }
-      .finding:last-child {
-        border-bottom: 1px solid var(--border);
-      }
-      .finding .n {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        color: var(--gold);
-      }
-      .finding .name {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 17px;
-        color: var(--text-primary);
-        margin: 0 0 4px;
-      }
-      .finding .what {
-        font-size: 14px;
-        line-height: 1.6;
-        color: var(--text-secondary);
-        margin: 0;
-      }
-      .recommend {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-left: 2px solid var(--teal);
-        padding: 24px 28px;
-        margin: 24px 0;
-        border-radius: 2px;
-      }
-      .recommend .label {
-        font-family: var(--font-mono);
-        font-size: 10px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--teal);
-        margin-bottom: 10px;
-      }
-      .recommend .tier {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 22px;
-        color: var(--text-primary);
-        margin: 0 0 6px;
-      }
-      .recommend .why {
-        font-size: 14px;
-        line-height: 1.6;
-        color: var(--text-secondary);
-        margin: 0;
-      }
-      .colophon {
-        margin-top: 80px;
-        padding-top: 24px;
-        border-top: 2px solid var(--gold);
-        font-family: var(--font-mono);
-        font-size: 11px;
-        color: var(--text-muted);
-        display: flex;
-        justify-content: space-between;
-      }
-      @page {
-        size: Letter;
-        margin: 0.7in;
-      }
-      @media print {
-        html,
-        body {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-        .page {
-          padding: 0;
-          max-width: none;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="page">
-      <header class="masthead">
-        <div class="lockup">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            class="mark"
-            width="24"
-            height="24"
-            aria-hidden="true"
-          >
-            <rect
-              x="2"
-              y="16.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-              opacity="0.45"
-            />
-            <rect
-              x="4"
-              y="10.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-            />
-            <rect
-              x="6"
-              y="4.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#C8A96E"
-            />
-          </svg>
-          <span class="wordmark"
-            ><span class="cat">Catalyst</span
-            ><span class="sh">Shift</span></span
-          >
-        </div>
-        <div class="meta">
-          <div>Discovery · {{DOC_NUMBER}}</div>
-          <div>{{ISSUE_DATE}}</div>
-        </div>
-      </header>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Discovery Report — {{CLIENT_NAME}} — Catalyst Shift</title>
+<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="stylesheet" href="../assets/colors_and_type.css">
+<link rel="stylesheet" href="../assets/doc-shell.css">
+<style>
+  /* discovery-only overrides */
+  .quote {
+    margin: 16px 0 24px; padding: 20px 24px;
+    border: 1px solid var(--border); border-left: 2px solid var(--accent);
+    border-radius: var(--r-3); background: var(--surface);
+    font-family: var(--font-display); font-weight: 500;
+    font-size: 18px; line-height: 1.45; color: var(--text);
+    max-width: 680px;
+  }
+  .quote .who {
+    display: block; margin-top: 12px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-mute); font-weight: 500;
+  }
+  .vs {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px;
+    align-items: stretch; max-width: 880px; margin: 8px 0 0;
+  }
+  @media (max-width: 720px) { .vs { grid-template-columns: 1fr; } .vs .arrow-cell { display: none; } }
+  .vs .col {
+    border: 1px solid var(--border); border-radius: var(--r-3);
+    background: var(--surface); padding: 20px 22px;
+  }
+  .vs .col.symptoms { border-color: rgba(255,111,77,0.35); }
+  .vs .col.cause { border-color: var(--signal-soft); background: linear-gradient(180deg, rgba(52,226,194,0.05), var(--surface)); }
+  .vs h4 {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  .vs .symptoms h4 { color: var(--warm); }
+  .vs .cause h4 { color: var(--signal); }
+  .vs ul { margin: 0; padding: 0; list-style: none; }
+  .vs li {
+    position: relative; padding-left: 20px; margin-bottom: 8px;
+    font-size: 14.5px; line-height: 1.5; color: var(--text-dim);
+  }
+  .vs .symptoms li::before { content: "·"; position: absolute; left: 6px; color: var(--warm); }
+  .vs .cause li::before { content: "·"; position: absolute; left: 6px; color: var(--signal); }
+  .vs .arrow-cell {
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-mute);
+  }
+</style>
+</head>
+<body>
 
-      <div class="doc-kicker">Discovery report · {{CLIENT_NAME}}</div>
-      <h1 class="doc">{{HEADLINE_RESTATING_THE_CORE_PROBLEM}}</h1>
-      <p class="lede">
-        {{ONE_PARAGRAPH_FRAMING_WHAT_THIS_DOC_IS_AND_WHY_WE_WROTE_IT_AFTER_THE_CALL}}
-      </p>
+<header class="nav">
+  <div class="nav-inner">
+    <a class="lockup" href="#">
+      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        
+        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
+        <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
+        <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
+      </svg>
+      <span class="wordmark">Catalyst<span class="sh">Shift</span></span>
+    </a>
+    <div class="nav-meta">
+      <span>Discovery · {{DOC_NUMBER}}</span>
+      <span>{{ISSUE_DATE}}</span>
+      <span class="live">Synthesis</span>
+    </div>
+  </div>
+</header>
 
-      <h2 class="sec">
-        <span class="num">§ 01 · What we heard</span>In your words
-      </h2>
-      <p>{{1-2_SENTENCES_RESTATING_THEIR_SITUATION_FROM_THE_CALL}}</p>
-      <blockquote>
-        "{{DIRECT_QUOTE_FROM_THE_PROSPECT_THAT_CRYSTALLIZES_THE_PROBLEM}}"<cite
-          >{{NAME}} · Discovery call · {{DATE}}</cite
-        >
-      </blockquote>
-      <p>{{1-2_SENTENCES_ON_WHY_THIS_QUOTE_MATTERS_AND_WHAT_IT_POINTS_TO}}</p>
+<section class="hero">
+  <div class="grid-bg"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-inner">
+    <div class="pill"><span class="badge">Discovery</span></div>
+    <div class="doc-kicker">Discovery report</div>
+    <h1 class="doc">
+      What's actually getting in the way.<br>
+      <span class="subline">{{ONE_LINE_REFRAME_OF_THE_PROBLEM}}</span>
+    </h1>
+    <p class="lede">{{2_SENTENCE_PROMISE_THAT_THIS_DOCUMENT_NAMES_THE_REAL_PROBLEM_NOT_THE_SYMPTOMS_AND_PROPOSES_A_PATH}}</p>
 
-      <h2 class="sec">
-        <span class="num">§ 02 · The pattern underneath</span>What's actually
-        happening
-      </h2>
-      <p>
-        {{2-3_SENTENCES_NAMING_THE_UNDERLYING_PROBLEM_DISTINCT_FROM_THE_SYMPTOMS}}
-      </p>
-      <p>{{1-2_SENTENCES_ON_WHY_THE_OBVIOUS_FIXES_HAVENT_WORKED_OR_WONT}}</p>
+    <div class="cover-strip">
+      <div class="cell"><div class="label">Issued</div><div class="value">{{ISSUE_DATE}}<small>Doc · {{DOC_NUMBER}}</small></div></div>
+      <div class="cell"><div class="label">For</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
+      <div class="cell"><div class="label">Inputs</div><div class="value">{{N_STAKEHOLDERS}} stakeholders<small>{{N_HOURS}}h · {{N_DOCS}} docs reviewed</small></div></div>
+      <div class="cell"><div class="label">Recommends</div><div class="value">{{TIER_NAME}}<small>{{DURATION}} · ${{FEE}}</small></div></div>
+    </div>
+  </div>
+</section>
 
-      <h2 class="sec">
-        <span class="num">§ 03 · Findings</span>What we observed
-      </h2>
-      <div class="findings">
-        <div class="finding">
-          <span class="n">F.01</span>
-          <div>
-            <p class="name">{{FINDING_1_NAME}}</p>
-            <p class="what">{{FINDING_1_DETAIL_2_SENTENCES_MAX}}</p>
-          </div>
-        </div>
-        <div class="finding">
-          <span class="n">F.02</span>
-          <div>
-            <p class="name">{{FINDING_2_NAME}}</p>
-            <p class="what">{{FINDING_2_DETAIL}}</p>
-          </div>
-        </div>
-        <div class="finding">
-          <span class="n">F.03</span>
-          <div>
-            <p class="name">{{FINDING_3_NAME}}</p>
-            <p class="what">{{FINDING_3_DETAIL}}</p>
-          </div>
-        </div>
-        <div class="finding">
-          <span class="n">F.04</span>
-          <div>
-            <p class="name">{{FINDING_4_NAME}}</p>
-            <p class="what">{{FINDING_4_DETAIL}}</p>
-          </div>
-        </div>
+<!-- § 01 — CONTEXT -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">01</div>
+      <div class="s-eyebrow">Context</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">Where {{CLIENT_NAME}} stands today.</h2>
+      <p>{{2-3_SENTENCES_DESCRIBING_THE_BUSINESS_STAGE_TEAM_SIZE_REVENUE_BAND_AND_THE_INFLECTION_POINT_THEYRE_AT}}</p>
+      <p>{{1-2_SENTENCES_ON_WHY_NOW_WHAT_TRIGGERED_THE_CONVERSATION}}</p>
+    </div>
+  </div>
+</section>
+
+<!-- § 02 — WHAT WE HEARD -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">02</div>
+      <div class="s-eyebrow">What we heard</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">In their own words.</h2>
+      <p>Across {{N_STAKEHOLDERS}} stakeholders, three themes surfaced repeatedly. We've kept the language verbatim where we can.</p>
+
+      <h3>Theme 1 — {{THEME_1_LABEL}}</h3>
+      <div class="quote">
+        "{{VERBATIM_QUOTE_1}}"
+        <span class="who">— {{SPEAKER_1_NAME}}, {{SPEAKER_1_ROLE}}</span>
       </div>
 
-      <h2 class="sec">
-        <span class="num">§ 04 · Recommendation</span>Where to start
-      </h2>
-      <p>
-        {{1-2_SENTENCES_ON_THE_RECOMMENDED_PATH_AND_WHY_IT_FITS_THIS_CLIENT}}
-      </p>
-      <div class="recommend">
-        <div class="label">Recommended engagement</div>
-        <p class="tier">{{TIER_NAME}} — ${{FEE}} / {{DURATION}}</p>
-        <p class="why">{{ONE_LINE_ON_WHY_THIS_TIER_OVER_THE_OTHERS}}</p>
+      <h3>Theme 2 — {{THEME_2_LABEL}}</h3>
+      <div class="quote">
+        "{{VERBATIM_QUOTE_2}}"
+        <span class="who">— {{SPEAKER_2_NAME}}, {{SPEAKER_2_ROLE}}</span>
       </div>
-      <p>
-        <strong>Most engagements continue</strong> on a platform retainer
-        ({{RETAINER_RANGE}}/month) after implementation. We'd scope that with
-        you in the final two weeks if and only if it makes sense.
-      </p>
 
-      <h2 class="sec">
-        <span class="num">§ 05 · What success looks like</span>Outcomes we'd
-        commit to
-      </h2>
-      <p>
-        If we move forward, here's what we'd guarantee in writing for
-        {{CLIENT_NAME}}:
-      </p>
-      <ul>
-        <li><strong>{{OUTCOME_1}}</strong> — by {{DEADLINE_1}}</li>
-        <li><strong>{{OUTCOME_2}}</strong> — by {{DEADLINE_2}}</li>
-        <li><strong>{{OUTCOME_3}}</strong> — by {{DEADLINE_3}}</li>
-      </ul>
-      <p>If we don't hit them, we keep working at no cost until we do.</p>
-
-      <h2 class="sec">
-        <span class="num">§ 06 · Next steps</span>Two paths from here
-      </h2>
-      <p>
-        <strong>Path A — Move forward.</strong> Reply to confirm and we'll send
-        a proposal mirroring this scope within 2 business days.
-      </p>
-      <p>
-        <strong>Path B — Take it to your team.</strong> This document is yours.
-        Use it however helps internally. We'll follow up on {{FOLLOWUP_DATE}}
-        unless you tell us otherwise.
-      </p>
-
-      <div class="colophon">
-        <span>Catalyst Shift · catalystshift.ai</span>
-        <span>{{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}}</span>
+      <h3>Theme 3 — {{THEME_3_LABEL}}</h3>
+      <div class="quote">
+        "{{VERBATIM_QUOTE_3}}"
+        <span class="who">— {{SPEAKER_3_NAME}}, {{SPEAKER_3_ROLE}}</span>
       </div>
     </div>
-  </body>
+  </div>
+</section>
+
+<!-- § 03 — SYMPTOMS VS ROOT CAUSE -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">03</div>
+      <div class="s-eyebrow">Diagnosis</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">Symptoms vs. root cause.</h2>
+      <p>The pain points above are real, but they're symptoms. Underneath them is a single structural problem.</p>
+
+      <div class="vs">
+        <div class="col symptoms">
+          <h4>Symptoms · what's visible</h4>
+          <ul>
+            <li>{{SYMPTOM_1}}</li>
+            <li>{{SYMPTOM_2}}</li>
+            <li>{{SYMPTOM_3}}</li>
+            <li>{{SYMPTOM_4}}</li>
+          </ul>
+        </div>
+        <div class="arrow-cell">→ caused by →</div>
+        <div class="col cause">
+          <h4>Root cause · what's underneath</h4>
+          <ul>
+            <li>{{ROOT_CAUSE_1}}</li>
+            <li>{{ROOT_CAUSE_2}}</li>
+          </ul>
+        </div>
+      </div>
+
+      <p style="margin-top: 28px;">{{1-2_SENTENCES_EXPLAINING_WHY_FIXING_THE_SYMPTOMS_DIRECTLY_WONT_HOLD_AND_WHY_THE_ROOT_CAUSE_IS_THE_RIGHT_TARGET}}</p>
+    </div>
+  </div>
+</section>
+
+<!-- § 04 — DIAGNOSTIC SNAPSHOT -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">04</div>
+      <div class="s-eyebrow">Diagnostic</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">Where the leaks are.</h2>
+      <p>A snapshot of {{CLIENT_NAME}}'s operating layer today, scored against the dimensions a healthy revenue engine needs.</p>
+
+      <div class="module-frame" style="margin-top: 16px;">
+        <div class="chrome">
+          <span class="dots"><span></span><span></span><span></span></span>
+          <span class="crumb">catalyst&nbsp;os · {{CLIENT_SHORT}} · diagnostic</span>
+          <span class="right">M.DX — SCAN</span>
+        </div>
+        <div class="data-toolbar">
+          <span class="module-id">M.DX — DIAGNOSTIC</span>
+          <span class="title">Operating-layer scan</span>
+          <span class="meta">{{N_DIMENSIONS}} dimensions</span>
+        </div>
+        <table class="outcomes">
+          <thead><tr><th>Dimension</th><th>Status</th><th>Observation</th></tr></thead>
+          <tbody>
+            <tr><td class="outcome">Lead generation</td><td><span class="dot {{LEADGEN_TONE}}">{{LEADGEN_STATUS}}</span></td><td>{{LEADGEN_OBSERVATION}}</td></tr>
+            <tr><td class="outcome">Sales motion</td><td><span class="dot {{SALES_TONE}}">{{SALES_STATUS}}</span></td><td>{{SALES_OBSERVATION}}</td></tr>
+            <tr><td class="outcome">Conversion / close</td><td><span class="dot {{CLOSE_TONE}}">{{CLOSE_STATUS}}</span></td><td>{{CLOSE_OBSERVATION}}</td></tr>
+            <tr><td class="outcome">Onboarding / handoff</td><td><span class="dot {{ONBOARD_TONE}}">{{ONBOARD_STATUS}}</span></td><td>{{ONBOARD_OBSERVATION}}</td></tr>
+            <tr><td class="outcome">Visibility / reporting</td><td><span class="dot {{REPORT_TONE}}">{{REPORT_STATUS}}</span></td><td>{{REPORT_OBSERVATION}}</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p style="margin-top: 28px;">{{1-2_SENTENCES_ON_WHICH_DIMENSION_TO_FIX_FIRST_AND_WHY}}</p>
+    </div>
+  </div>
+</section>
+
+<!-- § 05 — RECOMMENDATION PREVIEW -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">05</div>
+      <div class="s-eyebrow">Path forward</div>
+      <div class="module-rail">
+        <div class="row active"><span class="id">{{TIER_CODE}}</span><span>{{TIER_NAME}}</span></div>
+        <div class="row"><span class="id">M.01</span><span>{{MODULE_1_SHORT}}</span></div>
+        <div class="row"><span class="id">M.02</span><span>{{MODULE_2_SHORT}}</span></div>
+        <div class="row"><span class="id">M.03</span><span>{{MODULE_3_SHORT}}</span></div>
+      </div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">What we'd recommend.</h2>
+      <p>Based on the diagnosis above, the right starting move is the <strong>{{TIER_NAME}}</strong> engagement: {{ONE_LINE_DESCRIPTION_OF_TIER_OUTCOME}}.</p>
+
+      <p class="pull">
+        <span class="a">Kevin builds the engine that generates leads.</span>
+        <span class="b">Lucas builds the engine that closes them.</span>
+      </p>
+
+      <p>The full proposal — scope, deliverables, fees, outcomes, and a written guarantee — follows this discovery report under separate cover.</p>
+    </div>
+  </div>
+</section>
+
+<!-- § 06 — NEXT STEP -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">06</div>
+      <div class="s-eyebrow">Next step</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">From here.</h2>
+      <ol>
+        <li><strong>Review this report</strong> internally with your team and surface anything we missed.</li>
+        <li><strong>Working session</strong> — 60 minutes, scheduled within 5 business days, to walk through the diagnosis live.</li>
+        <li><strong>Proposal issued</strong> within 2 business days of that session, mirroring the recommendation above with fees, timeline and outcomes.</li>
+      </ol>
+
+      <div class="signoff" style="margin-top: 32px;">
+        <div class="col">
+          <h4>Prepared by</h4>
+          <p>{{CS_LEAD_NAME}}<br><span class="role">{{CS_LEAD_ROLE}}</span><br><span class="role">{{CS_LEAD_EMAIL}}</span></p>
+        </div>
+        <div class="col">
+          <h4>For</h4>
+          <p>{{CLIENT_PRIMARY_NAME}}<br><span class="role">{{CLIENT_PRIMARY_ROLE}}</span><br><span class="role">{{CLIENT_NAME}}</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="inner">
+    <span>Catalyst Shift · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
+    <span>Discovery · {{DOC_NUMBER}} · {{ISSUE_DATE}}</span>
+  </div>
+</footer>
+
+</body>
 </html>

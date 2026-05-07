@@ -1,5 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="360" height="80" aria-label="Catalyst Shift">
-  
-  <text x="0" y="54" class="linen" font-size="44" letter-spacing="-1.2">Catalyst</text>
-  <text x="204" y="54" class="gold" font-size="44" letter-spacing="-1.2">Shift</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 56" aria-label="Catalyst Shift">
+  <g transform="translate(4 4)">
+    <path d="M24 4L4 14v20l20 10 20-10V14L24 4z" stroke="#34E2C2" stroke-width="3" fill="none"></path>
+    <path d="M24 14L14 19v10l10 5 10-5V19L24 14z" fill="#34E2C2" opacity="0.4"></path>
+    <circle cx="24" cy="24" r="4" fill="#34E2C2"></circle>
+  </g>
+  <text x="64" y="36" class="cs-cat" font-size="32">Catalyst</text>
+  <text x="200" y="36" class="cs-shift" font-size="32">Shift</text>
 </svg>

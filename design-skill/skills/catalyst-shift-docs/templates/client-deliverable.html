@@ -1,365 +1,233 @@
 <!doctype html>
 <!--
-  Catalyst Shift — Client Deliverable Template
-  The doc you hand a client during/after an engagement: a playbook,
-  audit findings, a strategy, an ops manual. Generic structure that
-  flexes to any phase deliverable.
+  Catalyst Shift — Client Deliverable Template (site-fidelity, dark, screen-first)
+  ============================================================
+  USAGE FOR CLAUDE:
+    1. The client deliverable is what gets handed to the client mid- or end-engagement.
+       Examples: ICP doc, sales playbook, ops audit, content system, brand brief.
+    2. Replace every {{PLACEHOLDER}}. Use {{DELIVERABLE_TYPE}} as the kicker.
+    3. Section structure is flexible — pattern is § 01 What this is · § 02 How to use ·
+       § 03 The work itself (multiple sub-sections allowed) · § 04 What's next.
+    4. This is the most "internal" of the doc types — keep tone direct, low marketing.
+    5. Print via Cmd/Ctrl+P — print rules in doc-shell.css invert the canvas.
+  ============================================================
 -->
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>{{DELIVERABLE_TITLE}} — {{CLIENT_NAME}} — Catalyst Shift</title>
-    <link rel="stylesheet" href="../assets/colors_and_type.css" />
-    <style>
-      * {
-        box-sizing: border-box;
-      }
-      html,
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text-primary);
-        font-family: var(--font-body);
-      }
-      .page {
-        max-width: 780px;
-        margin: 0 auto;
-        padding: 80px 56px 120px;
-      }
-      .masthead {
-        border-top: 2px solid var(--gold);
-        padding-top: 20px;
-        margin-bottom: 64px;
-        display: flex;
-        justify-content: space-between;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        line-height: 1.6;
-      }
-      .masthead .lockup {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-      }
-      .masthead .lockup .mark {
-        height: 24px;
-        width: 24px;
-        display: block;
-        flex-shrink: 0;
-      }
-      .masthead .lockup .wordmark {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 22px;
-        letter-spacing: -0.02em;
-        text-transform: none;
-        display: inline-flex;
-        align-items: baseline;
-        gap: 2px;
-        line-height: 1;
-      }
-      .masthead .lockup .cat {
-        color: var(--text-primary);
-      }
-      .masthead .lockup .sh {
-        color: var(--gold);
-      }
-      .doc-kicker {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--teal);
-        margin-bottom: 16px;
-      }
-      h1.doc {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: clamp(40px, 5vw, 60px);
-        letter-spacing: -0.03em;
-        line-height: 1.04;
-        margin: 0 0 24px;
-      }
-      .lede {
-        font-family: var(--font-display);
-        font-weight: 500;
-        font-size: 20px;
-        line-height: 1.5;
-        color: var(--text-secondary);
-        max-width: 600px;
-        margin: 0 0 56px;
-      }
-      .toc {
-        border: 1px solid var(--border);
-        background: var(--surface);
-        padding: 24px 28px;
-        margin: 0 0 64px;
-        border-radius: 2px;
-      }
-      .toc .label {
-        font-family: var(--font-mono);
-        font-size: 10px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--gold);
-        margin-bottom: 14px;
-      }
-      .toc ol {
-        padding-left: 0;
-        margin: 0;
-        list-style: none;
-      }
-      .toc li {
-        display: grid;
-        grid-template-columns: 48px 1fr;
-        gap: 12px;
-        font-size: 14px;
-        padding: 6px 0;
-        border-top: 1px dashed var(--border-subtle);
-      }
-      .toc li:first-child {
-        border-top: none;
-      }
-      .toc li .n {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        color: var(--text-muted);
-        letter-spacing: 0.08em;
-      }
-      .toc li a {
-        color: var(--text-secondary);
-        text-decoration: none;
-      }
-      .toc li a:hover {
-        color: var(--gold);
-      }
-      h2.sec {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: clamp(26px, 2.8vw, 36px);
-        letter-spacing: -0.02em;
-        line-height: 1.1;
-        margin: 80px 0 8px;
-      }
-      h2.sec .num {
-        display: block;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        color: var(--gold);
-        margin-bottom: 10px;
-        font-weight: 500;
-        text-transform: uppercase;
-      }
-      h3 {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 20px;
-        margin: 32px 0 8px;
-        color: var(--text-primary);
-      }
-      h4 {
-        font-family: var(--font-mono);
-        font-weight: 500;
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        margin: 24px 0 8px;
-      }
-      p {
-        font-size: 16px;
-        line-height: 1.7;
-        color: var(--text-secondary);
-        margin: 0 0 16px;
-        max-width: 600px;
-      }
-      p strong {
-        color: var(--text-primary);
-        font-weight: 600;
-      }
-      ul,
-      ol {
-        padding-left: 18px;
-        margin: 0 0 16px;
-        color: var(--text-secondary);
-        max-width: 600px;
-      }
-      li {
-        font-size: 15px;
-        line-height: 1.65;
-        margin: 0 0 6px;
-      }
-      ul li::marker {
-        color: var(--gold);
-      }
-      .callout {
-        background: rgba(200, 169, 110, 0.05);
-        border: 1px solid rgba(200, 169, 110, 0.18);
-        padding: 20px 24px;
-        margin: 24px 0;
-        border-radius: 2px;
-      }
-      .callout .label {
-        font-family: var(--font-mono);
-        font-size: 10px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--gold);
-        margin-bottom: 8px;
-      }
-      .callout p {
-        margin: 0;
-        color: var(--text-primary);
-        font-size: 15px;
-      }
-      .colophon {
-        margin-top: 80px;
-        padding-top: 24px;
-        border-top: 2px solid var(--gold);
-        font-family: var(--font-mono);
-        font-size: 11px;
-        color: var(--text-muted);
-        display: flex;
-        justify-content: space-between;
-      }
-      @page {
-        size: Letter;
-        margin: 0.7in;
-      }
-      @media print {
-        html,
-        body {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-        .page {
-          padding: 0;
-          max-width: none;
-        }
-        h2.sec {
-          page-break-after: avoid;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="page">
-      <header class="masthead">
-        <div class="lockup">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            class="mark"
-            width="24"
-            height="24"
-            aria-hidden="true"
-          >
-            <rect
-              x="2"
-              y="16.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-              opacity="0.45"
-            />
-            <rect
-              x="4"
-              y="10.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-            />
-            <rect
-              x="6"
-              y="4.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#C8A96E"
-            />
-          </svg>
-          <span class="wordmark"
-            ><span class="cat">Catalyst</span
-            ><span class="sh">Shift</span></span
-          >
-        </div>
-        <div>{{DELIVERABLE_TYPE}} · {{ISSUE_DATE}}</div>
-      </header>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{DELIVERABLE_NAME}} — {{CLIENT_NAME}} — Catalyst Shift</title>
+<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="stylesheet" href="../assets/colors_and_type.css">
+<link rel="stylesheet" href="../assets/doc-shell.css">
+<style>
+  .callout {
+    margin: 16px 0; padding: 18px 22px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 2px solid var(--accent); border-radius: var(--r-3);
+    max-width: 720px;
+  }
+  .callout .label {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .callout p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
+  .kv-table {
+    border: 1px solid var(--border); border-radius: var(--r-3);
+    background: var(--surface); overflow: hidden; max-width: 720px;
+    margin: 12px 0 24px;
+  }
+  .kv-table .row {
+    display: grid; grid-template-columns: 200px 1fr;
+    border-bottom: 1px solid var(--border);
+  }
+  .kv-table .row:last-child { border-bottom: none; }
+  .kv-table .k {
+    padding: 14px 18px; background: var(--surface-hi);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-mute);
+    border-right: 1px solid var(--border);
+  }
+  .kv-table .v {
+    padding: 14px 18px; color: var(--text); font-size: 14.5px; line-height: 1.5;
+  }
+  @media (max-width: 600px) {
+    .kv-table .row { grid-template-columns: 1fr; }
+    .kv-table .k { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
 
-      <div class="doc-kicker">{{ENGAGEMENT_PHASE}} · {{CLIENT_NAME}}</div>
-      <h1 class="doc">{{DELIVERABLE_TITLE}}</h1>
-      <p class="lede">
-        {{ONE_PARAGRAPH_FRAMING_WHAT_THIS_DOC_IS_AND_WHO_ITS_FOR_INTERNALLY_AT_THE_CLIENT}}
-      </p>
+<header class="nav">
+  <div class="nav-inner">
+    <a class="lockup" href="#">
+      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        
+        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
+        <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
+        <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
+      </svg>
+      <span class="wordmark">Catalyst<span class="sh">Shift</span></span>
+    </a>
+    <div class="nav-meta">
+      <span>{{DELIVERABLE_TYPE}} · {{DOC_NUMBER}}</span>
+      <span>{{ISSUE_DATE}}</span>
+      <span class="live">v{{VERSION}}</span>
+    </div>
+  </div>
+</header>
 
-      <nav class="toc" aria-label="Contents">
-        <div class="label">Contents</div>
-        <ol>
-          <li>
-            <span class="n">§ 01</span><a href="#s1">{{SECTION_1_TITLE}}</a>
-          </li>
-          <li>
-            <span class="n">§ 02</span><a href="#s2">{{SECTION_2_TITLE}}</a>
-          </li>
-          <li>
-            <span class="n">§ 03</span><a href="#s3">{{SECTION_3_TITLE}}</a>
-          </li>
-          <li>
-            <span class="n">§ 04</span><a href="#s4">{{SECTION_4_TITLE}}</a>
-          </li>
-          <li>
-            <span class="n">§ 05</span><a href="#s5">{{SECTION_5_TITLE}}</a>
-          </li>
-        </ol>
-      </nav>
+<section class="hero">
+  <div class="grid-bg"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-inner">
+    <div class="pill"><span class="badge">{{DELIVERABLE_TYPE}}</span></div>
+    <div class="doc-kicker">{{MODULE_ID}} · Deliverable</div>
+    <h1 class="doc">
+      {{DELIVERABLE_NAME}}<br>
+      <span class="subline">{{ONE_LINE_PURPOSE}}</span>
+    </h1>
+    <p class="lede">{{2_SENTENCE_LEDE_NAMING_WHAT_THIS_IS_AND_HOW_TO_USE_IT}}</p>
 
-      <h2 class="sec" id="s1">
-        <span class="num">§ 01</span>{{SECTION_1_TITLE}}
-      </h2>
-      <p>{{SECTION_1_BODY}}</p>
+    <div class="cover-strip">
+      <div class="cell"><div class="label">For</div><div class="value">{{CLIENT_NAME}}<small>{{TIER_NAME}}</small></div></div>
+      <div class="cell"><div class="label">Module</div><div class="value">{{MODULE_ID}}<small>{{MODULE_NAME}}</small></div></div>
+      <div class="cell"><div class="label">Owner</div><div class="value">{{OWNER_NAME}}<small>{{OWNER_ROLE}}</small></div></div>
+      <div class="cell"><div class="label">Version</div><div class="value">v{{VERSION}}<small>{{ISSUE_DATE}}</small></div></div>
+    </div>
+  </div>
+</section>
 
-      <h2 class="sec" id="s2">
-        <span class="num">§ 02</span>{{SECTION_2_TITLE}}
-      </h2>
-      <p>{{SECTION_2_BODY}}</p>
-
-      <h2 class="sec" id="s3">
-        <span class="num">§ 03</span>{{SECTION_3_TITLE}}
-      </h2>
-      <p>{{SECTION_3_BODY}}</p>
-
-      <h2 class="sec" id="s4">
-        <span class="num">§ 04</span>{{SECTION_4_TITLE}}
-      </h2>
-      <p>{{SECTION_4_BODY}}</p>
-
-      <h2 class="sec" id="s5">
-        <span class="num">§ 05</span>{{SECTION_5_TITLE}}
-      </h2>
-      <p>{{SECTION_5_BODY}}</p>
+<!-- § 01 — WHAT THIS IS -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">01</div>
+      <div class="s-eyebrow">What this is</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">What you're holding.</h2>
+      <p>{{2-3_SENTENCES_DESCRIBING_THE_DELIVERABLE_AND_THE_PROBLEM_IT_SOLVES}}</p>
 
       <div class="callout">
-        <div class="label">How to use this document</div>
-        <p>
-          {{ONE_PARAGRAPH_ON_HOW_THE_CLIENT_TEAM_SHOULD_USE_THIS_INTERNALLY_WHO_OWNS_WHAT_AND_WHEN_TO_REVISIT}}
-        </p>
+        <div class="label">TL;DR</div>
+        <p>{{ONE_PARAGRAPH_TLDR_FOR_ANYONE_WHO_WONT_READ_THE_REST}}</p>
       </div>
 
-      <div class="colophon">
-        <span
-          >Catalyst Shift · catalystshift.ai · Prepared for
-          {{CLIENT_NAME}}</span
-        >
-        <span>{{CS_LEAD_NAME}} · {{CS_LEAD_EMAIL}}</span>
+      <h3>What's inside</h3>
+      <ul>
+        <li><strong>{{SECTION_1_NAME}}</strong> — {{ONE_LINE}}</li>
+        <li><strong>{{SECTION_2_NAME}}</strong> — {{ONE_LINE}}</li>
+        <li><strong>{{SECTION_3_NAME}}</strong> — {{ONE_LINE}}</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- § 02 — HOW TO USE -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">02</div>
+      <div class="s-eyebrow">How to use</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">How to put this to work.</h2>
+      <p>{{1-2_SENTENCES_ON_WHO_USES_THIS_AND_WHEN}}</p>
+
+      <ol>
+        <li><strong>{{STEP_1_HEADLINE}}</strong> — {{STEP_1_DETAIL}}</li>
+        <li><strong>{{STEP_2_HEADLINE}}</strong> — {{STEP_2_DETAIL}}</li>
+        <li><strong>{{STEP_3_HEADLINE}}</strong> — {{STEP_3_DETAIL}}</li>
+        <li><strong>{{STEP_4_HEADLINE}}</strong> — {{STEP_4_DETAIL}}</li>
+      </ol>
+
+      <h3>Owners</h3>
+      <div class="kv-table">
+        <div class="row"><div class="k">Day-to-day</div><div class="v">{{DAILY_OWNER_NAME}} · {{DAILY_OWNER_ROLE}}</div></div>
+        <div class="row"><div class="k">Approvals</div><div class="v">{{APPROVAL_OWNER_NAME}} · {{APPROVAL_OWNER_ROLE}}</div></div>
+        <div class="row"><div class="k">Review cadence</div><div class="v">{{REVIEW_CADENCE}}</div></div>
+        <div class="row"><div class="k">Linked doc</div><div class="v">{{LINK_TO_LIVING_DOC_OR_NOTION_PAGE}}</div></div>
       </div>
     </div>
-  </body>
+  </div>
+</section>
+
+<!-- § 03 — THE WORK -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">03</div>
+      <div class="s-eyebrow">The work</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">{{SECTION_1_NAME}}.</h2>
+      <p>{{BODY_PARAGRAPH_1}}</p>
+      <p>{{BODY_PARAGRAPH_2}}</p>
+
+      <h3>{{SUBSECTION_A}}</h3>
+      <ul>
+        <li>{{POINT_1}}</li>
+        <li>{{POINT_2}}</li>
+        <li>{{POINT_3}}</li>
+      </ul>
+
+      <h3>{{SUBSECTION_B}}</h3>
+      <p>{{BODY_PARAGRAPH_3}}</p>
+
+      <div class="module-frame" style="margin-top: 16px;">
+        <div class="chrome">
+          <span class="dots"><span></span><span></span><span></span></span>
+          <span class="crumb">catalyst&nbsp;os · {{CLIENT_SHORT}} · {{MODULE_ID_LOWER}}</span>
+          <span class="right">{{MODULE_ID}}</span>
+        </div>
+        <div class="data-toolbar">
+          <span class="module-id">{{MODULE_ID}}</span>
+          <span class="title">{{TABLE_TITLE}}</span>
+          <span class="meta">{{N_ROWS}} rows</span>
+        </div>
+        <table class="outcomes">
+          <thead><tr><th>{{COL_1}}</th><th>Status</th><th>{{COL_3}}</th><th>{{COL_4}}</th></tr></thead>
+          <tbody>
+            <tr><td class="outcome">{{ROW_1_LABEL}}</td><td><span class="dot positive">{{ROW_1_STATUS}}</span></td><td class="metric">{{ROW_1_VALUE}}</td><td class="deadline">{{ROW_1_NOTE}}</td></tr>
+            <tr><td class="outcome">{{ROW_2_LABEL}}</td><td><span class="dot signal">{{ROW_2_STATUS}}</span></td><td class="metric">{{ROW_2_VALUE}}</td><td class="deadline">{{ROW_2_NOTE}}</td></tr>
+            <tr><td class="outcome">{{ROW_3_LABEL}}</td><td><span class="dot caution">{{ROW_3_STATUS}}</span></td><td class="metric">{{ROW_3_VALUE}}</td><td class="deadline">{{ROW_3_NOTE}}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- § 04 — WHAT'S NEXT -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">04</div>
+      <div class="s-eyebrow">Next</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">What's next.</h2>
+      <ol>
+        <li><strong>{{NEXT_STEP_1_HEADLINE}}</strong> — {{NEXT_STEP_1_DETAIL}}</li>
+        <li><strong>{{NEXT_STEP_2_HEADLINE}}</strong> — {{NEXT_STEP_2_DETAIL}}</li>
+        <li><strong>{{NEXT_STEP_3_HEADLINE}}</strong> — {{NEXT_STEP_3_DETAIL}}</li>
+      </ol>
+
+      <h3>Questions</h3>
+      <p>{{CS_LEAD_NAME}} · <a href="mailto:{{CS_LEAD_EMAIL}}">{{CS_LEAD_EMAIL}}</a></p>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="inner">
+    <span>Catalyst Shift · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
+    <span>{{DELIVERABLE_TYPE}} · {{DOC_NUMBER}} · v{{VERSION}}</span>
+  </div>
+</footer>
+
+</body>
 </html>

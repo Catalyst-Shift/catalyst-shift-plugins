@@ -1,8 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 140" width="260" height="140" aria-label="Catalyst Shift">
-  
-  <rect class="bar" x="0" y="0" width="32" height="2"></rect>
-  <text x="0" y="56" class="linen" font-size="44" letter-spacing="-1.2">Catalyst</text>
-  <text x="0" y="102" class="gold" font-size="44" letter-spacing="-1.2">Shift</text>
-  <rect class="bar" x="0" y="114" width="32" height="2"></rect>
-  <text x="0" y="132" class="muted" font-size="9">GROWTH INFRASTRUCTURE</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" aria-label="Catalyst Shift">
+  <defs>
+    <linearGradient id="cs-stacked-grad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34E2C2"></stop>
+      <stop offset="1" stop-color="#8B7CF6"></stop>
+    </linearGradient>
+    
+  </defs>
+  <g transform="translate(88 8)">
+    <path d="M32 4L4 18v28l28 14 28-14V18L32 4z" stroke="url(#cs-stacked-grad)" stroke-width="3" fill="none"></path>
+    <path d="M32 18L14 27v14l18 9 18-9V27L32 18z" fill="url(#cs-stacked-grad)" opacity="0.4"></path>
+    <circle cx="32" cy="32" r="5" fill="url(#cs-stacked-grad)"></circle>
+  </g>
+  <text x="40" y="108" class="cs-cat-s" font-size="26">Catalyst</text>
+  <text x="151" y="108" class="cs-shift-s" font-size="26">Shift</text>
 </svg>

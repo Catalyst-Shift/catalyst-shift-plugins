@@ -1,6 +1,5 @@
-
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <rect x="3" y="16.5" width="9" height="3" rx="0.75" fill="#2DD4A8" opacity="0.45"></rect>
-  <rect x="5" y="10.5" width="11" height="3" rx="0.75" fill="#2DD4A8"></rect>
-  <rect x="7" y="4.5" width="13" height="3" rx="0.75" fill="#C8A96E"></rect>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-label="Catalyst Shift mark">
+  <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"></path>
+  <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"></path>
+  <circle cx="12" cy="12" r="2" fill="#34E2C2"></circle>
 </svg>

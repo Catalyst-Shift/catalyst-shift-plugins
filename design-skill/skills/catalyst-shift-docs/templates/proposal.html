@@ -1,619 +1,814 @@
 <!doctype html>
 <!--
-  Catalyst Shift — Proposal Template
+  Catalyst Shift — Proposal Template (site-fidelity, dark, screen-first)
   ============================================================
   USAGE FOR CLAUDE:
     1. Replace every {{PLACEHOLDER}} with real content. If you don't have a value, ASK — do not invent.
-    2. Keep the document-style numbering (§ 01, § 02, ...) and the masthead structure.
+    2. Keep section structure (§ 01 … § 06) and module-style mono labels (M.01, etc.).
     3. Use locked glossary phrases verbatim where they fit (see BRAND.md).
     4. Default fee + duration come from PRICING.md; override only if the teammate gave a custom number.
     5. The "guarantee in writing" section is mandatory — every proposal has one.
-    6. Body measure stays ~580px. Don't widen it.
+    6. Every metric in tables/feed should have a status dot tone: positive | caution | negative | signal.
+    7. Print-export goes through Cmd/Ctrl+P. The print stylesheet at the bottom
+       inverts the canvas to white and tones down the chrome.
   ============================================================
 -->
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Proposal — {{CLIENT_NAME}} — Catalyst Shift</title>
-    <link rel="stylesheet" href="../assets/colors_and_type.css" />
-    <style>
-      * {
-        box-sizing: border-box;
-      }
-      html,
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text-primary);
-        font-family: var(--font-body);
-        -webkit-font-smoothing: antialiased;
-      }
-      ::selection {
-        background: rgba(200, 169, 110, 0.25);
-        color: var(--text-primary);
-      }
-      .page {
-        max-width: 760px;
-        margin: 0 auto;
-        padding: 80px 56px 120px;
-      }
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Proposal — {{CLIENT_NAME}} — Catalyst Shift</title>
+<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="stylesheet" href="../assets/colors_and_type.css">
+<link rel="stylesheet" href="../assets/doc-shell.css">
+<style>
+  /* proposal-only overrides — none. All shared chrome lives in doc-shell.css. */
+  /* legacy duplicate block REMOVED — kept here as a marker:
+     :root vars, .nav, .hero, .pill, .doc-kicker, h1.doc, .lede, .cover-strip,
+     section.s, .s-grid, .s-rail, .s-title, .s-body, .module-rail, .pull,
+     .pricing-card, .module-frame, .chrome, .data-toolbar, table.outcomes,
+     .dot, .sparkbar, .guarantee, .feed, .two-up, .signoff, footer.colophon,
+     and the @media print block — all moved to assets/doc-shell.css. */
+  /* (no overrides) */
+  :root.proposal-shim { --__: 0; }
+  /* placeholder ↑ keeps this style block valid; safe to delete */
+</style>
 
-      /* Masthead */
-      .masthead {
-        border-top: 2px solid var(--gold);
-        padding-top: 20px;
-        margin-bottom: 64px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        line-height: 1.6;
-      }
-      .masthead .lockup {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-      }
-      .masthead .lockup .mark {
-        height: 24px;
-        width: 24px;
-        display: block;
-        flex-shrink: 0;
-      }
-      .masthead .lockup .wordmark {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 22px;
-        letter-spacing: -0.02em;
-        text-transform: none;
-        display: inline-flex;
-        align-items: baseline;
-        gap: 2px;
-        line-height: 1;
-      }
-      .masthead .lockup .cat {
-        color: var(--text-primary);
-      }
-      .masthead .lockup .sh {
-        color: var(--gold);
-      }
-      .masthead .meta {
-        text-align: right;
-        line-height: 1.5;
-      }
-      .masthead .meta div + div {
-        margin-top: 4px;
-        color: var(--text-muted);
-      }
+<!-- LEGACY-INLINE-CSS-BEGIN: kept commented out for reference only.
+<style>
+  :root { --doc-max: 1180px; --doc-gutter: 32px; --col: 760px; }
 
-      /* Cover */
-      .doc-kicker {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--teal);
-        margin-bottom: 16px;
-      }
-      h1.doc {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: clamp(40px, 5vw, 64px);
-        letter-spacing: -0.03em;
-        line-height: 1.04;
-        margin: 0 0 24px;
-      }
-      .lede {
-        font-family: var(--font-display);
-        font-weight: 500;
-        font-size: clamp(18px, 1.7vw, 22px);
-        line-height: 1.5;
-        letter-spacing: -0.01em;
-        color: var(--text-secondary);
-        max-width: 600px;
-        margin: 0 0 56px;
-      }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+  body { overflow-x: hidden; }
+  a { color: inherit; }
 
-      /* Section heads */
-      h2.sec {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: clamp(26px, 2.6vw, 34px);
-        letter-spacing: -0.02em;
-        line-height: 1.1;
-        margin: 80px 0 8px;
-        scroll-margin-top: 24px;
-      }
-      h2.sec .num {
-        display: block;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        color: var(--gold);
-        margin-bottom: 10px;
-        font-weight: 500;
-        text-transform: uppercase;
-      }
+  /* ── Sticky chrome ──────────────────────────────────────── */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(8,8,11,0.78); backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: var(--doc-max); margin: 0 auto; padding: 0 var(--doc-gutter);
+    height: 60px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .lockup { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+  .lockup .mark { width: 22px; height: 22px; flex-shrink: 0; }
+  .wordmark {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 17px; letter-spacing: -0.025em; line-height: 1; color: var(--text);
+  }
+  .wordmark .sh { color: var(--signal); }
+  .nav-meta {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-dim); display: flex; gap: 20px;
+  }
+  .nav-meta .live { color: var(--signal); display: inline-flex; align-items: center; gap: 6px; }
+  .nav-meta .live::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--signal); box-shadow: 0 0 10px var(--signal); animation: pulse-dot 2s ease-in-out infinite; }
 
-      /* Body type */
-      h3 {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 20px;
-        letter-spacing: -0.01em;
-        margin: 32px 0 8px;
-        color: var(--text-primary);
-      }
-      h4 {
-        font-family: var(--font-mono);
-        font-weight: 500;
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        margin: 24px 0 8px;
-      }
-      p {
-        font-size: 16px;
-        line-height: 1.7;
-        color: var(--text-secondary);
-        margin: 0 0 16px;
-        max-width: 580px;
-      }
-      p strong {
-        color: var(--text-primary);
-        font-weight: 600;
-      }
-      p em {
-        font-style: normal;
-        color: var(--gold);
-      }
-      ul,
-      ol {
-        padding-left: 18px;
-        margin: 0 0 16px;
-        color: var(--text-secondary);
-        max-width: 580px;
-      }
-      li {
-        font-size: 15px;
-        line-height: 1.65;
-        margin: 0 0 6px;
-      }
-      ul li::marker {
-        color: var(--gold);
-      }
-      hr {
-        border: none;
-        border-top: 1px solid var(--border);
-        margin: 48px 0;
-      }
+  /* ── Hero / cover ───────────────────────────────────────── */
+  .hero {
+    position: relative; padding: 96px var(--doc-gutter) 80px;
+    border-bottom: 1px solid var(--border); overflow: hidden;
+  }
+  .hero-glow {
+    position: absolute; left: 50%; top: -120px; transform: translateX(-50%);
+    width: 1100px; height: 480px; pointer-events: none; z-index: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 50%, var(--signal-glow), transparent 70%);
+    opacity: 0.55; filter: blur(40px);
+  }
+  .grid-bg {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask: radial-gradient(ellipse 70% 60% at 50% 30%, black 30%, transparent 75%);
+    -webkit-mask: radial-gradient(ellipse 70% 60% at 50% 30%, black 30%, transparent 75%);
+  }
+  .hero-inner {
+    position: relative; z-index: 1; max-width: var(--doc-max); margin: 0 auto;
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 10px;
+    height: 30px; padding: 0 14px 0 4px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-pill); font-size: 12.5px; color: var(--text-dim);
+    font-weight: 500; line-height: 1; text-decoration: none;
+  }
+  .pill .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--signal); color: var(--signal-ink);
+    font-size: 10px; height: 22px; padding: 0 9px;
+    border-radius: var(--r-pill); font-weight: 700; letter-spacing: 0.04em;
+    font-family: var(--font-mono); text-transform: uppercase;
+  }
+  .pill .arrow { color: var(--text-mute); margin-left: -2px; }
 
-      /* Pricing card */
-      .pricing {
-        display: grid;
-        grid-template-columns: auto 1fr auto;
-        gap: 24px;
-        align-items: baseline;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-left: 2px solid var(--gold);
-        padding: 28px 32px;
-        margin: 24px 0 12px;
-        border-radius: 2px;
-      }
-      .pricing .tier {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--gold);
-      }
-      .pricing .what {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 18px;
-        color: var(--text-primary);
-      }
-      .pricing .what small {
-        display: block;
-        font-family: var(--font-body);
-        font-weight: 400;
-        font-size: 13px;
-        color: var(--text-muted);
-        margin-top: 4px;
-      }
-      .pricing .fee {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 24px;
-        color: var(--text-primary);
-        text-align: right;
-      }
-      .pricing .fee small {
-        display: block;
-        font-family: var(--font-mono);
-        font-size: 10px;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        margin-top: 4px;
-      }
+  .doc-kicker {
+    margin-top: 32px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--signal);
+  }
+  h1.doc {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: clamp(48px, 6vw, 84px); letter-spacing: -0.04em;
+    line-height: 1.0; margin: 16px 0 22px; max-width: 980px;
+    text-wrap: balance;
+  }
+  h1.doc .subline { display: block; color: var(--text-dim); font-weight: 600; }
+  .lede {
+    font-family: var(--font-body); font-weight: 400;
+    font-size: 19px; line-height: 1.5; color: var(--text-dim);
+    max-width: 680px; margin: 0 0 40px;
+  }
 
-      /* Guarantee block */
-      .guarantee {
-        background: rgba(45, 212, 168, 0.05);
-        border: 1px solid rgba(45, 212, 168, 0.18);
-        padding: 24px 28px;
-        margin: 32px 0;
-        border-radius: 2px;
-      }
-      .guarantee .label {
-        font-family: var(--font-mono);
-        font-size: 10px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--teal);
-        margin-bottom: 10px;
-      }
-      .guarantee p {
-        margin: 0 0 8px;
-        font-size: 15px;
-        line-height: 1.6;
-        color: var(--text-primary);
-      }
-      .guarantee p:last-child {
-        margin: 0;
-      }
+  /* Cover meta strip — issued / for / fee preview */
+  .cover-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 0; max-width: 980px; margin: 24px 0 0;
+    border: 1px solid var(--border); border-radius: var(--r-3);
+    background: var(--surface); overflow: hidden;
+  }
+  .cover-strip .cell { padding: 16px 20px; border-right: 1px solid var(--border); }
+  .cover-strip .cell:last-child { border-right: none; }
+  .cover-strip .label {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-mute); margin-bottom: 6px;
+  }
+  .cover-strip .value {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    color: var(--text); letter-spacing: -0.01em; line-height: 1.2;
+  }
+  .cover-strip .value small {
+    display: block; margin-top: 4px;
+    font-family: var(--font-body); font-weight: 400; font-size: 12.5px;
+    letter-spacing: 0; color: var(--text-mute);
+  }
 
-      /* Differentiator pull */
-      .pull {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 24px;
-        line-height: 1.3;
-        color: var(--text-primary);
-        margin: 32px 0;
-        padding-left: 20px;
-        border-left: 2px solid var(--gold);
-        max-width: 600px;
-        letter-spacing: -0.01em;
-      }
-      .pull .a {
-        color: var(--gold);
-      }
-      .pull .b {
-        color: var(--teal);
-      }
+  /* ── Section ────────────────────────────────────────────── */
+  section.s {
+    position: relative; padding: 96px var(--doc-gutter);
+    border-bottom: 1px solid var(--border);
+  }
+  section.s.alt { background: var(--bg-alt); }
+  .s-inner { max-width: var(--doc-max); margin: 0 auto; }
+  .s-grid {
+    display: grid; grid-template-columns: 240px 1fr; gap: 56px;
+  }
+  @media (max-width: 880px) {
+    .s-grid { grid-template-columns: 1fr; gap: 16px; }
+  }
+  .s-num {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--signal); margin-bottom: 6px;
+  }
+  .s-eyebrow {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-mute);
+  }
+  .s-rail {
+    position: sticky; top: 84px; align-self: start;
+    padding-top: 4px;
+  }
+  .s-title {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: clamp(28px, 3.4vw, 44px); letter-spacing: -0.03em;
+    line-height: 1.05; color: var(--text); margin: 0 0 20px;
+    text-wrap: balance;
+  }
+  .s-body { max-width: 640px; }
+  .s-body p {
+    font-size: 17px; line-height: 1.65; color: var(--text-dim);
+    margin: 0 0 16px;
+  }
+  .s-body p strong { color: var(--text); font-weight: 600; }
+  .s-body p em { font-style: normal; color: var(--signal); }
+  .s-body h3 {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 22px; letter-spacing: -0.02em; color: var(--text);
+    margin: 36px 0 12px;
+  }
+  .s-body h4 {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-mute); margin: 24px 0 8px;
+  }
+  .s-body ul, .s-body ol { padding-left: 0; list-style: none; margin: 12px 0 24px; }
+  .s-body ul li, .s-body ol li {
+    position: relative; padding-left: 28px; margin-bottom: 10px;
+    font-size: 16px; line-height: 1.6; color: var(--text-dim);
+  }
+  .s-body ul li::before {
+    content: ""; position: absolute; left: 8px; top: 9px;
+    width: 6px; height: 6px; border-radius: 999px; background: var(--signal);
+  }
+  .s-body ol { counter-reset: cs; }
+  .s-body ol li { counter-increment: cs; }
+  .s-body ol li::before {
+    content: counter(cs, decimal-leading-zero);
+    position: absolute; left: 0; top: 0;
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: 0.06em; color: var(--signal); padding-top: 4px;
+  }
+  .s-body li strong { color: var(--text); font-weight: 600; }
 
-      /* Outcomes table */
-      table.outcomes {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 16px 0 24px;
-        font-size: 14px;
-      }
-      table.outcomes th,
-      table.outcomes td {
-        text-align: left;
-        padding: 12px 14px;
-        border-bottom: 1px solid var(--border);
-        vertical-align: top;
-      }
-      table.outcomes th {
-        font-family: var(--font-mono);
-        font-weight: 500;
-        font-size: 10px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        background: var(--surface);
-      }
-      table.outcomes td {
-        color: var(--text-secondary);
-      }
-      table.outcomes td.metric {
-        font-family: var(--font-mono);
-        font-variant-numeric: tabular-nums;
-        color: var(--text-primary);
-        white-space: nowrap;
-      }
+  /* ── Module strip rail ─────────────────────────────────── */
+  .module-rail {
+    display: flex; flex-direction: column; gap: 4px; margin-top: 18px;
+    border-top: 1px solid var(--border); padding-top: 14px;
+  }
+  .module-rail .row {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-mono); font-size: 11.5px;
+    color: var(--text-mute); padding: 6px 0;
+  }
+  .module-rail .row .id { color: var(--accent); letter-spacing: 0.06em; }
+  .module-rail .row.active .id { color: var(--signal); }
+  .module-rail .row.active { color: var(--text); }
 
-      /* Sign-off */
-      .signoff {
-        margin-top: 80px;
-        padding-top: 32px;
-        border-top: 1px solid var(--border);
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 48px;
-      }
-      .signoff .col h4 {
-        margin-top: 0;
-      }
-      .signoff .sigline {
-        margin-top: 48px;
-        border-top: 1px solid var(--border);
-        padding-top: 8px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-      }
+  /* ── Pull quote / differentiator ───────────────────────── */
+  .pull {
+    margin: 32px 0 36px;
+    padding: 32px 0 32px 28px;
+    border-left: 2px solid var(--signal);
+    background: linear-gradient(90deg, rgba(52,226,194,0.05), transparent 60%);
+    font-family: var(--font-display); font-weight: 600;
+    font-size: clamp(22px, 2.2vw, 30px); letter-spacing: -0.02em;
+    line-height: 1.25; color: var(--text); max-width: 720px;
+  }
+  .pull .a { color: var(--signal); display: block; }
+  .pull .b { color: var(--accent); display: block; margin-top: 6px; }
 
-      /* Colophon */
-      .colophon {
-        margin-top: 96px;
-        padding-top: 24px;
-        border-top: 2px solid var(--gold);
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        display: flex;
-        justify-content: space-between;
-      }
+  /* ── Pricing card (dark, site-style) ───────────────────── */
+  .pricing-card {
+    margin: 12px 0 28px; max-width: 720px;
+    background: linear-gradient(180deg, var(--surface-hi), var(--surface));
+    border: 1px solid var(--signal-soft);
+    border-radius: var(--r-4);
+    box-shadow: 0 0 80px -30px var(--signal-glow), var(--el-card);
+    padding: 28px 32px;
+    display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end;
+  }
+  .pricing-card .tier-id {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--signal);
+    margin-bottom: 10px;
+  }
+  .pricing-card .tier-name {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 28px; letter-spacing: -0.02em; color: var(--text);
+    line-height: 1.1; margin-bottom: 6px;
+  }
+  .pricing-card .tier-line {
+    font-size: 15px; color: var(--text-dim); line-height: 1.55;
+  }
+  .pricing-card .fee-block { text-align: right; }
+  .pricing-card .fee {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 32px; letter-spacing: -0.02em; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .pricing-card .fee small {
+    display: block; font-family: var(--font-mono); font-weight: 500;
+    font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-mute); margin-top: 6px;
+  }
 
-      /* Print */
-      @page {
-        size: Letter;
-        margin: 0.7in;
-      }
-      @media print {
-        html,
-        body {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-        .page {
-          padding: 0;
-          max-width: none;
-        }
-        h2.sec {
-          page-break-after: avoid;
-        }
-        .pricing,
-        .guarantee,
-        .signoff {
-          page-break-inside: avoid;
-        }
-        a {
-          color: inherit;
-          text-decoration: none;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="page">
-      <!-- =============== MASTHEAD =============== -->
-      <header class="masthead">
-        <div class="lockup">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            class="mark"
-            width="24"
-            height="24"
-            aria-hidden="true"
-          >
-            <rect
-              x="2"
-              y="16.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-              opacity="0.45"
-            />
-            <rect
-              x="4"
-              y="10.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#2DD4A8"
-            />
-            <rect
-              x="6"
-              y="4.5"
-              width="13"
-              height="3"
-              rx="0.75"
-              fill="#C8A96E"
-            />
-          </svg>
-          <span class="wordmark"
-            ><span class="cat">Catalyst</span
-            ><span class="sh">Shift</span></span
-          >
-        </div>
-        <div class="meta">
-          <div>Proposal · {{DOC_NUMBER}}</div>
-          <div>{{ISSUE_DATE}}</div>
-        </div>
-      </header>
+  /* ── Outcomes table — product-style ────────────────────── */
+  .module-frame {
+    position: relative; border: 1px solid var(--border);
+    border-radius: var(--r-4); background: var(--surface);
+    overflow: hidden; max-width: 880px;
+    box-shadow: var(--el-card);
+  }
+  .chrome {
+    display: flex; align-items: center; gap: 12px;
+    height: 38px; padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-hi);
+  }
+  .chrome .dots { display: inline-flex; gap: 6px; }
+  .chrome .dots span {
+    width: 9px; height: 9px; border-radius: 999px;
+    background: rgba(255,255,255,0.10);
+  }
+  .chrome .crumb {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    color: var(--text-mute); margin-left: 12px;
+  }
+  .chrome .right {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    color: var(--signal);
+  }
 
-      <!-- =============== COVER =============== -->
-      <div class="doc-kicker">Proposal · Prepared for {{CLIENT_NAME}}</div>
-      <h1 class="doc">{{ENGAGEMENT_HEADLINE}}</h1>
-      <p class="lede">{{ONE_LINE_SUMMARY_OF_WHAT_WE_RECOMMEND_AND_WHY}}</p>
+  .data-toolbar {
+    display: flex; align-items: baseline; gap: 16px;
+    padding: 16px 20px 12px; border-bottom: 1px solid var(--border);
+  }
+  .data-toolbar .module-id {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: 0.08em; color: var(--accent);
+  }
+  .data-toolbar .title {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: -0.01em; color: var(--text);
+  }
+  .data-toolbar .meta {
+    margin-left: auto; font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-mute);
+  }
 
-      <!-- =============== § 01 — CONTEXT =============== -->
-      <h2 class="sec"><span class="num">§ 01 · Context</span>What we heard</h2>
-      <p>
-        {{2-3_SENTENCES_RESTATING_THE_CLIENTS_PROBLEM_IN_THEIR_OWN_LANGUAGE_FROM_THE_DISCOVERY_CALL}}
-      </p>
+  table.outcomes {
+    width: 100%; border-collapse: collapse;
+    font-size: 14px;
+  }
+  table.outcomes th, table.outcomes td {
+    text-align: left; padding: 14px 20px;
+    border-bottom: 1px solid var(--border); vertical-align: middle;
+  }
+  table.outcomes thead th {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-mute); background: transparent; padding-top: 14px; padding-bottom: 12px;
+  }
+  table.outcomes tbody td { color: var(--text-dim); font-size: 14.5px; }
+  table.outcomes tbody td.outcome { color: var(--text); font-weight: 500; }
+  table.outcomes tbody td.metric {
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+    color: var(--text); white-space: nowrap;
+  }
+  table.outcomes tbody td.deadline {
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);
+    white-space: nowrap;
+  }
+  table.outcomes tbody tr:last-child td { border-bottom: none; }
+
+  .dot { display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--font-mono); font-size: 11.5px; }
+  .dot::before {
+    content: ""; width: 7px; height: 7px; border-radius: 999px; background: currentColor;
+  }
+  .dot.positive { color: var(--positive); }
+  .dot.caution  { color: var(--caution); }
+  .dot.negative { color: var(--negative); }
+  .dot.signal   { color: var(--signal); }
+  .dot.glow::before { box-shadow: 0 0 8px currentColor; }
+
+  /* ── Sparkline row inside data ─────────────────────────── */
+  .sparkbar {
+    display: grid; grid-template-columns: 1fr auto; gap: 12px;
+    align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border);
+  }
+  .sparkbar .meta {
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--text-mute);
+  }
+  .sparkbar .meta .label { color: var(--text-dim); }
+  .sparkbar .meta .delta { color: var(--positive); margin-left: 8px; }
+  .sparkbar svg { display: block; }
+
+  /* ── Guarantee block ───────────────────────────────────── */
+  .guarantee {
+    margin: 16px 0 0; max-width: 720px;
+    background: linear-gradient(180deg, rgba(52,226,194,0.07), rgba(52,226,194,0.02));
+    border: 1px solid var(--signal-soft); border-radius: var(--r-4);
+    padding: 24px 28px; position: relative; overflow: hidden;
+  }
+  .guarantee::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: linear-gradient(180deg, var(--signal), transparent);
+  }
+  .guarantee .label {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--signal);
+    margin-bottom: 12px; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .guarantee .label::before {
+    content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--signal);
+    box-shadow: 0 0 8px var(--signal);
+  }
+  .guarantee p { margin: 0 0 8px; font-size: 15.5px; line-height: 1.6; color: var(--text); }
+  .guarantee p:last-child { margin: 0; }
+
+  /* ── Activity feed (right rail of approach section) ───── */
+  .feed {
+    border: 1px solid var(--border); border-radius: var(--r-4);
+    background: var(--surface); overflow: hidden;
+  }
+  .feed-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+  }
+  .feed-head .t {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-dim);
+  }
+  .feed-head .live {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--signal);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .feed-head .live::before {
+    content: ""; width: 6px; height: 6px; border-radius: 999px;
+    background: var(--signal); box-shadow: 0 0 8px var(--signal);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  .feed-item {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline;
+  }
+  .feed-item:last-child { border-bottom: none; }
+  .feed-item .ev {
+    font-family: var(--font-display); font-weight: 600; font-size: 13.5px;
+    color: var(--text); line-height: 1.3;
+  }
+  .feed-item .det { font-size: 13px; color: var(--text-dim); display: block; margin-top: 3px; }
+  .feed-item .time {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--text-mute); white-space: nowrap;
+  }
+
+  /* ── Approach two-up (deliverables + feed) ─────────────── */
+  .two-up { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; margin-top: 16px; }
+  @media (max-width: 880px) { .two-up { grid-template-columns: 1fr; } }
+
+  /* ── Sign-off ──────────────────────────────────────────── */
+  .signoff {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
+    max-width: 880px;
+  }
+  @media (max-width: 720px) { .signoff { grid-template-columns: 1fr; } }
+  .signoff .col {
+    border: 1px solid var(--border); border-radius: var(--r-3);
+    background: var(--surface); padding: 24px;
+  }
+  .signoff h4 {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--signal); margin: 0 0 12px;
+  }
+  .signoff p { margin: 0 0 4px; color: var(--text); font-size: 15px; line-height: 1.5; }
+  .signoff p .role { color: var(--text-dim); font-size: 14px; display: block; margin-top: 2px; }
+  .signoff .sig {
+    margin-top: 32px; padding-top: 8px; border-top: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    color: var(--text-mute); display: flex; justify-content: space-between;
+  }
+
+  /* ── Footer ────────────────────────────────────────────── */
+  footer.colophon {
+    padding: 32px var(--doc-gutter);
+    background: var(--bg-alt); border-top: 1px solid var(--border);
+  }
+  footer.colophon .inner {
+    max-width: var(--doc-max); margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    color: var(--text-mute);
+  }
+  footer.colophon .inner a { color: var(--text-dim); text-decoration: none; }
+
+  /* ── Print: invert canvas, drop chrome ─────────────────── */
+  @page { size: Letter; margin: 0.6in; }
+  @media print {
+    html, body { background: #fff !important; color: #1A1A1F !important; }
+    body { font-size: 11pt; }
+    .nav, .nav-meta, .feed-head .live, footer.colophon, .grid-bg, .hero-glow { display: none !important; }
+    section.s, .hero { padding: 24px 0 !important; border-bottom: 1px solid #DDD9D2 !important; background: transparent !important; }
+    .hero { padding-top: 0 !important; }
+    h1.doc, h1.doc .subline, .s-title, .s-body p, .s-body p strong, .signoff p,
+    .pricing-card .tier-name, .pricing-card .fee, table.outcomes tbody td.outcome,
+    table.outcomes tbody td.metric, .guarantee p, .pull, .pull .a, .pull .b,
+    .data-toolbar .title, .feed-item .ev { color: #1A1A1F !important; }
+    .lede, .s-body p, .s-body li, .pricing-card .tier-line, .signoff p .role,
+    table.outcomes tbody td, .feed-item .det, .nav-meta { color: #444 !important; }
+    .doc-kicker, .s-num, .s-body h4, .pricing-card .tier-id, table.outcomes thead th,
+    .module-rail .row, .signoff h4, .feed-item .time, .data-toolbar .module-id,
+    .feed-head .t, .pull .a, .guarantee .label, .cover-strip .label { color: #1A9E7A !important; }
+    .pull .b, .data-toolbar .module-id, .module-rail .row .id { color: #5E4FD1 !important; }
+    .pricing-card, .module-frame, .feed, .signoff .col, .cover-strip {
+      background: #fff !important; border: 1px solid #DDD9D2 !important;
+      box-shadow: none !important;
+    }
+    .guarantee {
+      background: #F4FBF8 !important; border: 1px solid #BDE7DA !important;
+    }
+    .pull { background: transparent !important; border-left-color: #1A9E7A !important; }
+    .chrome { background: #FAFAF7 !important; border-bottom-color: #DDD9D2 !important; }
+    table.outcomes th, table.outcomes td, .feed-item, .sparkbar {
+      border-bottom-color: #EAE7E0 !important;
+    }
+    .s-grid { grid-template-columns: 200px 1fr !important; gap: 32px !important; }
+    .s-rail { position: static !important; }
+    .two-up { grid-template-columns: 1fr !important; }
+    .pricing-card { box-shadow: none !important; page-break-inside: avoid; }
+    section.s, .signoff { page-break-inside: avoid; }
+    h1.doc { font-size: 36pt !important; }
+    .s-title { font-size: 22pt !important; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+LEGACY-INLINE-CSS-END -->
+</head>
+<body>
+
+<!-- ════════════════ STICKY NAV ════════════════ -->
+<header class="nav">
+  <div class="nav-inner">
+    <a class="lockup" href="#">
+      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        
+        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
+        <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
+        <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
+      </svg>
+      <span class="wordmark">Catalyst<span class="sh">Shift</span></span>
+    </a>
+    <div class="nav-meta">
+      <span>Proposal · {{DOC_NUMBER}}</span>
+      <span>{{ISSUE_DATE}}</span>
+      <span class="live">Live draft</span>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════════ HERO / COVER ════════════════ -->
+<section class="hero">
+  <div class="grid-bg"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-inner">
+
+    <div class="pill"><span class="badge">Prepared for {{CLIENT_NAME}}</span></div>
+
+    <div class="doc-kicker">Proposal · {{TIER_NAME}}</div>
+
+    <h1 class="doc">
+      {{ENGAGEMENT_HEADLINE}}<br>
+      <span class="subline">{{ENGAGEMENT_SUBLINE}}</span>
+    </h1>
+
+    <p class="lede">{{ONE_LINE_SUMMARY_OF_WHAT_WE_RECOMMEND_AND_WHY}}</p>
+
+    <div class="cover-strip">
+      <div class="cell"><div class="label">Issued</div><div class="value">{{ISSUE_DATE}}<small>Doc · {{DOC_NUMBER}}</small></div></div>
+      <div class="cell"><div class="label">For</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
+      <div class="cell"><div class="label">Engagement</div><div class="value">{{TIER_NAME}}<small>{{DURATION}}</small></div></div>
+      <div class="cell"><div class="label">Investment</div><div class="value">${{FEE}}<small>{{PAYMENT_SCHEDULE_SHORT}}</small></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ § 01 — CONTEXT ════════════════ -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">01</div>
+      <div class="s-eyebrow">Context</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">What we heard.</h2>
+      <p>{{2-3_SENTENCES_RESTATING_THE_CLIENTS_PROBLEM_IN_THEIR_OWN_LANGUAGE_FROM_THE_DISCOVERY_CALL}}</p>
       <p>{{1-2_SENTENCES_NAMING_THE_UNDERLYING_PROBLEM_BEHIND_THE_SYMPTOMS}}</p>
+    </div>
+  </div>
+</section>
 
-      <!-- =============== § 02 — RECOMMENDATION =============== -->
-      <h2 class="sec">
-        <span class="num">§ 02 · Recommendation</span>What we propose
-      </h2>
-      <p>
-        We recommend the <strong>{{TIER_NAME}}</strong> engagement:
-        {{ONE_LINE_DESCRIPTION_OF_TIER_OUTCOME}}.
-      </p>
+<!-- ════════════════ § 02 — RECOMMENDATION ════════════════ -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">02</div>
+      <div class="s-eyebrow">Recommendation</div>
+      <div class="module-rail">
+        <div class="row active"><span class="id">{{TIER_CODE}}</span><span>{{TIER_NAME}}</span></div>
+        <div class="row"><span class="id">M.01</span><span>{{MODULE_1_SHORT}}</span></div>
+        <div class="row"><span class="id">M.02</span><span>{{MODULE_2_SHORT}}</span></div>
+        <div class="row"><span class="id">M.03</span><span>{{MODULE_3_SHORT}}</span></div>
+      </div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">What we propose.</h2>
+      <p>We recommend the <strong>{{TIER_NAME}}</strong> engagement: {{ONE_LINE_DESCRIPTION_OF_TIER_OUTCOME}}.</p>
 
-      <div class="pricing">
-        <div class="tier">{{TIER_CODE}}</div>
-        <div class="what">{{TIER_NAME}}<small>{{TIER_ONE_LINE}}</small></div>
-        <div class="fee">${{FEE}}<small>{{DURATION}}</small></div>
+      <div class="pricing-card">
+        <div>
+          <div class="tier-id">{{TIER_CODE}} · Implementation</div>
+          <div class="tier-name">{{TIER_NAME}}</div>
+          <div class="tier-line">{{TIER_ONE_LINE}}</div>
+        </div>
+        <div class="fee-block">
+          <div class="fee">${{FEE}}</div>
+          <small>{{DURATION}} · fixed fee</small>
+        </div>
       </div>
 
-      <p>
-        <strong>Most engagements continue</strong> on a platform retainer of
-        {{RETAINER_RANGE}} per month after implementation. Optional, scoped
-        after handoff.
-      </p>
+      <p><strong>Most engagements continue</strong> on a platform retainer of {{RETAINER_RANGE}} per month after implementation. Optional, scoped after handoff.</p>
+    </div>
+  </div>
+</section>
 
-      <!-- =============== § 03 — APPROACH =============== -->
-      <h2 class="sec"><span class="num">§ 03 · Approach</span>How we work</h2>
+<!-- ════════════════ § 03 — APPROACH ════════════════ -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">03</div>
+      <div class="s-eyebrow">Approach</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">How we work.</h2>
 
       <p class="pull">
         <span class="a">Kevin builds the engine that generates leads.</span>
         <span class="b">Lucas builds the engine that closes them.</span>
       </p>
 
-      <p>
-        {{1-2_SENTENCES_ON_HOW_THE_PAIR_APPLIES_TO_THIS_SPECIFIC_CLIENT_PROBLEM}}
-      </p>
+      <p>{{1-2_SENTENCES_ON_HOW_THE_PAIR_APPLIES_TO_THIS_SPECIFIC_CLIENT_PROBLEM}}</p>
 
-      <h3>What gets installed</h3>
-      <ul>
-        <li>
-          <strong>{{DELIVERABLE_1_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}
-        </li>
-        <li>
-          <strong>{{DELIVERABLE_2_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}
-        </li>
-        <li>
-          <strong>{{DELIVERABLE_3_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}
-        </li>
-        <li>
-          <strong>{{DELIVERABLE_4_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}
-        </li>
-      </ul>
+      <div class="two-up">
+        <div>
+          <h3>What gets installed</h3>
+          <ul>
+            <li><strong>{{DELIVERABLE_1_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
+            <li><strong>{{DELIVERABLE_2_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
+            <li><strong>{{DELIVERABLE_3_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
+            <li><strong>{{DELIVERABLE_4_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
+          </ul>
 
-      <h3>Timeline</h3>
-      <h4>Week 0 — Onboarding</h4>
-      <p>{{WHAT_HAPPENS_BEFORE_WORK_BEGINS}}</p>
-      <h4>Weeks 1–{{X}} — {{PHASE_NAME}}</h4>
-      <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
-      <h4>Weeks {{X+1}}–{{Y}} — {{PHASE_NAME}}</h4>
-      <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
-      <h4>Week {{FINAL}} — Handoff</h4>
-      <p>{{WHAT_THE_CLIENT_OWNS_AT_HANDOFF_AND_HOW_WE_TRANSITION}}</p>
+          <h3>Timeline</h3>
+          <h4>Week 0 — Onboarding</h4>
+          <p>{{WHAT_HAPPENS_BEFORE_WORK_BEGINS}}</p>
+          <h4>Weeks 1–{{X}} — {{PHASE_NAME}}</h4>
+          <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
+          <h4>Weeks {{X+1}}–{{Y}} — {{PHASE_NAME}}</h4>
+          <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
+          <h4>Week {{FINAL}} — Handoff</h4>
+          <p>{{WHAT_THE_CLIENT_OWNS_AT_HANDOFF_AND_HOW_WE_TRANSITION}}</p>
+        </div>
 
-      <!-- =============== § 04 — OUTCOMES & GUARANTEE =============== -->
-      <h2 class="sec">
-        <span class="num">§ 04 · Outcomes</span>What success looks like — in
-        writing
-      </h2>
+        <aside class="feed" aria-label="Engagement signals">
+          <div class="feed-head">
+            <span class="t">Engagement signals</span>
+            <span class="live">Live</span>
+          </div>
+          <div class="feed-item">
+            <span class="dot signal glow" aria-hidden="true"></span>
+            <span><span class="ev">Discovery synthesized</span><span class="det">{{CLIENT_SHORT}} · {{N}} stakeholders</span></span>
+            <span class="time">today</span>
+          </div>
+          <div class="feed-item">
+            <span class="dot positive" aria-hidden="true"></span>
+            <span><span class="ev">Scope drafted</span><span class="det">{{TIER_NAME}} · {{DURATION}}</span></span>
+            <span class="time">today</span>
+          </div>
+          <div class="feed-item">
+            <span class="dot caution" aria-hidden="true"></span>
+            <span><span class="ev">Awaiting decision</span><span class="det">Sign-off → kickoff window</span></span>
+            <span class="time">{{TARGET_START_DATE}}</span>
+          </div>
+          <div class="feed-item">
+            <span class="dot signal" aria-hidden="true"></span>
+            <span><span class="ev">Onboarding queued</span><span class="det">CRM · ops stack · brand inputs</span></span>
+            <span class="time">on signing</span>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
 
-      <p>
-        Every Catalyst Shift engagement defines measurable outcomes before the
-        work begins. If we miss them, we keep working at no cost until we hit
-        them. Here's what we're committing to for {{CLIENT_NAME}}:
-      </p>
+<!-- ════════════════ § 04 — OUTCOMES & GUARANTEE ════════════════ -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">04</div>
+      <div class="s-eyebrow">Outcomes</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">What success looks like — in writing.</h2>
+      <p>Every Catalyst Shift engagement defines measurable outcomes before the work begins. If we miss them, we keep working at no cost until we hit them. Here's what we're committing to for {{CLIENT_NAME}}:</p>
 
-      <table class="outcomes">
-        <thead>
-          <tr>
-            <th>Outcome</th>
-            <th>Metric</th>
-            <th>By</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>{{OUTCOME_1}}</td>
-            <td class="metric">{{TARGET_1}}</td>
-            <td class="metric">{{DEADLINE_1}}</td>
-          </tr>
-          <tr>
-            <td>{{OUTCOME_2}}</td>
-            <td class="metric">{{TARGET_2}}</td>
-            <td class="metric">{{DEADLINE_2}}</td>
-          </tr>
-          <tr>
-            <td>{{OUTCOME_3}}</td>
-            <td class="metric">{{TARGET_3}}</td>
-            <td class="metric">{{DEADLINE_3}}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="module-frame" style="margin-top: 16px;">
+        <div class="chrome">
+          <span class="dots"><span></span><span></span><span></span></span>
+          <span class="crumb">catalyst&nbsp;os · {{CLIENT_SHORT}} · outcomes</span>
+          <span class="right">M.OUT — TARGETS</span>
+        </div>
+
+        <div class="data-toolbar">
+          <span class="module-id">M.OUT — OUTCOMES</span>
+          <span class="title">Targets &amp; deadlines</span>
+          <span class="meta">3 outcomes · 1 final deadline</span>
+        </div>
+
+        <!-- Optional sparkline strip — replace points with real projection if available -->
+        <div class="sparkbar">
+          <div class="meta"><span class="label">target_index → {{PRIMARY_METRIC}}</span><span class="delta">+{{PROJECTED_LIFT}}% projected</span></div>
+          <svg width="220" height="32" viewBox="0 0 220 32" aria-hidden="true">
+            <path d="M0,26 L20,24 L40,25 L60,21 L80,19 L100,17 L120,14 L140,11 L160,9 L180,7 L200,5 L220,3"
+                  fill="none" stroke="#34E2C2" stroke-width="1.5"/>
+            <circle cx="220" cy="3" r="3" fill="#34E2C2"/>
+          </svg>
+        </div>
+
+        <table class="outcomes">
+          <thead>
+            <tr><th>Outcome</th><th>Status</th><th>Metric</th><th>By</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="outcome">{{OUTCOME_1}}</td>
+              <td><span class="dot positive">target</span></td>
+              <td class="metric">{{TARGET_1}}</td>
+              <td class="deadline">{{DEADLINE_1}}</td>
+            </tr>
+            <tr>
+              <td class="outcome">{{OUTCOME_2}}</td>
+              <td><span class="dot signal">target</span></td>
+              <td class="metric">{{TARGET_2}}</td>
+              <td class="deadline">{{DEADLINE_2}}</td>
+            </tr>
+            <tr>
+              <td class="outcome">{{OUTCOME_3}}</td>
+              <td><span class="dot caution">target</span></td>
+              <td class="metric">{{TARGET_3}}</td>
+              <td class="deadline">{{DEADLINE_3}}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <div class="guarantee">
         <div class="label">Guarantee · in writing</div>
-        <p>
-          If we have not delivered on the outcomes above by {{FINAL_DEADLINE}},
-          we continue the engagement at no additional cost until the metrics are
-          met or both parties agree to stop.
-        </p>
+        <p>If we have not delivered on the outcomes above by <strong>{{FINAL_DEADLINE}}</strong>, we continue the engagement at no additional cost until the metrics are met or both parties agree to stop.</p>
       </div>
+    </div>
+  </div>
+</section>
 
-      <!-- =============== § 05 — INVESTMENT =============== -->
-      <h2 class="sec">
-        <span class="num">§ 05 · Investment</span>Fees and terms
-      </h2>
+<!-- ════════════════ § 05 — INVESTMENT ════════════════ -->
+<section class="s">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">05</div>
+      <div class="s-eyebrow">Investment</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">Fees and terms.</h2>
 
       <h4>Implementation</h4>
-      <p>
-        <strong>${{FEE}}</strong>, fixed fee. {{PAYMENT_SCHEDULE_DEFAULT_50_50}}
-      </p>
+      <p><strong>${{FEE}}</strong>, fixed fee. {{PAYMENT_SCHEDULE_DEFAULT_50_50}}</p>
 
-      <h4>Platform retainer (optional, post-handoff)</h4>
-      <p>
-        <strong>{{RETAINER_RANGE}}/month.</strong> Scoped during the final two
-        weeks of implementation. Cancel with 30 days' notice.
-      </p>
+      <h4>Platform retainer · optional, post-handoff</h4>
+      <p><strong>{{RETAINER_RANGE}}/month.</strong> Scoped during the final two weeks of implementation. Cancel with 30 days' notice.</p>
 
       <h4>What's not included</h4>
       <p>{{ANY_THIRD_PARTY_TOOLING_AD_SPEND_OR_SCOPE_EXCLUSIONS}}</p>
+    </div>
+  </div>
+</section>
 
-      <!-- =============== § 06 — NEXT STEPS =============== -->
-      <h2 class="sec">
-        <span class="num">§ 06 · Next steps</span>To move forward
-      </h2>
+<!-- ════════════════ § 06 — NEXT STEPS ════════════════ -->
+<section class="s alt">
+  <div class="s-inner s-grid">
+    <aside class="s-rail">
+      <div class="s-num">06</div>
+      <div class="s-eyebrow">Next steps</div>
+    </aside>
+    <div class="s-body">
+      <h2 class="s-title">To move forward.</h2>
       <ol>
-        <li>
-          Confirm acceptance of this proposal in writing (reply to this email or
-          sign below).
-        </li>
-        <li>
-          We send a Statement of Work mirroring the scope and outcomes above.
-        </li>
-        <li>Onboarding call scheduled within 5 business days of signing.</li>
-        <li>Implementation begins {{TARGET_START_DATE}}.</li>
+        <li><strong>Confirm acceptance</strong> of this proposal in writing — reply to this email or sign below.</li>
+        <li><strong>SOW issued</strong> mirroring the scope and outcomes above, within 1 business day.</li>
+        <li><strong>Onboarding call</strong> scheduled within 5 business days of signing.</li>
+        <li><strong>Implementation begins</strong> {{TARGET_START_DATE}}.</li>
       </ol>
 
-      <!-- =============== SIGN-OFF =============== -->
-      <div class="signoff">
+      <div class="signoff" style="margin-top: 32px;">
         <div class="col">
           <h4>For Catalyst Shift</h4>
-          <p>{{CS_LEAD_NAME}}<br />{{CS_LEAD_ROLE}}<br />{{CS_LEAD_EMAIL}}</p>
-          <div class="sigline">Signature · Date</div>
+          <p>{{CS_LEAD_NAME}}<br><span class="role">{{CS_LEAD_ROLE}}</span><br><span class="role">{{CS_LEAD_EMAIL}}</span></p>
+          <div class="sig"><span>Signature</span><span>Date</span></div>
         </div>
         <div class="col">
           <h4>For {{CLIENT_NAME}}</h4>
-          <p>{{CLIENT_SIGNER_NAME}}<br />{{CLIENT_SIGNER_ROLE}}</p>
-          <div class="sigline">Signature · Date</div>
+          <p>{{CLIENT_SIGNER_NAME}}<br><span class="role">{{CLIENT_SIGNER_ROLE}}</span></p>
+          <div class="sig"><span>Signature</span><span>Date</span></div>
         </div>
       </div>
-
-      <!-- =============== COLOPHON =============== -->
-      <div class="colophon">
-        <span>Catalyst Shift · catalystshift.ai</span>
-        <span>Proposal · {{DOC_NUMBER}}</span>
-      </div>
     </div>
-  </body>
+  </div>
+</section>
+
+<!-- ════════════════ COLOPHON ════════════════ -->
+<footer class="colophon">
+  <div class="inner">
+    <span>Catalyst Shift · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
+    <span>Proposal · {{DOC_NUMBER}} · {{ISSUE_DATE}}</span>
+  </div>
+</footer>
+
+</body>
 </html>

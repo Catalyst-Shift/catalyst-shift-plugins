@@ -28,11 +28,11 @@
 
 ## Action items
 
-| #   | Action       | Owner     | Due     |
-| --- | ------------ | --------- | ------- |
-| 01  | {{ACTION_1}} | {{OWNER}} | {{DUE}} |
-| 02  | {{ACTION_2}} | {{OWNER}} | {{DUE}} |
-| 03  | {{ACTION_3}} | {{OWNER}} | {{DUE}} |
+| # | Action | Owner | Due |
+|---|--------|-------|-----|
+| 01 | {{ACTION_1}} | {{OWNER}} | {{DUE}} |
+| 02 | {{ACTION_2}} | {{OWNER}} | {{DUE}} |
+| 03 | {{ACTION_3}} | {{OWNER}} | {{DUE}} |
 
 ## Open questions
 
@@ -45,4 +45,4 @@
 
 ---
 
-_Catalyst Shift internal. Not for distribution._
+*Catalyst Shift internal. Not for distribution.*

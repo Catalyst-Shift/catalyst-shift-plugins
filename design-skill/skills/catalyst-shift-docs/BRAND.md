@@ -4,7 +4,7 @@ Distilled from the full `CLAUDE.md` at the project root. Read this before writin
 
 ## Who Catalyst Shift is
 
-**Catalyst Shift builds growth systems.** Three people:
+A **growth strategy firm**, not a tech firm. Three people:
 - **Kevin Townsend** — founder, growth systems. Builds the engine that generates leads.
 - **Lucas Dowd** — revenue ops, 15yr cybersecurity sales. Builds the engine that closes them.
 - **Keith Maselli** — delivery partner, former agency owner. Runs the engagement.
@@ -24,7 +24,7 @@ The implementation is the entry point. The retainer is the default continuation.
 
 ## Locked positioning rules
 
-- **Growth systems, not tech.** AI is *how* we work, not *what* we sell. AI never appears in headlines, only in methodology.
+- **Growth firm, not tech firm.** AI is *how* we work, not *what* we sell. AI never appears in headlines, only in methodology.
 - **Proof over promises.** Pre-revenue, zero retainer clients, no real testimonials yet. Do not fabricate. The honest "no testimonials yet — here's what we stand on" stance is deliberate.
 - **Pricing in public.** Fixed fees, disclosed. No "book a call to discuss investment."
 - **Guarantee in writing.** Every engagement defines measurable outcomes before start. Miss them, we keep working at no cost.
@@ -77,4 +77,4 @@ Common traits: skeptical of agencies, tired of strategy decks, respond to proof 
 
 ## Visual system (one-paragraph version)
 
-Dark-first, editorial. Display type **General Sans** for headlines (was Canela in earlier drafts; General Sans is the active stack). Body **DM Sans**. Mono **IBM Plex Mono** with `tabular-nums` and `snake_case` for system-style content. Colors: `--gold #C8A96E` (Kevin / growth systems), `--teal #2DD4A8` (Lucas / revenue ops), `--terracotta #C05A3C` (Keith / Catalyst OS). Borders separate, not shadows. Document-style section numbers (`§ 01`). All tokens in `assets/colors_and_type.css`.
+Dark-first, editorial. Display type **General Sans** for headlines. Body **DM Sans**. Mono **IBM Plex Mono** with `tabular-nums` and `snake_case` for system-style content. Palette is the v2 site palette: **`--signal #34E2C2`** (cyan — primary accent, status, key glows), **`--accent #8B7CF6`** (violet — module IDs, AI/automation register, secondary CTAs), **`--warm #FF6F4D`** (coral — closing CTAs, human moments). Surfaces are graphite (`--bg #08080B`, `--surface #101019`). Borders separate, not shadows. Document-style section numbers (`§ 01`). All tokens live in `assets/colors_and_type.css`. The v1 token names (`--gold`, `--teal`, `--action`, `--terracotta`) remain as aliases so older templates keep rendering — new work uses the v2 names.
