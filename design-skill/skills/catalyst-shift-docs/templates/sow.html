@@ -64,18 +64,18 @@
   <div class="hero-glow"></div>
   <div class="hero-inner">
     <div class="pill"><span class="badge">SOW</span></div>
-    <div class="doc-kicker">Statement of Work · {{TIER_NAME}}</div>
+    <div class="doc-kicker">Statement of Work · Catalyst OS</div>
     <h1 class="doc">
       Statement of Work.<br>
-      <span class="subline">{{CLIENT_NAME}} · {{TIER_NAME}}</span>
+      <span class="subline">{{CLIENT_NAME}} · Catalyst OS</span>
     </h1>
     <p class="lede">This SOW formalizes the engagement scoped in Proposal {{PROPOSAL_DOC_NUMBER}}. It supersedes the proposal upon signature by both parties.</p>
 
     <div class="cover-strip">
       <div class="cell"><div class="label">Effective</div><div class="value">{{EFFECTIVE_DATE}}<small>SOW · {{DOC_NUMBER}}</small></div></div>
       <div class="cell"><div class="label">Client</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_LEGAL_NAME}}</small></div></div>
-      <div class="cell"><div class="label">Engagement</div><div class="value">{{TIER_NAME}}<small>{{DURATION}}</small></div></div>
-      <div class="cell"><div class="label">Fee</div><div class="value">${{FEE}}<small>{{PAYMENT_SCHEDULE_SHORT}}</small></div></div>
+      <div class="cell"><div class="label">Scope</div><div class="value">Catalyst OS<small>{{USE_CASE_FOCUS}}</small></div></div>
+      <div class="cell"><div class="label">Fee</div><div class="value">Custom<small>setup (credited) + per-client MRR</small></div></div>
     </div>
   </div>
 </section>
@@ -105,15 +105,17 @@
       <div class="s-num">02</div>
       <div class="s-eyebrow">Scope</div>
       <div class="module-rail">
-        <div class="row active"><span class="id">{{TIER_CODE}}</span><span>{{TIER_NAME}}</span></div>
-        <div class="row"><span class="id">M.01</span><span>{{MODULE_1_SHORT}}</span></div>
-        <div class="row"><span class="id">M.02</span><span>{{MODULE_2_SHORT}}</span></div>
-        <div class="row"><span class="id">M.03</span><span>{{MODULE_3_SHORT}}</span></div>
+        <div class="row active"><span class="id">OS</span><span>Catalyst OS · the platform</span></div>
+        <div class="row"><span class="id">M.01</span><span>The Operator Brief</span></div>
+        <div class="row"><span class="id">M.02</span><span>Churn Early Warning</span></div>
+        <div class="row"><span class="id">M.03</span><span>Proposal Generation</span></div>
+        <div class="row"><span class="id">M.04</span><span>Pipeline Visibility</span></div>
+        <div class="row"><span class="id">M.05</span><span>Authority Engine</span></div>
       </div>
     </aside>
     <div class="s-body">
       <h2 class="s-title">What is in scope.</h2>
-      <p>Catalyst Shift will design, install, and hand off the <strong>{{TIER_NAME}}</strong> engagement: {{ONE_LINE_DESCRIPTION_OF_TIER_OUTCOME}}.</p>
+      <p>Catalyst Shift will install and operate <strong>Catalyst OS</strong> — the synthesis layer across {{CLIENT_NAME}}'s CRM, PSA, and RMM — beginning with <strong>{{LEAD_USE_CASE_NAME}}</strong>: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}.</p>
 
       <h3>Included</h3>
       <ul>
@@ -153,8 +155,8 @@
       <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
       <h4>Weeks {{X+1}}–{{Y}} — {{PHASE_2_NAME}}</h4>
       <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
-      <h4>Week {{FINAL}} — Handoff</h4>
-      <p>{{WHAT_THE_CLIENT_OWNS_AT_HANDOFF_AND_HOW_WE_TRANSITION}}</p>
+      <h4>Week {{FINAL}} — Go-live</h4>
+      <p>{{FIRST_OUTCOME_AT_GO_LIVE_AND_THE_ONGOING_MANAGED_CADENCE}}</p>
     </div>
   </div>
 </section>
@@ -193,7 +195,7 @@
 
       <div class="guarantee">
         <div class="label">Guarantee · in writing</div>
-        <p>If Catalyst Shift has not delivered on the outcomes above by <strong>{{FINAL_DEADLINE}}</strong>, Catalyst Shift continues the engagement at no additional cost until the metrics are met or both parties agree in writing to stop.</p>
+        <p>The deliverables and outcomes above are committed <strong>in writing</strong> as part of this SOW — named deliverables, the metrics Catalyst Shift will measure, and the dates by which they'll be measured.</p>
         <p>Measurement methodology, data sources, and reporting cadence are documented in the onboarding kickoff and confirmed by both parties before measurement begins.</p>
       </div>
     </div>
@@ -212,21 +214,21 @@
 
       <div class="pricing-card">
         <div>
-          <div class="tier-id">{{TIER_CODE}} · Implementation</div>
-          <div class="tier-name">{{TIER_NAME}}</div>
-          <div class="tier-line">{{TIER_ONE_LINE}}</div>
+          <div class="tier-id">Catalyst OS · Managed engagement</div>
+          <div class="tier-name">Setup + per-client MRR</div>
+          <div class="tier-line">Scoped by the paid assessment; custom per this deal — no public price list.</div>
         </div>
         <div class="fee-block">
-          <div class="fee">${{FEE}}</div>
-          <small>{{DURATION}} · fixed fee</small>
+          <div class="fee">Custom</div>
+          <small>setup (credited) + per-client MRR</small>
         </div>
       </div>
 
-      <h4>Payment schedule</h4>
-      <p>{{PAYMENT_SCHEDULE_DEFAULT_50_50_OR_OVERRIDE}}</p>
+      <h4>One-time setup</h4>
+      <p><strong>{{SETUP_FEE}}</strong>, credited from the $2,500 assessment. {{PAYMENT_SCHEDULE}}</p>
 
-      <h4>Platform retainer · optional, post-handoff</h4>
-      <p><strong>{{RETAINER_RANGE}}/month.</strong> Scoped during the final two weeks of implementation under a separate retainer SOW. Cancel with 30 days' notice.</p>
+      <h4>Per-client MRR</h4>
+      <p><strong>{{PER_CLIENT_MRR}} per managed client / month</strong>, scaled by managed-client count and use-case depth. Annual term; billed monthly. Expansion (added clients or use cases) is scoped in writing.</p>
 
       <h4>Late payment</h4>
       <p>Invoices are net-{{NET_DAYS}}. Past-due invoices accrue {{LATE_INTEREST}}% interest per month or the maximum allowed by law, whichever is lower.</p>
