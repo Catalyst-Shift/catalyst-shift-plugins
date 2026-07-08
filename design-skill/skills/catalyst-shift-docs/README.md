@@ -2,9 +2,9 @@
 
 A Claude skill that generates branded Catalyst Shift documents — proposals, SOWs, discovery reports, sales decks, client deliverables, case studies, one-pagers, and internal docs — in HTML, PDF, PPTX, DOCX, or Markdown.
 
-Built for **Kevin, Lucas, and Keith**. Same brand, same voice, same templates, every time.
+Built for **Kevin and Lucas** (with Keith supporting the build internally). Same brand, same voice, same templates, every time.
 
-> **Strategy version:** v4.3 (2026-05-07). If you're seeing old tier names (Diagnostic / 60-day Foundation / Operating Layer 90-day) or "growth strategy firm" framing in generated docs, your local copy is stale — see **Updating** below.
+> **Strategy version:** v5.2 (canon 2026-06-30; amended 2026-07-03). If generated docs still say "vertical-first product-led firm," sell five modules à la carte, quote named tiers (Foundation / Growth / Full Stack) or public setup+MRR price lists, headline "QBR Automation," use the founder-named differentiator, or promise "keep working at no cost," your local copy is stale — see **Updating** below.
 
 ---
 
@@ -12,11 +12,11 @@ Built for **Kevin, Lucas, and Keith**. Same brand, same voice, same templates, e
 
 You ask Claude something like:
 
-> "Make a CS proposal for Acme MSP — Foundation tier, $12,500 setup / $3,200 MRR, kickoff May 15. They're $1.8M revenue, 220 endpoints, ConnectWise + NinjaOne. Owner is drowning in QBRs and three big clients are showing churn signals."
+> "Make a CS proposal for Acme MSP — leading with The Operator Brief, off the paid assessment. They're $1.8M revenue, 22 managed clients, ConnectWise + NinjaOne + HubSpot. Owner is drowning in client reviews and three clients are showing churn signals."
 
 Claude reads the skill, asks any missing questions in one bundle, and writes a full proposal into your working folder. Same for SOWs, discovery reports, decks, etc.
 
-The skill has the brand voice, the locked glossary, the v4.3 module pricing, the guarantee language, the template structures, and the visual system baked in. You provide the deal-specific content.
+The skill has the v5.2 brand voice, the locked glossary, the synthesis-first story, the platform pricing model (custom-managed, no public price list), the paid-assessment front door, the defined-deliverables guarantee, the template structures, and the visual system baked in. You provide the deal-specific content.
 
 ---
 
@@ -24,9 +24,9 @@ The skill has the brand voice, the locked glossary, the v4.3 module pricing, the
 
 ```
 catalyst-shift-docs/
-├── SKILL.md                  # entry point Claude reads first
-├── BRAND.md                  # voice rules + locked glossary (v4.3)
-├── PRICING.md                # five modules + Foundation/Growth/Full Stack tiers (v4.3)
+├── SKILL.md                  # entry point Claude reads first (v5.2)
+├── BRAND.md                  # voice rules + locked glossary (v5.2)
+├── PRICING.md                # price-the-platform model, assessment, no public list (v5.2)
 ├── INTAKE.md                 # questions to ask when context is thin
 ├── README.md                 # this file
 ├── assets/
@@ -90,44 +90,46 @@ Drop the `catalyst-shift-docs` folder in. Restart Claude Desktop.
 Ask Claude in plain English. The skill description fires on phrases like:
 
 - "Write a Catalyst Shift proposal for [client]…"
-- "Draft an SOW for [client] — Full Stack, $16,500 setup / $4,500 MRR, start May 15."
-- "Make a CS discovery report from this transcript…"
+- "Draft an SOW for [client] — off the assessment, setup + per-client MRR, start May 15."
+- "Make a CS discovery report from this listen-call transcript…"
 - "Build a 10-slide CS sales deck for an IBPI peer-group room."
-- "Generate a one-pager for **M.01 QBR Automation**."
-- "One-pager on the design-partner program."
-- "I need a case study writeup for [client] — here are the metrics…"
+- "Generate a one-pager on **The Operator Brief (M.01)**."
+- "One-pager on the early-adopter program."
+- "I need a case study writeup for [client] — here are the outcomes…"
 - "Format this as a CS client deliverable."
-- "Internal doc: leadership sync notes from today."
+- "Internal doc: co-founder sync notes from today."
 
 Or, vaguer:
 
 - "Make a CS proposal." → Claude will ask the intake questions in `INTAKE.md`.
 
-You can also paste a discovery transcript, an intake form, or a prior doc and Claude will use it. **If the prior doc is from v3.x**, Claude will rewrite to v4.3 (modules + Foundation/Growth/Full Stack tiers).
+You can also paste a listen-call transcript, an assessment, or a prior doc and Claude will use it. **If the prior doc is v4.x/v3.x**, Claude will rewrite to v5.2 (platform-priced synthesis layer, use cases, paid-assessment front door, two co-founders).
 
 ---
 
-## v4.3 quick reference
+## v5.2 quick reference
 
-The five **Catalyst OS** modules:
+**What we are:** a **product company.** The product is **Catalyst OS** — the business-layer operating system for an MSP, built on a **synthesis core** that makes the stack (CRM + PSA + RMM) talk to itself and *acts* on it. Delivered managed until proven across ~5 customers, then graduates toward software (the Palantir pattern). **We sell the platform, not modules à la carte.**
 
-| ID | Module | Setup | MRR |
-|---|---|---|---|
-| **M.01** | QBR Automation | $4,500 | $1,200/mo |
-| **M.02** | Churn Early Warning | $5,000 | $1,500/mo |
-| **M.03** | Proposal Generation | $5,500 | $1,000/mo |
-| **M.04** | Pipeline Visibility | $3,500 | $800/mo |
-| **M.05** | Content & Authority | $3,000 | $1,000/mo |
+The five **use cases** (a module is a use case — a view over the synthesis spine):
 
-The three tiers:
+| ID | Use case |
+|---|---|
+| **M.01** | The Operator Brief *(renamed QBR output — the default first use case)* |
+| **M.02** | Churn Early Warning |
+| **M.03** | Proposal Generation |
+| **M.04** | Pipeline Visibility |
+| **M.05** | Authority Engine |
 
-| Tier | Setup | MRR | Coverage |
-|---|---|---|---|
-| **Foundation** | $12,500 | $3,200/mo | M.01–M.03 · Operations |
-| **Growth** | $5,500 | $1,600/mo | M.04–M.05 · Revenue |
-| **Full Stack** | $16,500 | $4,500/mo | All five modules |
+**Pricing:** price the platform, deliver custom. Per managed client × use-case depth, with caps. Managed now: **paid assessment ($2,500, credited) → custom SOW → setup (credited) → per-client MRR.** **No public price list.** SaaS tiers (Intelligence / Action / Operator-Owned) are illustrative and future-only. Managed floor = Action. See `PRICING.md`.
 
-Plus **design-partner** terms (first 10 customers) and **IBPI member** discount. See `PRICING.md`.
+**Front door:** the paid assessment builds the custom proposal; the free self-serve Scorecard is lead capture ahead of it. No consultative/advisory services.
+
+**Team:** two co-founders — Kevin (product/eng) and Lucas (revenue, client-facing). Keith supports the build internally, not presented externally.
+
+**Guarantee:** defined deliverables **in writing** — never "keep working at no cost."
+
+Plus the **early-adopter program**, **IBPI member** terms (15% setup + 10% Y1 MRR + 5% rebate), and **ASCII Spark**. See `PRICING.md`.
 
 ---
 
@@ -149,36 +151,37 @@ The script README is at `scripts/README.md`.
 
 **Will:**
 
-- Use locked glossary phrases verbatim ("Kevin builds the engine…", "operating layer," "install the infrastructure," "in writing," "most engagements continue," "whether you're paying attention or not").
-- Apply the v4.3 module pricing and Foundation/Growth/Full Stack tiers as defaults; honor overrides.
-- Ask in one bundled message for anything it doesn't have (MSP size, stack, decision-maker, modules, design-partner status, IBPI status).
+- Lead with **synthesis** and outcomes; use locked glossary phrases verbatim ("operating layer," "your stack, finally talking to itself," "actioned intelligence," "operator-owned intelligence," "The Operator Brief," "in writing," "most engagements continue," "Palantir, for the MSP business layer").
+- Sell the **platform**, framing the five as use cases over one synthesis spine.
+- Price custom off the **paid assessment** — no public price list, no fixed tiers.
+- Ask in one bundled message for anything it doesn't have (revenue band, managed-client count, stack, decision-maker, lead use case, early-adopter/IBPI status).
 - Format outputs to match the live site's type, color, and editorial structure.
-- Replace v3.x language in any prior doc you paste in.
+- Replace v4.x/v3.x language in any prior doc you paste in.
 
 **Won't:**
 
-- Fabricate testimonials, client logos, or case-study results. Catalyst OS is in active development with the founding cohort — Claude will say so plainly when relevant.
-- Write "AI-powered" anywhere customer-facing.
-- Use deprecated tier names (Diagnostic / 60-day Foundation / 90-day Operating Layer / Signal Sprint / Operator / fractional CRO).
-- Describe CS as a "growth strategy firm" — it's a vertical-first, product-led firm for MSPs.
-- Render section numbers with the `§` glyph (deprecated v1.x).
-- Pad with filler sections.
-- Use emoji.
+- Fabricate testimonials, client logos, or results. The synthesis core is demoable and delivered managed until proven across ~5 customers — Claude says so via the founding-cohort narrative.
+- Name **ScalePad**, or write "AI-powered" / lead with "AI" in customer-facing headlines.
+- Sell use cases à la carte, publish a price list, or quote the illustrative SaaS tiers as a managed price.
+- Use the retired founder-named differentiator, present Keith externally, or introduce a third co-founder.
+- Use the "keep working at no cost" guarantee, or headline "QBR Automation."
+- Describe CS as a "growth strategy firm" or "vertical-first product-led firm" — it's a product company.
+- Render section numbers with the `§` glyph, pad with filler, or use emoji.
 - Override your judgment — if you tell it to change copy, it changes copy.
 
 ---
 
 ## Updating the skill
 
-When something changes — pricing, a new module ships, a glossary phrase evolves, a template needs a new section — edit the relevant file:
+When something changes — pricing model, a use case is renamed, a glossary phrase evolves, a template needs a new section — edit the relevant file:
 
 - **New brand voice rule / glossary phrase / positioning shift** → `BRAND.md`
-- **Pricing change / new module / new discount** → `PRICING.md`
+- **Pricing-model change / new exception** → `PRICING.md`
 - **New intake question** → `INTAKE.md`
 - **Template change** → the relevant file in `templates/`
 - **New doc type** → add a template + a row in `SKILL.md`'s routing table
 
-Bump the strategy version banner in `SKILL.md` and `README.md` whenever you make a positioning-level change. Then push to the `catalyst-shift-plugins` repo and tag a release. Teammates pick it up via Cowork → Sync (and a Cowork restart).
+Bump the strategy version banner in `SKILL.md` and `README.md` whenever you make a positioning-level change, and bump `version` in `design-skill/.claude-plugin/plugin.json`. Then push to the `catalyst-shift-plugins` repo. Teammates pick it up via Cowork → Sync (and a Cowork restart).
 
 ### Troubleshooting — "the templates aren't displaying the new version"
 
@@ -187,17 +190,17 @@ Almost never a browser cache issue. Check in this order:
 1. **Is the change merged on `main`?** Open `Catalyst-Shift/catalyst-shift-plugins` on GitHub and confirm the version in `design-skill/.claude-plugin/plugin.json` matches what you pushed.
 2. **Has the teammate synced?** Cowork → Customize → plugins → catalyst-shift-plugins → Sync. Then accept the version update.
 3. **Did they restart Cowork after sync?** Cowork caches plugin assets at install time; a quit + reopen forces a clean reload.
-4. **Is Claude actually opening the templates?** If proposals come back looking like they were written from memory (no module-frame chrome, no cover-strip, generic numbered sections), the SKILL.md instruction to read `templates/` first isn't firing. The current SKILL.md ("Step 2 — you MUST read the relevant template file") addresses this; if older copies are still around, sync.
+4. **Is Claude actually opening the templates?** If proposals come back looking written from memory (no module-frame chrome, no cover-strip, generic sections), the SKILL.md instruction to read `templates/` first isn't firing. The current SKILL.md ("Step 2 — you MUST read the relevant template file") addresses this; if older copies are still around, sync.
 
 ---
 
 ## Built on
 
-The same design system as the live site (v2 tokens, v4.3 content). Hallmarks:
+The same design system as the live site (v2 tokens, v5.2 content). Hallmarks:
 
 - **Tokens** in `assets/colors_and_type.css` — graphite surfaces, signal teal, accent violet, warm coral.
 - **Type** General Sans (display) · DM Sans (body) · IBM Plex Mono (UI/labels), all self-hosted in `assets/fonts/`.
-- **Document grammar** — sticky nav, hero with grid + glow, cover-strip, plain numbered section rails (`01 / Title`, no glyph), module-frame product chrome with status dots, in-writing guarantee block, module IDs (M.01–M.05) used as in-text mono anchors.
-- **Dark-only, screen-first.** All templates render dark on screen and invert to clean white when printed via Cmd/Ctrl+P. There is no `-light` variant — that was an earlier iteration and has been removed.
+- **Document grammar** — sticky nav, hero with grid + glow, cover-strip, plain numbered section rails (`01 / Title`, no glyph), module-frame product chrome with status dots, defined-deliverables guarantee block, use-case IDs (M.01–M.05) used as in-text mono anchors.
+- **Dark-only, screen-first.** All templates render dark on screen and invert to clean white when printed via Cmd/Ctrl+P. There is no `-light` variant.
 
 v1 token names (`--gold`, `--teal`, `--action`, `--terracotta`) remain as aliases inside `colors_and_type.css` so anything written against the old palette keeps rendering. If the live site evolves, mirror the change here.

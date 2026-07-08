@@ -6,8 +6,8 @@
     1. Replace every {{PLACEHOLDER}} with real content. If you don't have a value, ASK — do not invent.
     2. Keep section structure (§ 01 … § 06) and module-style mono labels (M.01, etc.).
     3. Use locked glossary phrases verbatim where they fit (see BRAND.md).
-    4. Default fee + duration come from PRICING.md; override only if the teammate gave a custom number.
-    5. The "guarantee in writing" section is mandatory — every proposal has one.
+    4. Pricing is custom per the paid assessment (one-time setup, credited + per-client MRR). NO public price list / fixed tiers. See PRICING.md.
+    5. The "guarantee in writing" section is mandatory — defined deliverables, never "keep working at no cost."
     6. Every metric in tables/feed should have a status dot tone: positive | caution | negative | signal.
     7. Print-export goes through Cmd/Ctrl+P. The print stylesheet at the bottom
        inverts the canvas to white and tones down the chrome.
@@ -543,7 +543,7 @@ LEGACY-INLINE-CSS-END -->
 
     <div class="pill"><span class="badge">Prepared for {{CLIENT_NAME}}</span></div>
 
-    <div class="doc-kicker">Proposal · {{TIER_NAME}}</div>
+    <div class="doc-kicker">Proposal · {{ENGAGEMENT_SCOPE}}</div>
 
     <h1 class="doc">
       {{ENGAGEMENT_HEADLINE}}<br>
@@ -555,8 +555,8 @@ LEGACY-INLINE-CSS-END -->
     <div class="cover-strip">
       <div class="cell"><div class="label">Issued</div><div class="value">{{ISSUE_DATE}}<small>Doc · {{DOC_NUMBER}}</small></div></div>
       <div class="cell"><div class="label">For</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
-      <div class="cell"><div class="label">Engagement</div><div class="value">{{TIER_NAME}}<small>{{DURATION}}</small></div></div>
-      <div class="cell"><div class="label">Investment</div><div class="value">${{FEE}}<small>{{PAYMENT_SCHEDULE_SHORT}}</small></div></div>
+      <div class="cell"><div class="label">Scope</div><div class="value">{{USE_CASE_FOCUS}}<small>{{PLATFORM_ENGAGEMENT_ONE_LINE}}</small></div></div>
+      <div class="cell"><div class="label">Engagement</div><div class="value">Custom<small>Setup (credited) + per-client MRR · scoped by assessment</small></div></div>
     </div>
   </div>
 </section>
@@ -583,29 +583,31 @@ LEGACY-INLINE-CSS-END -->
       <div class="s-num">02</div>
       <div class="s-eyebrow">Recommendation</div>
       <div class="module-rail">
-        <div class="row active"><span class="id">{{TIER_CODE}}</span><span>{{TIER_NAME}}</span></div>
-        <div class="row"><span class="id">M.01</span><span>{{MODULE_1_SHORT}}</span></div>
-        <div class="row"><span class="id">M.02</span><span>{{MODULE_2_SHORT}}</span></div>
-        <div class="row"><span class="id">M.03</span><span>{{MODULE_3_SHORT}}</span></div>
+        <div class="row active"><span class="id">OS</span><span>Catalyst OS · the platform</span></div>
+        <div class="row"><span class="id">M.01</span><span>The Operator Brief</span></div>
+        <div class="row"><span class="id">M.02</span><span>Churn Early Warning</span></div>
+        <div class="row"><span class="id">M.03</span><span>Proposal Generation</span></div>
+        <div class="row"><span class="id">M.04</span><span>Pipeline Visibility</span></div>
+        <div class="row"><span class="id">M.05</span><span>Authority Engine</span></div>
       </div>
     </aside>
     <div class="s-body">
       <h2 class="s-title">What we propose.</h2>
-      <p>We recommend the <strong>{{TIER_NAME}}</strong> engagement: {{ONE_LINE_DESCRIPTION_OF_TIER_OUTCOME}}.</p>
+      <p>We recommend installing <strong>Catalyst OS</strong> — the synthesis layer across your CRM, PSA, and RMM — starting with <strong>{{LEAD_USE_CASE_NAME}}</strong>: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}. It runs as a managed service while we build it out, and grows as you add clients and use cases.</p>
 
       <div class="pricing-card">
         <div>
-          <div class="tier-id">{{TIER_CODE}} · Implementation</div>
-          <div class="tier-name">{{TIER_NAME}}</div>
-          <div class="tier-line">{{TIER_ONE_LINE}}</div>
+          <div class="tier-id">Catalyst OS · Managed engagement</div>
+          <div class="tier-name">{{LEAD_USE_CASE_NAME}} → platform</div>
+          <div class="tier-line">One-time setup (credited from your assessment) + per-client MRR, scaled by managed-client count and use-case depth. Scoped by the assessment — no public price list.</div>
         </div>
         <div class="fee-block">
-          <div class="fee">${{FEE}}</div>
-          <small>{{DURATION}} · fixed fee</small>
+          <div class="fee">Custom</div>
+          <small>setup (credited) + per-client MRR</small>
         </div>
       </div>
 
-      <p><strong>Most engagements continue</strong> on a platform retainer of {{RETAINER_RANGE}} per month after implementation. Optional, scoped after handoff.</p>
+      <p><strong>Most engagements continue</strong> and deepen from here — more clients under the platform, more use cases live. We scope each expansion in writing.</p>
     </div>
   </div>
 </section>
@@ -621,11 +623,11 @@ LEGACY-INLINE-CSS-END -->
       <h2 class="s-title">How we work.</h2>
 
       <p class="pull">
-        <span class="a">Kevin builds the engine that generates leads.</span>
-        <span class="b">Lucas builds the engine that closes them.</span>
+        <span class="a">Your stack already holds the answer.</span>
+        <span class="b">We make it talk — and then we act on it.</span>
       </p>
 
-      <p>{{1-2_SENTENCES_ON_HOW_THE_PAIR_APPLIES_TO_THIS_SPECIFIC_CLIENT_PROBLEM}}</p>
+      <p>Catalyst OS synthesizes the data already scattered across your CRM, PSA, and RMM into one picture of the business, then does the work: {{1-2_SENTENCES_ON_HOW_SYNTHESIS_APPLIES_TO_THIS_SPECIFIC_CLIENT_PROBLEM}}</p>
 
       <div class="two-up">
         <div>
@@ -660,7 +662,7 @@ LEGACY-INLINE-CSS-END -->
           </div>
           <div class="feed-item">
             <span class="dot positive" aria-hidden="true"></span>
-            <span><span class="ev">Scope drafted</span><span class="det">{{TIER_NAME}} · {{DURATION}}</span></span>
+            <span><span class="ev">Scope drafted</span><span class="det">Catalyst OS · {{LEAD_USE_CASE_NAME}}</span></span>
             <span class="time">today</span>
           </div>
           <div class="feed-item">
@@ -688,7 +690,7 @@ LEGACY-INLINE-CSS-END -->
     </aside>
     <div class="s-body">
       <h2 class="s-title">What success looks like — in writing.</h2>
-      <p>Every Catalyst Shift engagement defines measurable outcomes before the work begins. If we miss them, we keep working at no cost until we hit them. Here's what we're committing to for {{CLIENT_NAME}}:</p>
+      <p>Every Catalyst Shift engagement defines the deliverables and the outcomes we'll measure <em>in writing</em>, before a dollar changes hands. Here's what we're committing to for {{CLIENT_NAME}}:</p>
 
       <div class="module-frame" style="margin-top: 16px;">
         <div class="chrome">
@@ -742,7 +744,7 @@ LEGACY-INLINE-CSS-END -->
 
       <div class="guarantee">
         <div class="label">Guarantee · in writing</div>
-        <p>If we have not delivered on the outcomes above by <strong>{{FINAL_DEADLINE}}</strong>, we continue the engagement at no additional cost until the metrics are met or both parties agree to stop.</p>
+        <p>The deliverables and outcomes above are committed <strong>in writing</strong> before the engagement begins — named deliverables, the metrics we'll measure, and the dates we'll measure them by. Measurement methodology and data sources are confirmed by both parties at onboarding.</p>
       </div>
     </div>
   </div>
@@ -758,14 +760,16 @@ LEGACY-INLINE-CSS-END -->
     <div class="s-body">
       <h2 class="s-title">Fees and terms.</h2>
 
-      <h4>Implementation</h4>
-      <p><strong>${{FEE}}</strong>, fixed fee. {{PAYMENT_SCHEDULE_DEFAULT_50_50}}</p>
+      <p>Pricing is scoped by your <strong>paid assessment</strong> ($2,500, fully credited against this engagement) and delivered as a custom SOW. There is no public price list.</p>
 
-      <h4>Platform retainer · optional, post-handoff</h4>
-      <p><strong>{{RETAINER_RANGE}}/month.</strong> Scoped during the final two weeks of implementation. Cancel with 30 days' notice.</p>
+      <h4>One-time setup</h4>
+      <p><strong>{{SETUP_FEE}}</strong>, credited from the assessment. Scales with integration complexity across your CRM, PSA, and RMM. {{PAYMENT_SCHEDULE}}</p>
+
+      <h4>Per-client MRR</h4>
+      <p><strong>{{PER_CLIENT_MRR}} per managed client / month</strong>, scaled by managed-client count and use-case depth. Annual term; the platform grows as you add clients and use cases.</p>
 
       <h4>What's not included</h4>
-      <p>{{ANY_THIRD_PARTY_TOOLING_AD_SPEND_OR_SCOPE_EXCLUSIONS}}</p>
+      <p>{{ANY_THIRD_PARTY_TOOLING_OR_SCOPE_EXCLUSIONS}}</p>
     </div>
   </div>
 </section>
@@ -783,7 +787,7 @@ LEGACY-INLINE-CSS-END -->
         <li><strong>Confirm acceptance</strong> of this proposal in writing — reply to this email or sign below.</li>
         <li><strong>SOW issued</strong> mirroring the scope and outcomes above, within 1 business day.</li>
         <li><strong>Onboarding call</strong> scheduled within 5 business days of signing.</li>
-        <li><strong>Implementation begins</strong> {{TARGET_START_DATE}}.</li>
+        <li><strong>Onboarding begins</strong> {{TARGET_START_DATE}} — first outcome inside 30 days.</li>
       </ol>
 
       <div class="signoff" style="margin-top: 32px;">

@@ -1,93 +1,86 @@
 # Pricing reference
 
-Aligned to **Strategy v4.3** (effective 2026-05-07). Five modules, three tiers, plus the platform retainer. Bake these in as defaults; teammates can override per-deal.
+Aligned to **Strategy v5.2** (canon 2026-06-30). Source of truth: `Strategy and Canon/CatalystShift_Strategy_v5.2.md` §4. The 6/30 reasoning is in `CatalystShift_SKU_Productization_Memo_ForLucas_v0.2`.
 
-## The five modules
+> **This supersedes the v4.x model** (five modules with published per-module setup + MRR, three named tiers). **Do not** print fixed setup/MRR tables or a tier price list in customer-facing docs.
 
-| Module | What it runs | Setup | MRR | Year 1 ROI |
-|---|---|---|---|---|
-| **M.01 QBR Automation** | Quarterly business reviews delivered on time, every time | $4,500 | $1,200/mo | ~95% |
-| **M.02 Churn Early Warning** | Retention risk signals from PSA + ticket data | $5,000 | $1,500/mo | Strong from Y2 |
-| **M.03 Proposal Generation** | Faster proposal velocity, consistent scope language | $5,500 | $1,000/mo | 135%+ |
-| **M.04 Pipeline Visibility** | Deal velocity and forecast accuracy across the CRM | $3,500 | $800/mo | 190–360% |
-| **M.05 Content & Authority** | Market authority engine — the one we run on ourselves | $3,000 | $1,000/mo | Highest ceiling |
+## The principle: price the platform, deliver custom
 
-## The three tiers
+We **sell the platform** (the synthesis layer), not the parts. **A module is a use case.** Pricing monetizes the sum, not the modules.
 
-### Foundation — Operations (M.01–M.03)
+**Value metric — two variables with caps:**
 
-- **Setup:** $12,500
-- **MRR:** $3,200/month
-- **What it covers:** QBR automation, churn early warning, proposal generation. The three operations workflows MSPs lose money on every quarter.
-- **When to use:** Default starting tier. MSP needs operational stability before revenue acceleration.
+- **Per managed client** — the primary scaling unit, the thing the MSP has more of every quarter.
+- **× use-case depth** — the upsell lever (how many use cases, how deep).
+- **Fair-use caps** on high-cost use cases (the Operator Brief, proposals).
 
-### Growth — Revenue (M.04–M.05)
+**DH/O (delivery hours per outcome) is the master metric.** It sets every price, the graduation trigger (≤ ~0.6 hr across N clients), and the §4 caps. When in doubt about whether a scope prices right, it comes back to DH/O.
 
-- **Setup:** $5,500
-- **MRR:** $1,600/month
-- **What it covers:** Pipeline visibility + content & authority engine. The revenue side of the operating layer.
-- **When to use:** MSP has stable operations but is invisible in market or losing deals to forecast slippage. Often layered on top of Foundation.
+## Two phases
 
-### Full Stack — All Five Modules
+### Managed phase (now — next ~5 customers)
 
-- **Setup:** $16,500
-- **MRR:** $4,500/month
-- **Conservative Year 1 value:** $95K–$130K
-- **What it covers:** All five Catalyst OS modules.
-- **When to use:** MSP wants the full operating layer. Priced like a junior ops hire ($55–65K/yr fully loaded), covering five distinct functions one hire never could.
+The path per deal:
 
-## Pricing principles (v4.3)
+1. **Paid assessment** — $2,500, fully credited against the first engagement. Scores how the business runs and **builds the custom proposal.**
+2. **Custom SOW** — scope, integration plan, deliverables and outcomes in writing, timeline, annual term.
+3. **One-time setup fee** — credited, scales with integration complexity.
+4. **Per-client MRR** — the recurring line, scaled by managed-client count × use-case depth.
 
-- **Setup floor of $3K minimum** — signals infrastructure, not project work.
-- **Annual contracts standard** — 12-month commits with quarterly business reviews.
-- **Pricing in public** — fees published, fixed, no "investment to be discussed."
-- **Junior-ops-hire benchmark** anchors the Full Stack bundle.
-- **Honesty about build state** — Catalyst OS is in active development; we ship modules with our founding cohort. Don't claim a finished platform.
+**Pricing is custom per deal and stays behind the sales call — there is NO public price list.** Frame it as an **early-adopter program**: "you get it first and shape it; there are project fees."
 
-## Design-partner pricing (first 10 customers only)
+**The phase gate (hard rule):** in the managed phase the **floor is Action (actioned intelligence).** We do **not** sell a bare Intelligence/reporting tier in the managed phase — that's a competitor's game. Bare reporting only becomes a buyable tier once it's self-serve software that costs us nothing to deliver.
 
-Reduced setup + $1–2K/mo MRR in exchange for:
+### SaaS destination (illustrative, provisional — NOT the managed price)
 
-- 12-month commit
-- Case-study rights
-- Quarterly product input
-- Reference calls
+Resolves once DH/O is instrumented. One subscription, tiered by client count + depth. **These numbers are directional only and must not be quoted as the price of a managed engagement:**
 
-Sunsets at the 10th customer or when Module 02 ships, whichever comes first.
+| Tier (future SaaS) | Illustrative | Per client / mo |
+|---|---|---|
+| Intelligence | reporting/synthesis only | ~$65 |
+| Action | actioned intelligence — the managed floor | ~$120 |
+| Operator-Owned | benchmarked book sold back to the operator | ~$175 |
 
-## IBPI member discount
+At the SaaS destination, honest pricing returns to **published and fixed.** Until then it's custom-per-deal.
 
-For MSPs sourced through the IBPI MSP OneShare Preferred Partner program:
+## Expansion economics
 
-- **15% setup discount**
-- **10% Year 1 MRR discount**
-- **5% annual rebate to IBPI** on member-driven revenue
+- The **next use case costs less to deliver** because we're already embedded (DH/O falls).
+- Per-client price can **decline with volume** as lock-in grows.
+- **Operator-owned intelligence** — selling the operator their own benchmarked book back to them — is the **premium line**, un-copyable by a reporting competitor.
+- Use "**Most engagements continue**" framing for expansion (added use cases + per-client MRR), not a fixed retainer number.
+
+## The front door — the paid assessment
+
+- **$2,500, fully credited** against the first engagement.
+- It scores the business and **builds the custom proposal** (SOW + setup + MRR). It can't be free; most buyers expect pricing behind a sales call.
+- The lighter, **self-serve Scorecard survives as a free lead-capture front end** ahead of the paid assessment.
+- **We sell nothing else** — no consultative/advisory services.
+
+## Early Adopter Program & published exceptions
+
+First-cohort / partner structure: reduced economics in exchange for product input, case-study rights, and reference participation — **all with defined deliverables in writing.** Preserved published exceptions:
+
+- **IBPI MSP OneShare:** 15% setup discount + 10% Year 1 MRR discount + 5% annual rebate to IBPI on member-driven revenue.
+- **ASCII Spark:** terms preserved as a published exception.
 
 ## How to write pricing in a doc
 
-- **Always state the setup + MRR in numbers.** "$12,500 setup, $3,200/month" beats "investment to be discussed during scoping."
-- **Always state the Year 1 value.** Conservative numbers only — never project beyond what's defensible.
-- **Always state the guarantee.** Use the phrase "in writing" — every engagement has measurable outcomes defined before start, miss them, we keep working at no cost.
-- **Frame the retainer as the default.** Use "Most engagements continue" wording.
-- If the teammate gives you a custom fee, use it. Note in the doc it's a custom scope and explain why (single line is enough).
-
-## Quick reference table for templates
-
-```
-| Tier         | Setup    | MRR        | Coverage                         |
-|--------------|----------|------------|----------------------------------|
-| Foundation   | $12,500  | $3,200/mo  | M.01–M.03 · Operations           |
-| Growth       | $5,500   | $1,600/mo  | M.04–M.05 · Revenue              |
-| Full Stack   | $16,500  | $4,500/mo  | All five modules                 |
-```
+- **Do not publish a price list or fixed setup/MRR tables.** State that pricing is scoped by the paid assessment and delivered as a custom SOW (setup, credited + per-client MRR).
+- **Anchor on the assessment:** "$2,500 assessment, fully credited, builds your custom proposal."
+- **Frame recurring as per-client MRR**, scaled by managed-client count × use-case depth — not a flat retainer.
+- **State the guarantee as defined deliverables in writing** — the deliverables and the outcomes we'll measure, agreed before a dollar changes hands. Never "keep working at no cost."
+- If the teammate gives you a specific custom number for a specific deal, use it, and note in the doc it's the scoped custom price from the assessment.
+- Never quote the illustrative SaaS tiers ($65 / $120 / $175) as the price of a managed engagement.
 
 ## Deprecated — DO NOT use
 
-These are from earlier strategy versions. Reject if you see them in a doc:
+From earlier strategy versions. Reject if you see them in a doc:
 
-- ~~Diagnostic ($12K, 30 days)~~ — deprecated
-- ~~Foundation tier at $35K, 60 days~~ — deprecated
-- ~~Operating Layer tier at $45K+, 90 days~~ — deprecated
-- ~~Three-stage offer (Signal Sprint / Install / Operator)~~ — deprecated
-- ~~Fractional CRO~~ — deprecated
-- ~~"Most engagements continue on a $3–8K/month platform retainer"~~ — old retainer framing replaced by named-module MRR
+- ~~Five modules with published per-module setup + MRR (M.01 $4,500/$1,200, etc.)~~ — deprecated; modules are use cases, priced as a platform.
+- ~~Three named tiers: Foundation ($12,500 / $3,200), Growth ($5,500 / $1,600), Full Stack ($16,500 / $4,500)~~ — deprecated.
+- ~~"Pricing in public" / published fixed fees in the managed phase~~ — deprecated; no public price list until the SaaS destination.
+- ~~"Junior-ops-hire benchmark" as the Full Stack anchor~~ — deprecated.
+- ~~Fixed "platform retainer" line~~ — replaced by per-client MRR.
+- ~~"Most engagements continue on a $3–8K/month platform retainer"~~ — replaced by per-client MRR + added use cases.
+- ~~Diagnostic ($12K), 60/90-day tiers, Signal Sprint / Operator, fractional CRO~~ — deprecated (v3.x).
