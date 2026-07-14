@@ -46,16 +46,7 @@
   section[data-slide][data-bg="alt"]       { background: var(--bg-alt); }
   section[data-slide][data-bg="spotlight"] { background: radial-gradient(ellipse 80% 60% at 50% 35%, rgba(52,226,194,0.10), transparent 70%), var(--bg); }
 
-  /* Spotlight: thin grid + glow */
-  section[data-slide][data-bg="spotlight"]::before {
-    content: ""; position: absolute; inset: 0; pointer-events: none;
-    background-image:
-      linear-gradient(var(--grid-line) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-    background-size: 64px 64px;
-    mask: radial-gradient(ellipse 70% 60% at 50% 35%, black 30%, transparent 75%);
-    -webkit-mask: radial-gradient(ellipse 70% 60% at 50% 35%, black 30%, transparent 75%);
-  }
+  /* Spotlight: glow */
   section[data-slide][data-bg="spotlight"]::after {
     content: ""; position: absolute; left: 50%; top: -160px; transform: translateX(-50%);
     width: 1100px; height: 480px; pointer-events: none;
@@ -279,6 +270,22 @@
     }
   }
 </style>
+<style>
+/* v3 site — per-use-case module ID colors (module table) */
+.mid { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.mid.m01 { color: var(--m01); }
+.mid.m02 { color: var(--m02); }
+.mid.m03 { color: var(--m03); }
+.mid.m04 { color: var(--m04); }
+.mid.m05 { color: var(--m05); }
+@media print {
+  .mid.m01 { color: #1A9E7A !important; }
+  .mid.m02 { color: #C2456F !important; }
+  .mid.m03 { color: #5E4FD1 !important; }
+  .mid.m04 { color: #B5851F !important; }
+  .mid.m05 { color: #2E6FBF !important; }
+}
+</style>
 </head>
 <body>
 <div class="deck">
@@ -350,11 +357,11 @@
     <table>
       <thead><tr><th>Use case</th><th>What it does</th></tr></thead>
       <tbody>
-        <tr><td class="outcome">M.01 The Operator Brief</td><td>Synthesis over CRM + PSA + RMM — recurring client intelligence, prepared before you sit down</td></tr>
-        <tr><td class="outcome">M.02 Churn Early Warning</td><td>A heads-up 60–90 days before a client is at risk, plus the retention play</td></tr>
-        <tr><td class="outcome">M.03 Proposal Generation</td><td>Proposals out the same day, priced consistently, tracked sent-to-signed</td></tr>
-        <tr><td class="outcome">M.04 Pipeline Visibility</td><td>A pipeline you can see — staged, reported weekly, forecast that calibrates</td></tr>
-        <tr><td class="outcome">M.05 Authority Engine</td><td>Market presence on a set cadence (~8–12 pieces/quarter)</td></tr>
+        <tr><td class="outcome"><span class="mid m01">M.01</span> The Operator Brief</td><td>Synthesis over CRM + PSA + RMM — recurring client intelligence, prepared before you sit down</td></tr>
+        <tr><td class="outcome"><span class="mid m02">M.02</span> Churn Early Warning</td><td>A heads-up 60–90 days before a client is at risk, plus the retention play</td></tr>
+        <tr><td class="outcome"><span class="mid m03">M.03</span> Proposal Generation</td><td>Proposals out the same day, priced consistently, tracked sent-to-signed</td></tr>
+        <tr><td class="outcome"><span class="mid m04">M.04</span> Pipeline Visibility</td><td>A pipeline you can see — staged, reported weekly, forecast that calibrates</td></tr>
+        <tr><td class="outcome"><span class="mid m05">M.05</span> Authority Engine</td><td>Market presence on a set cadence (~8–12 pieces/quarter)</td></tr>
       </tbody>
     </table>
   </div>

@@ -13,6 +13,11 @@
    v1 token names (--gold, --teal, --action, --terracotta, etc.)
    are kept as aliases below so existing templates render without
    edits. NEW work should use the v2 names.
+
+   v3 ADDITION (site redesign, homepage v3 "Resolve"):
+     Per-use-case module colors --m01…--m05. Module IDs now render
+     in their own hue (was all-violet). The logo mark stays solid
+     teal; violet is M.03 + the AI/automation register only.
    ============================================================ */
 
 /* ── Fonts ───────────────────────────────────────────────────
@@ -122,14 +127,20 @@
   --error:              #FF5D8F;
   --info:               #8B7CF6;
 
-  /* ── GRID LINES ── */
-  --grid-line:          rgba(52,226,194,0.08);
+  /* ── MODULE / USE-CASE COLORS (v3 site — each use case its own hue) ──
+     Per the homepage v3 redesign: module IDs render in their own color,
+     no longer all-violet. The lockup stays solid teal; violet is M.03 +
+     the AI/automation register only. */
+  --m01:                #34E2C2;   /* The Operator Brief    — signal teal */
+  --m02:                #FF5D8F;   /* Churn Early Warning   — pink        */
+  --m03:                #8B7CF6;   /* Proposal Generation   — violet      */
+  --m04:                #F2B43C;   /* Pipeline Visibility   — amber       */
+  --m05:                #4DA3FF;   /* Authority Engine      — blue        */
 
   /* ── GRADIENTS ── */
   --grad-intelligence:  linear-gradient(90deg, transparent, rgba(52,226,194,0.20), transparent);
   --grad-gold-divider:  linear-gradient(90deg, transparent, rgba(52,226,194,0.20), transparent);
   --grad-edge-accent:   linear-gradient(180deg, #34E2C2, #8B7CF6);
-  --grid-mask:          radial-gradient(ellipse 80% 60% at 50% 40%, black 20%, transparent 70%);
 
   /* ── FONT STACKS ── */
   --font-display: 'General Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -337,6 +348,12 @@ body {
 .text-signal { color: var(--signal); }
 .text-accent { color: var(--accent); }
 .text-warm   { color: var(--warm); }
+/* module / use-case ID colors (v3 site) */
+.text-m01 { color: var(--m01); }
+.text-m02 { color: var(--m02); }
+.text-m03 { color: var(--m03); }
+.text-m04 { color: var(--m04); }
+.text-m05 { color: var(--m05); }
 /* v1 aliases */
 .text-gold   { color: var(--signal); }
 .text-teal   { color: var(--signal); }
@@ -368,7 +385,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.025;
+  opacity: 0.028;
   pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }

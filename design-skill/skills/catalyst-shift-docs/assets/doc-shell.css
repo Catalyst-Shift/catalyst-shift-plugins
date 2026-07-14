@@ -49,15 +49,6 @@ a { color: inherit; }
   background: radial-gradient(ellipse 60% 50% at 50% 50%, var(--signal-glow), transparent 70%);
   opacity: 0.55; filter: blur(40px);
 }
-.grid-bg {
-  position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask: radial-gradient(ellipse 70% 60% at 50% 30%, black 30%, transparent 75%);
-  -webkit-mask: radial-gradient(ellipse 70% 60% at 50% 30%, black 30%, transparent 75%);
-}
 .hero-inner { position: relative; z-index: 1; max-width: var(--doc-max); margin: 0 auto; }
 
 .pill {
@@ -429,7 +420,7 @@ footer.colophon .inner a { color: var(--text-dim); text-decoration: none; }
 @media print {
   html, body { background: #fff !important; color: #1A1A1F !important; }
   body { font-size: 11pt; }
-  .nav, .nav-meta, .feed-head .live, footer.colophon, .grid-bg, .hero-glow { display: none !important; }
+  .nav, .nav-meta, .feed-head .live, footer.colophon, .hero-glow { display: none !important; }
   section.s, .hero { padding: 24px 0 !important; border-bottom: 1px solid #DDD9D2 !important; background: transparent !important; }
   .hero { padding-top: 0 !important; }
   h1.doc, h1.doc .subline, .s-title, .s-body p, .s-body p strong, .signoff p,
