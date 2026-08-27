@@ -5,3 +5,7 @@
 .env
 .env.*
 node_modules/
+
+# Scratch staging for SharePoint uploads (m365 CLI needs a local Mac path).
+# Client deliverables pass through here — never commit them.
+.cs-upload-staging/
