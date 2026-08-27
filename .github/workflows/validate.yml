@@ -1,0 +1,49 @@
+# Minimal gate for a markdown/JSON repo: every plugin manifest parses, every
+# plugin is registered in the marketplace, and every SKILL.md has frontmatter
+# with name + description. Repos without a gate can only be reviewed by eyeball.
+name: validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate JSON manifests
+        run: |
+          set -e
+          for f in .claude-plugin/marketplace.json */.claude-plugin/plugin.json; do
+            python3 -m json.tool "$f" > /dev/null && echo "OK   $f"
+          done
+      - name: Every plugin dir is registered in the marketplace
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          m = json.load(open('.claude-plugin/marketplace.json'))
+          registered = {p['source'].lstrip('./') for p in m['plugins']}
+          on_disk = {d for d in os.listdir('.')
+                     if os.path.isfile(os.path.join(d, '.claude-plugin', 'plugin.json'))}
+          missing = on_disk - registered
+          if missing:
+              sys.exit(f"plugin dirs not in marketplace.json: {missing}")
+          print("registered:", sorted(on_disk))
+          PY
+      - name: Every SKILL.md has name + description frontmatter
+        run: |
+          python3 - <<'PY'
+          import glob, sys
+          bad = []
+          for f in glob.glob('*/skills/*/SKILL.md'):
+              head = open(f).read(4000)
+              if not head.startswith('---') or 'name:' not in head or 'description:' not in head:
+                  bad.append(f)
+              else:
+                  print("OK  ", f)
+          if bad: sys.exit(f"missing frontmatter: {bad}")
+          PY
