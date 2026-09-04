@@ -1,7 +1,7 @@
 {
   "name": "catalyst-ops",
-  "version": "0.1.0",
-  "description": "How Catalyst Shift operates. Two skills: ways-of-working (where every fact lives — repos/Linear/SharePoint — the ship check, WIP caps, autonomy tiers, weekly cadence) and decision-governance (how decisions get recorded: proposed-vs-decided labelling, no absent-party attribution, ratification rules). Behavior only; canon content stays in the strategy doc.",
+  "version": "0.2.0",
+  "description": "How Catalyst Shift operates. Three skills: ways-of-working (three homes \u2014 repos/Linear/SharePoint \u2014 and the build method: issue-as-spec, kanban, concept vs harden PRs, Red vs Normal, auto-land), verify (fresh-context verifier: diff + checklist only, PASS/FAIL with evidence, run before every /ship), and decision-governance (proposed-vs-decided labelling, no absent-party attribution, ratification rules). Behavior only; canon content stays in the strategy doc and docs/HOW_WE_BUILD.md.",
   "author": {
     "name": "Catalyst Shift",
     "email": "kevin@catalystshift.ai"
