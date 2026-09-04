@@ -12,7 +12,7 @@ If a change is trivial (typo, single-line copy fix), commit straight to `main`. 
 
 ## Bump the version on every merge
 
-Bump `version` in `design-skill/.claude-plugin/plugin.json` in the same PR as the change. (`marketplace.json` no longer carries a version field — Cowork's schema doesn't expect one there, only in the plugin manifest.)
+Bump `version` in the touched plugin's `.claude-plugin/plugin.json` (`design-skill/…` or `catalyst-ops/…`) in the same PR as the change. (`marketplace.json` no longer carries a version field — Cowork's schema doesn't expect one there, only in the plugin manifest.)
 
 Use [semver](https://semver.org/):
 
