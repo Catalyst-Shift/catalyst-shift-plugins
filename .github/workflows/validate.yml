@@ -47,6 +47,11 @@ jobs:
                   print("OK  ", f)
           if bad: sys.exit(f"missing frontmatter: {bad}")
           PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Hook tests (catalyst-ops verify-gate)
+        run: node --test catalyst-ops/tests/
       - name: The Ways of Working block is byte-identical in CLAUDE.md and the ways-of-working skill
         run: |
           set -e
