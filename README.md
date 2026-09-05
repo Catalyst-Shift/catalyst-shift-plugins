@@ -9,6 +9,17 @@ Currently ships:
 
 ---
 
+## Branch protection
+
+`main` is protected by the ruleset in `.github/ruleset-main.json` (PR required, `validate` required and up to date, no bypass actors, no deletion or force-push). Apply or replace it from a human terminal — the agent token cannot touch rulesets by design (CAT-529):
+
+```bash
+gh api repos/Catalyst-Shift/catalyst-shift-plugins/rulesets --input .github/ruleset-main.json
+# replace an existing one: gh api -X PUT repos/Catalyst-Shift/catalyst-shift-plugins/rulesets/<id> --input .github/ruleset-main.json
+```
+
+Why: on 2026-09-05 PR #8 merged with a red `validate` because nothing required it. A required check must have reported on `main` at least once under its name before the ruleset can name it — `validate` has.
+
 ## Install (Claude Desktop / Cowork)
 
 One-time setup. After this, you get updates by clicking **Sync** — no downloading, no zip files.
