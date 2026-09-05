@@ -7,12 +7,12 @@
     {
       "name": "design-skill",
       "source": "./design-skill",
-      "description": "Catalyst Shift branded business document generation (Strategy v5.2) \u2014 proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, and internal docs."
+      "description": "Catalyst Shift branded business document generation (Strategy v5.2) — proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, and internal docs."
     },
     {
       "name": "catalyst-ops",
       "source": "./catalyst-ops",
-      "description": "Catalyst Shift operating canon \u2014 ways-of-working (three homes, ship check, WIP caps, autonomy tiers, weekly cadence) and decision-governance (proposed-vs-decided labelling, ratification rules)."
+      "description": "Catalyst Shift operating canon — ways-of-working (three homes + the build method: issue-as-spec, kanban, concept/harden PRs, Red/Normal, auto-land), verify (fresh-context verifier before /ship), decision-governance (proposed-vs-decided labelling, ratification rules)."
     }
   ]
 }

@@ -47,3 +47,11 @@ jobs:
                   print("OK  ", f)
           if bad: sys.exit(f"missing frontmatter: {bad}")
           PY
+      - name: The Ways of Working block is byte-identical in CLAUDE.md and the ways-of-working skill
+        run: |
+          set -e
+          extract() { awk '/^## Ways of Working — Catalyst Shift/{f=1} f' "$1"; }
+          extract CLAUDE.md > /tmp/block-claude.md
+          n=$(wc -l < /tmp/block-claude.md)
+          extract catalyst-ops/skills/ways-of-working/SKILL.md | head -n "$n" > /tmp/block-skill.md
+          diff -u /tmp/block-claude.md /tmp/block-skill.md && echo "block identical ($n lines)"

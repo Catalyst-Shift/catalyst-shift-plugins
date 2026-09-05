@@ -5,6 +5,7 @@ Internal Catalyst Shift plugins for **Claude Cowork** (desktop) and Claude Code 
 Currently ships:
 
 - **`design-skill`** — branded document generation (proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, internal docs).
+- **`catalyst-ops`** — how we operate: `ways-of-working` (the canon block: three homes + the build method), `verify` (fresh-context verifier — diff + checklist only, PASS/FAIL with evidence, before every `/ship`), `decision-governance` (proposed-vs-decided labelling, ratification rules).
 
 ---
 
@@ -43,7 +44,7 @@ When Kevin pushes a new version:
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md). Short version:
 
 1. Edit on a branch, open a PR, get a review from one of the other two.
-2. Bump `version` in both `design-skill/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
+2. Bump `version` in the touched plugin's `.claude-plugin/plugin.json` (`marketplace.json` carries no version).
 3. Squash-merge to `main` and push.
 
 That's it. Lucas and Keith pick it up on their next Sync. No zips, no releases, no upload step.
