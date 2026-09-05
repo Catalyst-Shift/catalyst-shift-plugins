@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Fresh-context verifier for a branch before /ship. Reads ONLY the diff against main and the issue's acceptance checklist, checks each line with evidence, returns PASS or FAIL. Never edits code (runs in a throwaway worktree), never sees the builder's reasoning; its one write is a comment on the Linear issue. Use before every /ship; the loop stops after three FAILs. Trigger on "verify", "/verify", "check this against the issue", "is this ready to ship".
+description: Fresh-context verifier for a branch before /ship. Reads ONLY the diff against main and the issue's acceptance checklist, checks each line with evidence, returns PASS or FAIL. Never edits code (runs in a throwaway worktree), never sees the builder's reasoning; its writes are a comment on the Linear issue and a line in the repo's local `.gstack/verify.jsonl` ledger that the land gate reads. Use before every /ship; the loop stops after three FAILs. Trigger on "verify", "/verify", "check this against the issue", "is this ready to ship".
 user-invocable: true
 ---
 
@@ -54,7 +54,11 @@ lands in a throwaway checkout) whose prompt is exactly:
 > diff". Finish with one line: `VERDICT: PASS` or `VERDICT: FAIL (n of m)`.
 
 Append the checklist and the **touched-file list** to that prompt, plus the
-merge-base sha and the repo path; the verifier runs the diff itself, per file,
+merge-base sha, the **head sha**, and the repo path. Commit before you verify: an
+`isolation: "worktree"` subagent is checked out at the base branch, not at your
+head, so tell it to judge `git diff <merge-base> <head>` and read files with
+`git show <head>:<path>` — otherwise its `git diff <base>` is empty and it
+verifies nothing (observed 2026-09-05). The verifier runs the diff itself, per file,
 so a lockfile bump or a fixture drop cannot drown the checklist or blow the
 prompt budget. Inline the full diff only when it is under ~400 lines. That is
 the whole handoff.
@@ -80,6 +84,23 @@ it. Format:
 VERDICT: PASS | FAIL (n of m)
 ```
 
+Then record the same verdict in the repo's local ledger — the machine-readable
+twin of the comment, which the `verify-gate` hook reads before it lets a Claude
+session run `gh pr merge` (CAT-532):
+
+```bash
+mkdir -p .gstack && { [ -f .gstack/.gitignore ] || printf '*\n' > .gstack/.gitignore; }
+jq -nc --arg issue "CAT-###" --arg sha "$(git rev-parse HEAD)" --arg base "<merge-base sha>" \
+  --arg checklist "<sha256 first 8>" --arg verdict "PASS" \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{issue:$issue,sha:$sha,base:$base,checklist:$checklist,verdict:$verdict,ts:$ts}' >> .gstack/verify.jsonl
+```
+
+`verdict` is the exact string after `VERDICT: ` (`PASS`, or `FAIL (n of m)`).
+`sha` is the full head sha the verifier judged; the gate compares it to the
+commit being merged, so a push after a PASS needs a fresh `/verify`. The ledger
+is gitignored and per-checkout; the Linear comment stays the record of truth.
+
 On **PASS**: say "ready for /ship". On **FAIL**: list only the failing lines and
 what would satisfy them. Do not fix anything. Do not soften a FAIL because the
 work looks good otherwise.
@@ -102,3 +123,11 @@ posts it — same rule as the `red-approved` label).
 Not `/review` (that runs inside `/ship` and looks for bugs the checklist did not
 anticipate). Not `/qa` (browser). Not `/cso` (Red paths). `/verify` answers one
 question only: does the diff satisfy the checklist, with evidence.
+
+Not a security boundary either. The land gate (`hooks/verify-gate.mjs`,
+PreToolUse on Bash) refuses `gh pr merge` from a Claude session in a repo that
+carries the Ways of Working block unless the ledger holds a PASS for the merged
+commit. It makes landing unverified a deliberate act (`CS_LAND_UNVERIFIED=1`,
+logged to `.gstack/verify-bypass.log`), never an accident. A human in a real
+terminal never passes through it — that is the Red-tier contract, where the gate
+is the `red-approved` label (CAT-529).

@@ -5,7 +5,7 @@ Internal Catalyst Shift plugins for **Claude Cowork** (desktop) and Claude Code 
 Currently ships:
 
 - **`design-skill`** — branded document generation (proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, internal docs).
-- **`catalyst-ops`** — how we operate: `ways-of-working` (the canon block: three homes + the build method), `verify` (fresh-context verifier — diff + checklist only, PASS/FAIL with evidence, before every `/ship`), `decision-governance` (proposed-vs-decided labelling, ratification rules).
+- **`catalyst-ops`** — how we operate: `ways-of-working` (the canon block: three homes + the build method), `verify` (fresh-context verifier — diff + checklist only, PASS/FAIL with evidence, before every `/ship`), the `verify-gate` hook (a Claude session cannot `gh pr merge` a commit `/verify` has not passed — `CS_LAND_UNVERIFIED=1` overrides, logged), `decision-governance` (proposed-vs-decided labelling, ratification rules).
 
 ---
 

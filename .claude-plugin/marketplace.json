@@ -12,7 +12,7 @@
     {
       "name": "catalyst-ops",
       "source": "./catalyst-ops",
-      "description": "Catalyst Shift operating canon — ways-of-working (three homes + the build method: issue-as-spec, kanban, concept/harden PRs, Red/Normal, auto-land), verify (fresh-context verifier before /ship), decision-governance (proposed-vs-decided labelling, ratification rules)."
+      "description": "Catalyst Shift operating canon — ways-of-working (three homes + the build method: issue-as-spec, kanban, concept/harden PRs, Red/Normal, auto-land), verify (fresh-context verifier before /ship) + the verify-gate hook (no `gh pr merge` from a Claude session without a PASS for that commit), decision-governance (proposed-vs-decided labelling, ratification rules)."
     }
   ]
 }
