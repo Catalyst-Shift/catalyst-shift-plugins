@@ -24,7 +24,7 @@ Why: on 2026-09-05 PR #8 merged with a red `validate` because nothing required i
 
 Approve from a real terminal with the platform's sha-checked script: `scripts/red-approve.sh <pr> <sha-you-read> Catalyst-Shift/catalyst-shift-plugins` (in `catalyst-os-platform`). A push after approval strips the label.
 
-Make the job required once it has reported on one merged PR: add `{ "context": "protected paths", "integration_id": 15368 }` to `required_status_checks` in `.github/ruleset-main.json` and `PUT` the ruleset (command above).
+The job is required by the ruleset since 2026-09-05 (`protected paths` context in `.github/ruleset-main.json`); a new required check must report on one merged PR before it goes into the payload, or every PR deadlocks on a check that never runs.
 
 ## Install (Claude Desktop / Cowork)
 
