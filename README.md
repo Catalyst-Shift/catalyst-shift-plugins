@@ -20,6 +20,12 @@ gh api repos/Catalyst-Shift/catalyst-shift-plugins/rulesets --input .github/rule
 
 Why: on 2026-09-05 PR #8 merged with a red `validate` because nothing required it. A required check must have reported on `main` at least once under its name before the ruleset can name it — `validate` has.
 
+**Red paths (CAT-537).** `.github/workflows/protected-paths.yml` is the platform's job, mirrored: on every PR to `main` it runs `scripts/protected-paths.mjs --check` (base branch's copy, via `pull_request_target`) over the PR's changed file names and fails unless a named human applied `red-approved` to that exact head. Red here = `.github/**`, every `CLAUDE.md`, every `.claude-plugin/` manifest, every `hooks/` directory, `catalyst-ops/skills/ways-of-working/` (the canon block's source), `catalyst-ops/skills/verify/` (the verifier the land gate trusts), and the checker + its tests. The `PROTECTED` array in the script is the list. Everything else is Normal and may auto-land on `validate` + `/verify`. An agent never merges a Red PR here: it opens it and stops.
+
+Approve from a real terminal with the platform's sha-checked script: `scripts/red-approve.sh <pr> <sha-you-read> Catalyst-Shift/catalyst-shift-plugins` (in `catalyst-os-platform`). A push after approval strips the label.
+
+Make the job required once it has reported on one merged PR: add `{ "context": "protected paths", "integration_id": 15368 }` to `required_status_checks` in `.github/ruleset-main.json` and `PUT` the ruleset (command above).
+
 ## Install (Claude Desktop / Cowork)
 
 One-time setup. After this, you get updates by clicking **Sync** — no downloading, no zip files.

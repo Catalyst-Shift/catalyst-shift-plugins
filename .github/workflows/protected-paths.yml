@@ -1,0 +1,151 @@
+name: protected paths
+
+# Mirror of the platform repo's job (HOW_WE_BUILD.md §4/§6, CAT-537). This repo ships
+# the rails other repos run on (the verify-gate hook, the canon block, the plugin
+# manifests, its own CI), so a Normal PR must not change them on a green check
+# alone. `scripts/protected-paths.mjs` holds the list; this job runs it over the diff.
+# A human applies the `red-approved` label to let a Red PR through — after
+# reading it. Agent sessions run `gh` as the machine user `catalyst-shift-agent`
+# (CAT-529); a label from that identity, or any login outside the approver list
+# below, never mints an approval and is stripped on the next run.
+#
+# Trust model (each line closes a bypass a review found before this shipped):
+#   * pull_request_target, not pull_request — the workflow definition AND the
+#     hook it runs come from the BASE branch, so a PR that edits the checker or
+#     this file is still judged by the trusted copy. The PR's code is never
+#     executed here: we fetch its head only to `git diff` file names.
+#   * `git diff -z --no-renames` — NUL-delimited so a non-ASCII or quoted path
+#     is never C-quoted past the matcher (the hook fails closed on a quoted
+#     line anyway); renames disabled so moving a protected file OUT of its path
+#     still emits the protected side as a deletion.
+#   * BASE...HEAD — diff from the merge base, so a protected file that landed
+#     on main after the branch forked does not mark this PR Red by association.
+#   * Approval is bound to a commit, not to the PR. When a human applies the
+#     label, this job records a `red-approved` commit status on the head sha it
+#     was applied to. Every later run (a push, a reopen, another label) requires
+#     that status on the CURRENT head; if it is missing, the label is removed
+#     and the job fails. Close → push → reopen, or a label added during a push,
+#     cannot revive an approval of a diff nobody read.
+#   * Only exit 1 from the checker means "protected paths touched"; any other
+#     non-zero exit (it could not read its input) fails the job outright, label
+#     or not.
+
+on:
+  pull_request_target:
+    # `edited` covers a base-branch retarget: a PR opened against a branch the
+    # author controls is judged by THAT branch's copy of this file; retargeting
+    # to main must re-run main's copy. `branches: [main]` keeps runs off other
+    # bases entirely — main is the only branch the ruleset protects.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write # only to REMOVE a red-approved label that predates the current head
+  statuses: write # only to record which head sha the human approved
+
+concurrency:
+  group: protected-paths-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false # a labeled run must never cancel the run that would clear a stale label
+
+jobs:
+  check:
+    name: protected paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+      HEAD_REPO: ${{ github.event.pull_request.head.repo.clone_url }}
+      RED_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'red-approved') }}
+      SENDER: ${{ github.event.sender.login }}
+      ACTION: ${{ github.event.action }}
+      WITHDRAWN: ${{ github.event.action == 'unlabeled' && github.event.label.name == 'red-approved' }}
+      # Only a named human can mint an approval (HOW_WE_BUILD.md §8 "Agent identity").
+      # Agent sessions run `gh` as the org's machine user `catalyst-shift-agent` on a
+      # fine-grained PAT (no statuses:write, no administration); GitHub grants label
+      # rights to any token that can open a PR, so the agent CAN apply the label — this
+      # allowlist is what makes that label inert: no status is minted, and the next
+      # step strips it. A Bot sender (GitHub App, another workflow's GITHUB_TOKEN) is
+      # excluded the same way. Add the second engineer's login here, by a Red PR.
+      APPROVAL_EVENT: ${{ github.event.action == 'labeled' && github.event.label.name == 'red-approved' && github.event.sender.type == 'User' && contains(fromJSON('["kkreative"]'), github.event.sender.login) }}
+    steps:
+      # Default ref for pull_request_target is the BASE branch — the trusted
+      # checker and list. Do not check out the PR head here.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Bind a fresh red-approved label to this head sha, or refuse a stale one
+        if: env.RED_APPROVED == 'true'
+        run: |
+          set -euo pipefail
+          if [ "$APPROVAL_EVENT" = "true" ]; then
+            # The human just applied the label while HEAD was the head. Record it on that sha.
+            gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD" \
+              -f state=success -f context=red-approved \
+              -f description="red-approved applied by $SENDER at head $HEAD"
+            echo "recorded red-approved on $HEAD"
+            exit 0
+          fi
+          # Any other run with the label present: the approval must name THIS head.
+          # The statuses list is newest-first, so .[0] of the red-approved entries is
+          # the LATEST: a withdrawal (failure, below) outranks the success it replaced.
+          # Only a status this job minted counts — anyone with statuses:write can post
+          # one named red-approved, but not as github-actions[bot]. (Not the combined
+          # /status endpoint: it returns creator=null under every token.)
+          n=$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD/statuses?per_page=100" \
+                --jq '[.[] | select(.context=="red-approved")] | if length > 0 and .[0].state=="success" and .[0].creator.login=="github-actions[bot]" then 1 else 0 end')
+          if [ "$n" -gt 0 ]; then
+            echo "red-approved is bound to head $HEAD"
+            exit 0
+          fi
+          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label red-approved
+          echo "::error::Red-tier PR — red-approved on $HEAD was not minted by a named human (this run: $ACTION by $SENDER; the approval, if any, was bound to an earlier head, withdrawn, or applied by an agent or a Bot). The label has been removed; a human in the workflow's approver list re-reads the current diff and re-applies it."
+          exit 1
+
+      # Withdrawing the label revokes the approval on this head: statuses are
+      # immutable and the success would otherwise outlive the label, so anyone
+      # who can add a label (the agent identity included) could re-arm it.
+      - name: Record a withdrawn red-approved as a failure status on this head
+        if: env.WITHDRAWN == 'true'
+        run: |
+          set -euo pipefail
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD" \
+            -f state=failure -f context=red-approved \
+            -f description="red-approved withdrawn by $SENDER at head $HEAD"
+          echo "recorded withdrawal on $HEAD"
+
+      - name: Diff against base and check the protected list
+        run: |
+          set -euo pipefail
+          # Names only — the PR's tree is never checked out or executed.
+          git fetch --no-tags --quiet "$HEAD_REPO" "$HEAD"
+          # --diff-filter covers adds, modifies, deletes, renames (both sides, via
+          # --no-renames), copies, type changes.
+          git diff -z --no-renames --name-only --diff-filter=AMDRCT "$BASE...$HEAD" > /tmp/changed.bin
+          echo "changed files: $(tr -cd '\0' < /tmp/changed.bin | wc -c | tr -d ' ')"
+          set +e
+          node scripts/protected-paths.mjs --check < /tmp/changed.bin
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "no protected paths touched — Normal tier"
+            exit 0
+          fi
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::protected-paths checker failed (exit $rc) before it could classify the diff. Nothing was checked; this is not a Red verdict and the label does not apply."
+            exit "$rc"
+          fi
+          if [ "$RED_APPROVED" = "true" ]; then
+            echo "::warning::Red-tier PR — protected paths touched, red-approved label present and bound to $HEAD (human merge)."
+            exit 0
+          fi
+          echo "::error::Red-tier PR — protected paths touched and no red-approved label. A human must read this PR and apply the label; it cannot auto-land."
+          exit 1
