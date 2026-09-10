@@ -69,8 +69,20 @@ jobs:
       # rights to any token that can open a PR, so the agent CAN apply the label — this
       # allowlist is what makes that label inert: no status is minted, and the next
       # step strips it. A Bot sender (GitHub App, another workflow's GITHUB_TOKEN) is
-      # excluded the same way. Add the second engineer's login here, by a Red PR.
-      APPROVAL_EVENT: ${{ github.event.action == 'labeled' && github.event.label.name == 'red-approved' && github.event.sender.type == 'User' && contains(fromJSON('["kkreative"]'), github.event.sender.login) }}
+      # excluded the same way. Both engineers are now listed (CAT-585 Finding 2) —
+      # before this, kkreative was the only approver AND the only author, so
+      # "never the author" was not weakly enforced here, it was impossible to
+      # satisfy — Keith could not approve even if asked. Both engineers are now
+      # listed, so either can mint an approval.
+      #
+      # This list says WHO may approve, not that the approver must be someone
+      # else. We deliberately do NOT require
+      # `sender.login != pull_request.user.login`: blocking a merge on a second
+      # human being available is a cost we decided not to pay (Kevin,
+      # 2026-09-10, CAT-585). The control is attended work plus this label being
+      # sha-bound — a push after approval strips it and the diff is read again.
+      # Machine review as a required check is the intended replacement (CAT-602).
+      APPROVAL_EVENT: ${{ github.event.action == 'labeled' && github.event.label.name == 'red-approved' && github.event.sender.type == 'User' && contains(fromJSON('["kkreative","keithcatalyst","keithmaselli"]'), github.event.sender.login) }}
     steps:
       # Default ref for pull_request_target is the BASE branch — the trusted
       # checker and list. Do not check out the PR head here.

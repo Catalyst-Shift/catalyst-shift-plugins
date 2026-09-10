@@ -6,8 +6,9 @@ This repo holds the Catalyst Shift Claude Code plugins (`catalyst-ops`, `design-
 
 <!-- Canonical block. Byte-identical in: each repo's CLAUDE.md, the HQ project
      instructions, and the catalyst-ops plugin's ways-of-working skill. Change
-     all copies in ONE Linear issue. Last synced: 2026-09-04 (replaced the
-     2026-08-28 block: tiers 4→2, ship check 6→2, kanban, auto-land). -->
+     all copies in ONE Linear issue. Last synced: 2026-09-10 (added: Red is
+     attended work; said plainly that a Red approver may be the PR's own author
+     and that we do not block a merge on a second human). -->
 
 **Three homes.** Repos hold WHAT IS BUILT — the live repo beats any doc, deck, or
 memory of build state. Linear holds WHAT IS HAPPENING — anything with a date, a
@@ -26,9 +27,21 @@ Short form:
 - **Two kinds of PR**, named in the title: `[concept]` lands on CI green + verifier
   pass; `[harden]` adds `/review` at depth, tests, docs. Most work is concept work.
 - **Two tiers.** Red = the paths the protected-paths hook names (auth, tenant,
-  audit, migrations, secrets, CI, canon). Red gets `/cso` and a human merge, always;
-  the `protected-paths` CI job blocks it without a human `red-approved` label, which
-  an agent never applies. Everything else is Normal and may auto-land.
+  audit, migrations, secrets, CI, canon). Red gets `/cso` and never auto-lands: the
+  `protected-paths` CI job holds it until a named human applies the sha-bound
+  `red-approved` label, which an agent never applies and which a later push voids.
+  **That human may be the PR's own author.** We do not block a merge on a second
+  person being available — the wait costs more than it catches, and a review given
+  to clear a queue is not a review. Machine review as a required check is the
+  intended replacement. Everything else is Normal and may auto-land.
+- **Red is attended work.** An agent may draft a Red change only in an attended
+  session: a human starts it, is present, and reads the diff before the PR opens.
+  Never headless, never from the runner. Attended plus the sha-bound label is the
+  control, not a second reviewer: the label records who approved which sha, and a
+  push after approval strips it so the new diff has to be read again. Where a repo
+  enforces attended in code, its own instructions name the mechanism and where that
+  mechanism stops; where they do not, this line is prose and the label is all there
+  is — which is the honest description, not a gap to paper over.
 - **Verify before ship.** `/verify`: a fresh-context agent reads only the diff and
   the checklist, returns PASS/FAIL with evidence, never edits. Three fails → stop.
 - **Ship with `/ship`** (runs `/review` once), land with `/land-and-deploy`. Close
