@@ -1,6 +1,6 @@
 ---
 name: next
-description: Pick up and finish the next Linear card for this repo, end to end — build, attack, ship with auto-merge on, then take the next card. Use when Kevin types /next (optionally with a card ID like CAT-123 or a repo/project hint like "lbl"), or says "grab the next thing", "keep going", "pick up work". HOW_WE_BUILD v2 §2–§5.
+description: Pick up and finish the next Linear card for this repo, end to end — build, attack, ship with auto-merge on, then take the next card. Use when Kevin types /next (optionally with a card ID like CAT-123 or a repo/project hint like "lbl"), or says "grab the next thing", "keep going", "pick up work" in a code repo. Code repos only — never for strategy, documents or Cowork work. HOW_WE_BUILD v2 §2–§5.
 user-invocable: true
 ---
 

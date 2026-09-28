@@ -22,7 +22,10 @@ apply the `decision-governance` skill (proposed vs decided).
 
 **How we build.** The method is `docs/HOW_WE_BUILD.md` (v2) in
 `catalyst-os-platform`. Claude builds, attacks, ships and merges; Kevin clears
-Blocked and starts fresh sessions. Short form:
+Blocked and starts fresh sessions. **Code repos only:** strategy, documents and
+Cowork sessions don't use `/next`, auto-merge or the CI reviewer — they follow
+the three homes and `decision-governance`, and ask before anything is decided or
+sent. Short form:
 
 - **The issue is the spec.** A Linear issue with an acceptance checklist checkable
   from the diff. No checklist → Claude drafts one with `/spec`, posts it, starts.
