@@ -5,7 +5,7 @@ Internal Catalyst Shift plugins for **Claude Cowork** (desktop) and Claude Code 
 Currently ships:
 
 - **`design-skill`** — branded document generation (proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, internal docs).
-- **`catalyst-ops`** — how we operate: `ways-of-working` (the canon block: three homes + the build method), `verify` (fresh-context verifier — diff + checklist only, PASS/FAIL with evidence, before every `/ship`), the `verify-gate` hook (a Claude session cannot `gh pr merge` a commit `/verify` has not passed — `CS_LAND_UNVERIFIED=1` overrides, logged), `decision-governance` (proposed-vs-decided labelling, ratification rules).
+- **`catalyst-ops`** — how we operate: `next` (the pickup loop — top card → build → in-session adversarial pass → `/ship` with auto-merge on → next card; hands off at 650k context), `ways-of-working` (the canon block: three homes + HOW_WE_BUILD v2), `decision-governance` (proposed-vs-decided labelling, ratification rules). `verify` and the `verify-gate` hook are retired (2026-09-28): the required `adversarial review` CI check replaces them.
 
 ---
 
@@ -20,7 +20,7 @@ gh api repos/Catalyst-Shift/catalyst-shift-plugins/rulesets --input .github/rule
 
 Why: on 2026-09-05 PR #8 merged with a red `validate` because nothing required it. A required check must have reported on `main` at least once under its name before the ruleset can name it — `validate` has.
 
-**Red paths (CAT-537).** `.github/workflows/protected-paths.yml` is the platform's job, mirrored: on every PR to `main` it runs `scripts/protected-paths.mjs --check` (base branch's copy, via `pull_request_target`) over the PR's changed file names and fails unless a named human applied `red-approved` to that exact head. Red here = `.github/**`, every `CLAUDE.md`, every `.claude-plugin/` manifest, every `hooks/` directory, `catalyst-ops/skills/ways-of-working/` (the canon block's source), `catalyst-ops/skills/verify/` (the verifier the land gate trusts), and the checker + its tests. The `PROTECTED` array in the script is the list. Everything else is Normal and may auto-land on `validate` + `/verify`. An agent never merges a Red PR here: it opens it and stops.
+**Deep paths.** `scripts/protected-paths.mjs` holds this repo's deep-path list (`.github/**`, every `CLAUDE.md`, every `.claude-plugin/` manifest, every `hooks/` directory, the ways-of-working skill, the checker + its tests). Under HOW_WE_BUILD v2 it no longer gates a merge: the `adversarial review` workflow runs it with `--check` to decide how deep to review, and every PR auto-merges on `validate` + `adversarial review`.
 
 Approve from a real terminal with the platform's sha-checked script: `scripts/red-approve.sh <pr> <sha-you-read> Catalyst-Shift/catalyst-shift-plugins` (in `catalyst-os-platform`). A push after approval strips the label.
 

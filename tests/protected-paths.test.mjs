@@ -25,7 +25,7 @@ const RED = [
   "catalyst-ops/hooks/verify-gate.mjs",
   "future-plugin/hooks/anything.sh",
   "catalyst-ops/skills/ways-of-working/SKILL.md",
-  "catalyst-ops/skills/verify/SKILL.md",
+  "catalyst-ops/skills/next/SKILL.md",
   "scripts/protected-paths.mjs",
   "tests/protected-paths.test.mjs",
 ];

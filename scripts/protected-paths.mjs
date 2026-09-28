@@ -2,7 +2,7 @@
 // Red-path checker for catalyst-shift-plugins — CI twin of the platform's
 // .claude/hooks/protected-paths.mjs --check (HOW_WE_BUILD.md §4/§6, CAT-537).
 //
-// This repo ships the rails other repos run on: the verify-gate hook, the
+// This repo ships the rails other repos run on: the /next loop, the
 // Ways of Working canon block, plugin manifests, and its own CI. A Normal PR
 // must not be able to change any of those on a green check alone. The
 // `protected paths` workflow feeds this script the PR's changed file names
@@ -24,7 +24,7 @@ export const PROTECTED = [
   { kind: "segment", path: ".claude-plugin", why: "plugin / marketplace manifest — what every install picks up; governance PR only" },
   { kind: "segment", path: "hooks", why: "a plugin hook runs inside every Claude session that installs it (verify-gate) — governance PR only" },
   { kind: "prefix", path: "catalyst-ops/skills/ways-of-working/", why: "the canon block's generator source — a four-surface change, governance PR only" },
-  { kind: "prefix", path: "catalyst-ops/skills/verify/", why: "the verifier the land gate trusts — governance PR only" },
+  { kind: "prefix", path: "catalyst-ops/skills/next/", why: "the pickup loop that opens and auto-merges PRs — deep review" },
   { kind: "prefix", path: "scripts/protected-paths", why: "this checker — governance PR only" },
   { kind: "prefix", path: "tests/protected-paths", why: "this checker's tests — governance PR only" },
 ];
