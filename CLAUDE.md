@@ -6,9 +6,11 @@ This repo holds the Catalyst Shift Claude Code plugins (`catalyst-ops`, `design-
 
 <!-- Canonical block. Byte-identical in: each repo's CLAUDE.md, the HQ project
      instructions, and the catalyst-ops plugin's ways-of-working skill. Change
-     all copies in ONE Linear issue. Last synced: 2026-09-10 (added: Red is
-     attended work; said plainly that a Red approver may be the PR's own author
-     and that we do not block a merge on a second human). -->
+     all copies in ONE Linear issue. Last synced: 2026-09-28 (HOW_WE_BUILD v2.
+     REMOVED: human Red merge + red-approved label, attended-only Red, /verify +
+     verify-gate, stop-and-wait on forks, /land-and-deploy as the landing path.
+     ADDED: /next pickup, adversarial review as a required check, auto-merge on
+     everything, recommend-ask-proceed, hard stops, 650k context budget). -->
 
 **Three homes.** Repos hold WHAT IS BUILT — the live repo beats any doc, deck, or
 memory of build state. Linear holds WHAT IS HAPPENING — anything with a date, a
@@ -18,38 +20,41 @@ drafts (from a cloud session, write via the m365 CLI and verify it landed).
 Chat is where work gets done, never where it is kept. When recording a decision,
 apply the `decision-governance` skill (proposed vs decided).
 
-**How we build.** The method is `docs/HOW_WE_BUILD.md` in `catalyst-os-platform`.
-Short form:
+**How we build.** The method is `docs/HOW_WE_BUILD.md` (v2) in
+`catalyst-os-platform`. Claude builds, attacks, ships and merges; Kevin clears
+Blocked and starts fresh sessions. Short form:
 
-- **The issue is the spec.** Work starts from a Linear issue with an acceptance
-  checklist. No checklist, no start.
-- **Kanban.** Top card in Todo is next. One In Progress per person. No weekly ritual.
-- **Two kinds of PR**, named in the title: `[concept]` lands on CI green + verifier
-  pass; `[harden]` adds `/review` at depth, tests, docs. Most work is concept work.
-- **Two tiers.** Red = the paths the protected-paths hook names (auth, tenant,
-  audit, migrations, secrets, CI, canon). Red gets `/cso` and never auto-lands: the
-  `protected-paths` CI job holds it until a named human applies the sha-bound
-  `red-approved` label, which an agent never applies and which a later push voids.
-  **That human may be the PR's own author.** We do not block a merge on a second
-  person being available — the wait costs more than it catches, and a review given
-  to clear a queue is not a review. Machine review as a required check is the
-  intended replacement. Everything else is Normal and may auto-land.
-- **Red is attended work.** An agent may draft a Red change only in an attended
-  session: a human starts it, is present, and reads the diff before the PR opens.
-  Never headless, never from the runner. Attended plus the sha-bound label is the
-  control, not a second reviewer: the label records who approved which sha, and a
-  push after approval strips it so the new diff has to be read again. Where a repo
-  enforces attended in code, its own instructions name the mechanism and where that
-  mechanism stops; where they do not, this line is prose and the label is all there
-  is — which is the honest description, not a gap to paper over.
-- **Verify before ship.** `/verify`: a fresh-context agent reads only the diff and
-  the checklist, returns PASS/FAIL with evidence, never edits. Three fails → stop.
-- **Ship with `/ship`** (runs `/review` once), land with `/land-and-deploy`. Close
-  the issue with version + PR number. File what surfaced.
-- **Stop on product forks.** Product, UX, pricing, or architecture decisions are
-  asked, never resolved by picking the cheapest path.
-- **Rules are code.** A new rule becomes a test, a hook, or a CI job — or it is not
-  added. Recurring misses go to `/learn` and then to a check.
+- **The issue is the spec.** A Linear issue with an acceptance checklist checkable
+  from the diff. No checklist → Claude drafts one with `/spec`, posts it, starts.
+- **Pickup is `/next`.** Top Todo card for this repo → In Progress → build → PR
+  with auto-merge on → next card. One card per session at a time; don't wait on
+  merges. Context budget 650k: no new card past ~450k; at 650k post a handoff on
+  the card and tell Kevin to start a fresh session.
+- **Attack before and after the push.** In session: `/review`, then
+  `scripts/codex-pass.sh adversarial`; `/cso` on deep paths. In CI: the required
+  `adversarial review` check — a fresh model with the diff, PR body and read-only
+  files — fails on unmet checklist lines, security holes, data loss, wrong money,
+  unbacked public claims, weakened tests, or tampering with CI/reviewer/rules.
+  Three fails on one card → Blocked, move on.
+- **Everything auto-merges.** `/ship`, then `gh pr merge --auto --squash`. No
+  human label, no merge click. PR title carries `[concept]` or `[harden]`; body
+  ends with **Decisions made**.
+- **Deep paths** (the protected-paths list: auth, tenant, audit, crypto, egress,
+  persist, migrations, payments, CI, canon) set review depth, not a gate: `/cso`
+  in session, CI review on the stronger model, migrations replayed on a prod-shaped DB.
+- **Recommend, ask, keep going.** On a product, UX, pricing or architecture fork:
+  pick a recommendation, ask Kevin in a popup, keep building on it, record it
+  under Decisions made. **Hard stops** (only with Kevin's yes in-session; else
+  Blocked): running a change against a production database, deleting or
+  overwriting customer data, pricing or public product claims, anything sent to
+  a client or outside person, spending money or a new subprocessor, credentials,
+  weakening a rule (CI, reviewer, deep-path list, required tests, canon).
+- **The judge can't be edited by the judged.** The reviewer's workflow and prompt
+  live under `.github/workflows/`, which the agent token cannot push; it runs from
+  `main` via `pull_request_target`. Never widen the agent token.
+- **Rules are code.** A new rule becomes a test, a hook, or a line in the
+  reviewer's fail list. Misses go to `/learn`, then to a check. Re-tighten only
+  when an auto-merged change hurts a customer, and only for that class of path.
 - **Public claims are backed.** Copy about what the product does is checked against
   the platform repo's connector table; the site's claim-check test enforces it.
 - **Stack changes name a retirement.** Every automation has one owner and one

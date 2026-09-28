@@ -1,0 +1,152 @@
+name: adversarial review
+
+# HOW_WE_BUILD v2 §3/§7. A fresh model that did not write the change reads the
+# diff, the PR body and the PR's files (read-only) and tries to break it. Its
+# verdict is a REQUIRED check on main, so it gates auto-merge on every PR.
+#
+# Trust model (adversarial review of this file, 2026-09-28, closed each line):
+#   * pull_request_target — this file AND review-prompt.md come from main, never
+#     from the PR. Both live under .github/workflows/, which the agent token
+#     cannot push (Workflows: none), so a PR cannot change its own judge.
+#   * Nothing from the PR configures or runs: claude starts in /tmp/review, not in
+#     the PR tree, with --setting-sources user (no project .claude/settings, hooks,
+#     env, CLAUDE.md, MCP from the PR) and --strict-mcp-config. The PR tree is an
+#     --add-dir it may only Read/Grep/Glob. /proc and the runner home are denied, and
+#     the checkout keeps no token on disk, so a prompt injection has no secret to quote.
+#   * The verdict is the LAST line of the output, exactly. Anything else, any claude
+#     error, or a missing result fails closed — and still posts a comment saying why.
+#   * The Dependabot short-circuit needs every commit on the PR to be Dependabot's,
+#     not just the PR author, so an agent push onto a bump branch gets a full review.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write # post the review comment
+
+concurrency:
+  group: adversarial-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true # only the newest head matters; a cancelled run is not a success
+
+jobs:
+  review:
+    name: adversarial review
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+      SENDER: ${{ github.event.sender.login }}
+      MAX_DIFF_LINES: "4000"
+    steps:
+      - uses: actions/checkout@v4 # main's copy: this file, the prompt, the deep-path list
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Fetch the PR as files (never executed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --quiet "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "pull/$PR/head"
+          test "$(git rev-parse FETCH_HEAD)" = "$HEAD" || { echo "::error::head moved during fetch"; exit 1; }
+          git worktree add --detach /tmp/pr "$HEAD" >/dev/null
+          mkdir -p /tmp/review
+          # lockfiles are summarised by name only; their churn would bury the real diff
+          git diff --no-renames "$BASE...$HEAD" -- . ':(exclude)*package-lock.json' ':(exclude)*pnpm-lock.yaml' ':(exclude)*yarn.lock' > /tmp/review/diff.patch
+          git diff -z --no-renames --name-only --diff-filter=AMDRCT "$BASE...$HEAD" > /tmp/review/changed.bin
+          tr '\0' '\n' < /tmp/review/changed.bin > /tmp/review/changed.txt
+          gh pr view "$PR" --json title,body --jq '"# " + .title + "\n\n" + (.body // "")' > /tmp/review/pr.md
+          gh pr view "$PR" --json commits --jq '[.commits[].authors[].login] | unique | join(",")' > /tmp/review/commit-authors.txt
+
+      - name: Dependabot bump short-circuit
+        id: bump
+        run: |
+          set -euo pipefail
+          authors=$(cat /tmp/review/commit-authors.txt)
+          if [ "$AUTHOR" = "dependabot[bot]" ] && [ "$SENDER" = "dependabot[bot]" ] && [ "$authors" = "dependabot[bot]" ] \
+             && ! grep -vqxE 'package(-lock)?\.json' /tmp/review/changed.txt; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            echo "Dependency-only bump, every commit by dependabot[bot]; CI covers it. PASS without a model call."
+          fi
+
+      - name: Classify depth
+        if: steps.bump.outputs.skip != '1'
+        id: depth
+        run: |
+          # the repo's deep-path list: platform keeps it in the hook, plugins in scripts/, site in deep-paths.txt
+          checker=""
+          for c in .claude/hooks/protected-paths.mjs scripts/protected-paths.mjs; do [ -f "$c" ] && checker="$c" && break; done
+          if [ -n "$checker" ]; then
+            set +e
+            node "$checker" --check < /tmp/review/changed.bin > /tmp/review/deep.txt 2>&1
+            rc=$?
+            set -e
+            if [ $rc -eq 1 ]; then echo "deep=1" >> "$GITHUB_OUTPUT"; elif [ $rc -ne 0 ]; then cat /tmp/review/deep.txt; exit 1; fi
+          elif [ -f .github/workflows/deep-paths.txt ]; then
+            if grep -Ef .github/workflows/deep-paths.txt /tmp/review/changed.txt > /tmp/review/deep.txt; then echo "deep=1" >> "$GITHUB_OUTPUT"; fi
+          fi
+
+      - name: Review
+        id: review
+        if: steps.bump.outputs.skip != '1'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEP: ${{ steps.depth.outputs.deep }}
+        run: |
+          set -euo pipefail
+          lines=$(wc -l < /tmp/review/diff.patch)
+          if [ "$lines" -gt "$MAX_DIFF_LINES" ]; then
+            printf 'Diff is %s lines (limit %s, lockfiles excluded). Too big to review in one pass — split the PR.\n\nVERDICT: FAIL\n' "$lines" "$MAX_DIFF_LINES" > /tmp/review/review.md
+            exit 0
+          fi
+          npm install -g --silent @anthropic-ai/claude-code@2
+          model=sonnet; [ "${DEEP:-}" = "1" ] && model=opus
+          {
+            cat .github/workflows/review-prompt.md
+            echo
+            echo "PR_AUTHOR: $AUTHOR"
+            if [ "${DEEP:-}" = "1" ]; then echo "DEPTH: DEEP — this PR touches deep paths:"; cat /tmp/review/deep.txt; else echo "DEPTH: STANDARD"; fi
+          } > /tmp/review/prompt.md
+          cd /tmp/review
+          set +e
+          claude -p "$(cat /tmp/review/prompt.md)" \
+            --model "$model" \
+            --setting-sources user \
+            --strict-mcp-config \
+            --add-dir /tmp/pr \
+            --allowedTools "Read,Grep,Glob" \
+            --disallowedTools "Bash,Edit,Write,WebFetch,WebSearch,NotebookEdit,Task,Read(//proc/**),Read(//home/**),Read(//root/**),Read(//etc/**),Read(//github/**)" \
+            --max-turns 80 \
+            --output-format json > /tmp/review/out.json 2> /tmp/review/claude.err
+          rc=$?
+          set -e
+          if [ $rc -ne 0 ] || [ "$(jq -r '.is_error // false' /tmp/review/out.json 2>/dev/null)" = "true" ]; then
+            printf 'Reviewer did not finish (exit %s, %s). Infrastructure, not a finding — push again or re-run the job.\n\nVERDICT: FAIL\n' \
+              "$rc" "$(jq -r '.subtype // "no result"' /tmp/review/out.json 2>/dev/null || echo unreadable)" > /tmp/review/review.md
+            exit 0
+          fi
+          jq -r '.result // ""' /tmp/review/out.json > /tmp/review/review.md
+
+      - name: Post and decide
+        if: always() && steps.bump.outputs.skip != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          touch /tmp/review/review.md
+          last=$(sed -e 's/[[:space:]]*$//' /tmp/review/review.md | awk 'NF{l=$0} END{print l}')
+          case "$last" in "VERDICT: PASS") verdict=PASS;; "VERDICT: FAIL") verdict=FAIL;; *) verdict="NO VERDICT";; esac
+          { echo "### Adversarial review — \`${HEAD:0:7}\` — $verdict"; echo; head -c 60000 /tmp/review/review.md; } > /tmp/review/comment.md
+          gh pr comment "$PR" --body-file /tmp/review/comment.md || echo "::warning::could not post the review comment"
+          [ "$verdict" = "PASS" ] || { echo "::error::adversarial review: $verdict — see the PR comment"; exit 1; }
