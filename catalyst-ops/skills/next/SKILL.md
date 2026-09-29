@@ -40,16 +40,16 @@ If that prints anything but `true` (including an API error), **stop**: tell Kevi
 
 ## 2. Build
 
-gstack is the method in session, not a gate. Nothing merges or waits on it; only the required CI checks decide a merge.
+gstack is the method in session, not a gate. Nothing merges or waits on it; only the required CI checks decide a merge. The exception is the canon's attack steps in §3 (`/review`, the codex adversarial pass, `/cso` on deep paths), which run on every card whatever the table says.
 
 | Every card | When it fits | Not in /next |
 | -- | -- | -- |
-| `/review`, `/ship` | `/investigate` (bugs), `/qa` or `/qa-only` (anything with a UI), `/cso` (deep paths), `/careful` (risky edits), `/autoplan` (a new surface with real scope) | `/land-and-deploy` (auto-merge replaced it), the full plan-review chain on small cards |
+| `/review`, `/ship` | `/investigate` (bugs), `/qa` or `/qa-only` (anything with a UI), `/cso` (deep paths), `/careful` (risky edits, and always on deep paths), `/autoplan` (a new surface with real scope) | `/land-and-deploy` (auto-merge replaced it), the full plan-review chain on small cards |
 
-If a gstack skill isn't installed in the session, get the same outcome another way (a subagent review, a scripted Playwright drive), say so in the PR body, and keep going. **A missing tool is never a reason for Blocked.** The §3 attack steps are still mandatory; only the tool can change. A substitute for `/cso` is a security-focused pass over the deep-path diff, named in the PR body.
+If a gstack skill isn't installed in the session, get the same outcome another way (a subagent review, a scripted Playwright drive), say so in the PR body, and keep going. **A missing tool is never a reason for Blocked**, except for the §3 attack steps.
 
 - Load the `.claude/rules/*.md` that match the paths you'll touch.
-- Check whether you're touching **deep paths**, using the repo's protected-paths list: `node .claude/hooks/protected-paths.mjs --check` on the file list, or the list in the repo's CLAUDE.md. If you are, `/cso` runs in step 3, and migrations follow `.claude/rules/migrations.md`.
+- Check whether you're touching **deep paths**, using the repo's protected-paths checker: pipe the changed file list to `node .claude/hooks/protected-paths.mjs --check` or `node scripts/protected-paths.mjs --check`, whichever exists, or use the list in the repo's CLAUDE.md. If you can't find a list, treat the card as touching deep paths. If you are, `/cso` runs in step 3, and migrations follow `.claude/rules/migrations.md`.
 
 ## 3. Attack before the push
 
@@ -57,7 +57,7 @@ If a gstack skill isn't installed in the session, get the same outcome another w
 2. `scripts/codex-pass.sh adversarial` (the platform repo; elsewhere use `/codex` in adversarial mode)
 3. `/cso` if you touched deep paths
 
-A step whose skill isn't installed gets the same outcome another way (§2), noted in the PR body. For each finding: fix it, or add one line to the PR body saying why it isn't a problem. Run the tests the repo can run.
+These are canon, not method: the substitution rule in §2 doesn't cover them. Run the real tools. If one of them is missing, or runs but doesn't produce a report (no auth, no quota, an error), the card goes to **Blocked** with the missing tool named, until the canon changes. For each finding: fix it, or add one line to the PR body saying why it isn't a problem. Run the tests the repo can run.
 
 ## 4. Forks: recommend, ask, keep going
 
@@ -81,7 +81,7 @@ If he doesn't answer, move the card to **Blocked** with the question as a commen
 - `gh pr merge --auto --squash`. Move the card to **In Review** and comment the PR link.
 - **Don't wait for the merge.** Go back to step 0 for the next card.
 - When a PR from this session merges, close its card with version + PR number, and file anything that surfaced (a date, a dependency, or a deliverable) as a new card.
-- When the `adversarial review` check fails, read its PR comment, fix, and push. **Three fails on one card** → card to Blocked with the findings pasted in, and move on.
+- When the `adversarial review` check fails, read its PR comment, fix every finding locally, re-run §3 on the result, and push **once**. Every push is a new paid review run. **Three fails on one card** → card to Blocked with the findings pasted in, and move on.
 
 ## 6. Handoff
 
