@@ -1,6 +1,6 @@
 {
   "name": "catalyst-ops",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "How Catalyst Shift operates (HOW_WE_BUILD v2). Three skills: next (the pickup loop — top Linear card → build → in-session adversarial pass → /ship with auto-merge on → next card, 650k context budget, handoff for a fresh session), ways-of-working (three homes + the build method: /next, adversarial review as a required check, auto-merge on everything, recommend-ask-proceed with hard stops), and decision-governance (proposed-vs-decided labelling, ratification rules). The verify skill and verify-gate hook are retired (the CI adversarial review replaces them). Behavior only; canon content stays in the strategy doc and docs/HOW_WE_BUILD.md.",
   "author": {
     "name": "Catalyst Shift",

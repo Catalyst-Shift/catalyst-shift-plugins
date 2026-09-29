@@ -8,9 +8,18 @@ user-invocable: true
 
 You run the whole card. Kevin clears Blocked and starts fresh sessions. Don't wait on him unless you hit a hard stop.
 
-## 0. Budget check (every time, before a card)
+## 0. Preflight and budget check (every time, before a card)
 
-Estimate how much context this session has used. **Don't start a new card past ~450k tokens. At 650k, stop** at the next clean point (a pushed commit, or a PR opened) and hand off (§6). Keeping context under 650k keeps token costs down, and that matters more than finishing one more card.
+**Preflight, before the first card and again before each `gh pr merge --auto`.** Confirm `main` requires the `adversarial review` check, posted by GitHub Actions (integration 15368):
+
+```bash
+gh api repos/{owner}/{repo}/rules/branches/main \
+  --jq '[.[] | select(.type=="required_status_checks") | .parameters.required_status_checks[]] | any(.context=="adversarial review" and .integration_id==15368)'
+```
+
+If that prints anything but `true` (including an API error), **stop**: tell Kevin that `main` doesn't require `adversarial review` in an active ruleset (or that it's set by classic branch protection, which this endpoint doesn't see), and start no card or merge. Auto-merge without the required check merges unreviewed code.
+
+**Budget.** Estimate how much context this session has used. **Don't start a new card past ~450k tokens. At 650k, stop** at the next clean point (a pushed commit, or a PR opened) and hand off (§6). Keeping context under 650k keeps token costs down, and that matters more than finishing one more card.
 
 ## 1. Pick the card
 
@@ -26,11 +35,20 @@ Estimate how much context this session has used. **Don't start a new card past ~
 
 - Skip anything labelled `blocked-external` or `trigger-gated`, anything assigned to someone other than Kevin (unassigned cards are fair game), and any card that isn't code in this repo (a call, an email, a decision).
 - No acceptance checklist? Draft one with `/spec`. Keep it to 3–8 lines checkable from the diff. Post it as a comment headed `Checklist drafted by Claude — edit if wrong`, then start.
+- **Checklist lines state outcomes, never tool names.** Write "the four screens driven in a browser, screenshots attached", not "with /qa-only". A line that names a tool can't pass when the session doesn't have that tool, even if the PR is right.
 - Move the card to **In Progress**. Branch from fresh `origin/main` using the card's `gitBranchName`.
 
 ## 2. Build
 
-- Load the `.claude/rules/*.md` that match the paths you'll touch. Run gstack by moment: `/investigate` for a bug, `/autoplan` for a new surface with real scope, `/careful` on deep paths.
+gstack is the method in session, not a gate. Nothing merges or waits on it; only the required CI checks decide a merge.
+
+| Every card | When it fits | Not in /next |
+| -- | -- | -- |
+| `/review`, `/ship` | `/investigate` (bugs), `/qa` or `/qa-only` (anything with a UI), `/cso` (deep paths), `/careful` (risky edits), `/autoplan` (a new surface with real scope) | `/land-and-deploy` (auto-merge replaced it), the full plan-review chain on small cards |
+
+If a gstack skill isn't installed in the session, get the same outcome another way (a subagent review, a scripted Playwright drive), say so in the PR body, and keep going. **A missing tool is never a reason for Blocked.** The §3 attack steps are still mandatory; only the tool can change. A substitute for `/cso` is a security-focused pass over the deep-path diff, named in the PR body.
+
+- Load the `.claude/rules/*.md` that match the paths you'll touch.
 - Check whether you're touching **deep paths**, using the repo's protected-paths list: `node .claude/hooks/protected-paths.mjs --check` on the file list, or the list in the repo's CLAUDE.md. If you are, `/cso` runs in step 3, and migrations follow `.claude/rules/migrations.md`.
 
 ## 3. Attack before the push
@@ -39,7 +57,7 @@ Estimate how much context this session has used. **Don't start a new card past ~
 2. `scripts/codex-pass.sh adversarial` (the platform repo; elsewhere use `/codex` in adversarial mode)
 3. `/cso` if you touched deep paths
 
-For each finding: fix it, or add one line to the PR body saying why it isn't a problem. Run the tests the repo can run.
+A step whose skill isn't installed gets the same outcome another way (§2), noted in the PR body. For each finding: fix it, or add one line to the PR body saying why it isn't a problem. Run the tests the repo can run.
 
 ## 4. Forks: recommend, ask, keep going
 
