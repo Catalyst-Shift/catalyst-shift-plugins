@@ -1,14 +1,12 @@
 # Contributing
 
-Kevin maintains this repo solo for now; Lucas and Keith use the plugin in Cowork but don't review GitHub PRs. The branch + PR flow below is kept for hygiene (forces self-review of the diff, gives you an easy revert handle) — not as a review gate.
+Changes land the way every Catalyst Shift code repo lands them (HOW_WE_BUILD v2, the Ways of Working block in `CLAUDE.md`): a Linear issue with an acceptance checklist, a branch, a PR titled `[concept]` or `[harden]`, and the required `adversarial review` check deciding the merge. Lucas and Keith use the plugins in Cowork but don't review GitHub PRs.
 
 ## Branch + PR
 
-- Work on a branch named `<your-initials>/<short-description>` (e.g. `kp/tighten-sow-template`).
-- Open a PR. **Self-review the diff in the GitHub UI before merging** — it's much easier to catch brand-tone drift in the rendered diff than in the editor. Treat your past-self as the second pair of eyes.
-- Squash-merge to `main`.
-
-If a change is trivial (typo, single-line copy fix), commit straight to `main`. The PR ceremony is for anything substantive.
+- Branch from fresh `origin/main` using the Linear issue's `gitBranchName`.
+- Open a PR and turn on auto-merge (`gh pr merge --auto --squash`). It merges itself when the required checks pass. **Read the rendered diff** before you arm it — brand-tone drift is much easier to catch there than in the editor.
+- Every change is a PR, including a one-line copy fix. Nothing is pushed straight to `main`.
 
 ## Bump the version on every merge
 
@@ -26,9 +24,8 @@ Use [semver](https://semver.org/):
 
 There is no release artifact to build. `main` is the release.
 
-1. Merge the PR (with the version bump).
-2. `git push origin main` (if it isn't already).
-3. Tell Lucas and Keith (Slack, text, however) to hit **Sync** in Cowork → Customize → plugins. Cowork will also surface the update on next session even without manual sync.
+1. The release starts when the PR (with the version bump) auto-merges on its required checks.
+2. Tell Lucas and Keith (Slack, text, however) to hit **Sync** in Cowork → Customize → plugins. Cowork will also surface the update on next session even without manual sync.
 
 Optional but nice: tag the commit so it's easy to refer back to.
 
