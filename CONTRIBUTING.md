@@ -24,9 +24,8 @@ Use [semver](https://semver.org/):
 
 There is no release artifact to build. `main` is the release.
 
-1. Merge the PR (with the version bump).
-2. `git push origin main` (if it isn't already).
-3. Tell Lucas and Keith (Slack, text, however) to hit **Sync** in Cowork → Customize → plugins. Cowork will also surface the update on next session even without manual sync.
+1. The release starts when the PR (with the version bump) auto-merges on its required checks.
+2. Tell Lucas and Keith (Slack, text, however) to hit **Sync** in Cowork → Customize → plugins. Cowork will also surface the update on next session even without manual sync.
 
 Optional but nice: tag the commit so it's easy to refer back to.
 

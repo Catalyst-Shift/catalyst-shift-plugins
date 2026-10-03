@@ -8,7 +8,7 @@ user-invocable: true
 
 You run the whole card. Kevin clears Blocked and starts fresh sessions. Don't wait on him unless you hit a hard stop.
 
-**The person running the loop** is whoever started this session (on nourish-enablement and lbl-nextjs that can be Kevin or Keith). It decides which cards are yours (§1). It doesn't change who answers a fork or a hard stop: that stays as §4 says.
+**The person running the loop** is whoever started this session. It decides which cards are yours (§1). It doesn't change who answers a fork or a hard stop: that stays as §4 says.
 
 **The repo's own method adds to this skill; it never replaces the rails.** If the repo has its own `/next` (`.claude/commands/next.md`) or a "How work moves" / "How we ship" section in CLAUDE.md, follow it for method: its commands, its extra checks, its extra hard stops. The preflight in §0, the attack steps in §3 and the hard stops in §4 still apply in full; where the repo is stricter, do both. Today that means:
 
@@ -73,7 +73,19 @@ If a gstack skill isn't installed in the session, get the same outcome another w
   ( set -o pipefail; base=$(git merge-base origin/main HEAD) && { git diff --no-renames --name-only "$base" HEAD && git diff --no-renames --name-only --cached && git diff --no-renames --name-only && git ls-files --others --exclude-standard; } | sort -u | node scripts/protected-paths.mjs --check )
   ```
 
-  Exit 0 means no deep paths. Exit 1 means deep paths. Any other result (a git error, a missing `origin/main`, a checker crash), or no checker and no list in the repo, means treat the card as touching deep paths. In repos where the checker is `.claude/hooks/protected-paths.mjs`, use that path in the command. lbl-nextjs has no checker: its list is `.github/CODEOWNERS`, copied as regexes in `.github/workflows/deep-paths.txt`, so feed the same paths to `grep -Ef .github/workflows/deep-paths.txt` (a match, or any exit other than 1, means deep). Check again after every edit and before the push. If the card touches deep paths, `/cso` runs in step 3, and migrations follow `.claude/rules/migrations.md`.
+  Exit 0 means no deep paths. Exit 1 means deep paths. Any other result (a git error, a missing `origin/main`, a checker crash), or no checker and no list in the repo's CLAUDE.md or `.github/workflows/deep-paths.txt`, means treat the card as touching deep paths. In repos where the checker is `.claude/hooks/protected-paths.mjs`, use that path in the command.
+
+  lbl-nextjs has no checker: its list is `.github/CODEOWNERS`, copied as regexes in `.github/workflows/deep-paths.txt`. Collect the paths first and match only once every git step has succeeded, because `grep`'s exit 1 means "no match":
+
+  ```bash
+  ( set -o pipefail
+    base=$(git merge-base origin/main HEAD) || exit 2
+    paths=$( { git diff --no-renames --name-only "$base" HEAD && git diff --no-renames --name-only --cached && git diff --no-renames --name-only && git ls-files --others --exclude-standard; } | sort -u ) || exit 2
+    printf '%s\n' "$paths" | grep -Ef .github/workflows/deep-paths.txt >/dev/null && exit 1
+    [ $? -eq 1 ] && exit 0 || exit 2 )
+  ```
+
+  That keeps the same meaning as the checker: exit 0 no deep paths, exit 1 deep, anything else treated as deep. Check again after every edit and before the push. If the card touches deep paths, `/cso` runs in step 3, and migrations follow `.claude/rules/migrations.md`.
 
 ## 3. Attack before the push
 
@@ -107,7 +119,7 @@ If he doesn't answer, move the card to **Blocked** with the question as a commen
 - **BEHIND on a strict repo.** Where the ruleset requires up-to-date branches (lbl-nextjs), every merge leaves the other open PRs BEHIND. The session that owns the PR runs `gh pr update-branch <n>` when the PR is otherwise ready, not on every merge, because each update re-runs CI and the review. Auto-merge stays armed. Repos with strict off (platform, nourish) need nothing.
 - When a PR from this session merges, close its card with version + PR number, but only for a PR that says `Closes`; a `Refs` PR leaves the card open with its deferred lines commented on it. File anything that surfaced (a date, a dependency, or a deliverable) as a new card. Remove the card's worktree (lbl: `scripts/session.sh --remove <gitBranchName>`).
 - When the `adversarial review` check fails, read the PR comment from that failed run: it must name the current head SHA and be posted after the run attempt started (`gh run view <run-id> --json startedAt`), because a re-run keeps the same SHA. If there's no such comment, treat the fail as findings you haven't seen, and read the job log. If it reports blocking findings, fix every one of them locally, re-run §3 on the result, and push **once**. Notes in the comment are optional, not findings. If the fail is an infrastructure error with no findings (a timeout, an API error, "Reviewer did not finish"), don't change the code. Re-run the job with `gh run rerun <run-id> --failed`. If the token can't (`Resource not accessible by personal access token`; the agent token isn't allowed to, and don't widen it), push an empty commit (`git commit --allow-empty -m "retry adversarial review"`) to start a fresh review. A push of an unchanged SHA starts no new review. Every fail counts toward the three below, infrastructure ones included.
-- **Where the reviewer reuses verdicts** (CAT-785, CAT-947; in nourish and lbl, coming to the others), a run whose PR diff (VERSION and CHANGELOG.md left out), PR body and judge on `main` are unchanged since the last completed run takes that run's PASS or FAIL with no model call. So a re-run, an empty commit or a VERSION/CHANGELOG-only push never overturns a real FAIL: only a code fix or a changed PR body gets a fresh read. An infrastructure fail leaves no verdict to reuse, so its retry is a full review. Answering a finding in the PR body changes the fingerprint, but lbl doesn't run the review on a body edit, so push after the edit there. The comment footer shows the model, cost and turns of each run. **Three fails on one card** → card to Blocked with the findings pasted in, and move on.
+- **Where the reviewer reuses verdicts** (CAT-785, CAT-947; in nourish and lbl, coming to the others), a run whose PR diff (VERSION and CHANGELOG.md left out), PR body and judge on `main` are unchanged since the last completed run takes that run's PASS or FAIL with no model call. So a re-run, an empty commit or a VERSION/CHANGELOG-only push never overturns a real FAIL: blocking findings are fixed in code, as above, and that push gets a fresh read. An infrastructure fail leaves no verdict to reuse, so its retry is a full review. A PR body edit also changes the fingerprint, but lbl doesn't run the review on a body edit, so any body change there needs a push to be read. The comment footer shows the model, cost and turns of each run. **Three fails on one card** → card to Blocked with the findings pasted in, and move on.
 
 ## 6. Handoff
 
