@@ -8,16 +8,16 @@ user-invocable: true
 
 You run the whole card. Kevin clears Blocked and starts fresh sessions. Don't wait on him unless you hit a hard stop.
 
-**The person running the loop** is whoever started this session. On most repos that's Kevin. Where the repo's CLAUDE.md gives someone else the same authority (nourish-enablement, D38: Kevin or Keith), read "Kevin" below as "the person running the loop", and record every yes, ruling or overrule with the name of whoever gave it and the date.
+**The person running the loop** is whoever started this session (on nourish-enablement and lbl-nextjs that can be Kevin or Keith). It decides which cards are yours (§1). It doesn't change who answers a fork or a hard stop: that stays as §4 says.
 
-**The repo's own loop wins.** If the repo has its own `/next` (`.claude/commands/next.md`) or a "How work moves" / "How we ship" section in CLAUDE.md that differs from this skill, follow the repo and use this skill only for what the repo doesn't say. Today that means:
+**The repo's own method adds to this skill; it never replaces the rails.** If the repo has its own `/next` (`.claude/commands/next.md`) or a "How work moves" / "How we ship" section in CLAUDE.md, follow it for method: its commands, its extra checks, its extra hard stops. The preflight in §0, the attack steps in §3 and the hard stops in §4 still apply in full; where the repo is stricter, do both. Today that means:
 
-- **nourish-enablement** has its own `/next`, `/pickup`, `/build`, `/open-pr` and `/land`. Its code transfers to the client, so gstack isn't installed in the repo (HOW_WE_BUILD §3). Its attack is the repo's: `npm run verify`, the app driven as its user with what was seen captured, every guard the change relies on made to fail once, `compliance-reviewer` on deep paths, and a reader that didn't write the change. A missing `/codex` there is not a reason for Blocked. Deep-path edits there need the session to be attended (the `attending` declaration); a headless run can't make them.
+- **nourish-enablement** has its own `/next`, `/pickup`, `/build`, `/open-pr` and `/land`, and its attack adds `npm run verify`, the app driven as its user with what was seen captured, every guard the change relies on made to fail once, `compliance-reviewer` on deep paths, and a reader that didn't write the change. Deep-path edits there need the session to be attended (the `attending` declaration); a headless run can't make them.
 - **lbl-nextjs** keeps its rules in CLAUDE.md "How we ship" and "Parallel sessions".
 
 ## 0. Preflight and budget check (every time, before a card)
 
-**Preflight, before the first card and again before each `gh pr merge --auto`.** If the repo has its own merge-gate script (nourish: `node scripts/check-merge-gate.mjs`), run that; a non-zero exit means stop, as below. Otherwise confirm `main` requires the `adversarial review` check, posted by GitHub Actions (integration 15368), in at least one active ruleset that the identity you merge with can't bypass:
+**Preflight, before the first card and again before each `gh pr merge --auto`.** Confirm `main` requires the `adversarial review` check, posted by GitHub Actions (integration 15368), in at least one active ruleset that the identity you merge with can't bypass:
 
 ```bash
 preflight() {
@@ -32,7 +32,7 @@ preflight() {
 preflight && echo PREFLIGHT_OK || { echo PREFLIGHT_FAIL; false; }
 ```
 
-Anything but `PREFLIGHT_OK` (including an API error) means **stop**: tell Kevin that `main` doesn't enforce `adversarial review` for this identity (the check isn't required in an active ruleset, the ruleset lets this identity bypass it, or protection is set by classic branch protection, which this endpoint doesn't see), and start no card or merge. Auto-merge without the enforced check merges unreviewed code.
+Anything but `PREFLIGHT_OK` (including an API error) means **stop**: tell Kevin that `main` doesn't enforce `adversarial review` for this identity (the check isn't required in an active ruleset, the ruleset lets this identity bypass it, or protection is set by classic branch protection, which this endpoint doesn't see), and start no card or merge. Auto-merge without the enforced check merges unreviewed code. If the repo also has its own merge-gate script (nourish: `node scripts/check-merge-gate.mjs`), run it as well; a non-zero exit from either means stop.
 
 **Budget.** Estimate how much context this session has used. **Don't start a new card past ~450k tokens. At 650k, stop** at the next clean point (a pushed commit, or a PR opened) and hand off (§6). Keeping context under 650k keeps token costs down, and that matters more than finishing one more card.
 
@@ -85,9 +85,9 @@ These are canon, not method: the substitution rule in §2 doesn't cover them. Ru
 
 ## 4. Forks: recommend, ask, keep going
 
-For a product, UX, pricing or architecture choice: pick a recommendation, ask the person running the loop with AskUserQuestion (recommendation first, marked Recommended), and **keep building on it** while they haven't answered. Record every one under `## Decisions made` in the PR body and as a card comment, with who ruled: `Assumed X over Y because Z. Overrule → new card.`
+For a product, UX, pricing or architecture choice: pick a recommendation, ask Kevin with AskUserQuestion (recommendation first, marked Recommended), and **keep building on it** while he hasn't answered. Record every one under `## Decisions made` in the PR body and as a card comment, with who ruled: `Assumed X over Y because Z. Overrule → new card.`
 
-**Hard stops.** Don't do these without a yes in this session from Kevin, or from whoever else the repo's CLAUDE.md names (nourish: Kevin or Keith). Record who said yes. The repo's CLAUDE.md may add its own (nourish: a constraint break, the scope fence, an escape-hatch annotation; lbl: anything that changes what Craig's customers see or pay):
+**Hard stops.** Don't do these without Kevin's yes in this session. Record it. The repo's CLAUDE.md may add more hard stops (nourish: a constraint break, the scope fence, an escape-hatch annotation; lbl: anything that changes what Craig's customers see or pay), never fewer:
 
 - running a change against a production database (merging the migration file is fine)
 - deleting or overwriting customer data
