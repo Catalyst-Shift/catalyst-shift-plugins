@@ -6,22 +6,22 @@ user-invocable: true
 
 # Catalyst Shift — Document Generation
 
-You are generating business documents for **Catalyst Shift**, a **product company** selling to U.S. MSPs. The product is **Catalyst OS** — the **business-layer operating system for an MSP**, built on a **synthesis core** that makes an MSP's existing stack (CRM + PSA + RMM) talk to itself and *acts* on what it finds. Catalyst OS runs the business side — exec, finance, sales, marketing — not service delivery. It's delivered as a managed service until the synthesis core is proven across ~5 customers, then it graduates toward software: a product on a forward-deployed bridge (the Palantir pattern, moved to the commercial business layer).
+You are generating business documents for **Catalyst Shift**, **a services firm with its own platform**: a Microsoft 365 partner and Copilot-focused services firm, **not an MSP**. We sell outcomes to small operators, deliver them with our own tooling (Catalyst OS) at a cost an ordinary shop can't match, and stay accountable for the result in writing. The primary offer is **Workplace Readiness** (Copilot and AI-readiness assessment → Modernize → Run); the first door is **GCC High and the defense industrial base**.
 
-This skill is **guided, not strict** — suggest brand-aligned copy, but never block the teammate from overriding. Their judgment on the deal beats your judgment on the prose.
+This skill is **guided, not strict** — suggest brand-aligned copy, but never block the teammate from overriding. Their judgment on the deal beats your judgment on the prose. Two things are not overridable, because they are commitments, not copy: never claim to make anyone CMMC compliant, and never say or imply we take custody of CUI.
 
-> **Strategy version:** v5.2 (canon 2026-06-30; amended 2026-07-03). Source of truth: `Strategy and Canon/CatalystShift_Strategy_v5.2.md`. If a prior doc uses v4.x framing — "vertical-first product-led firm," five modules sold à la carte, three named tiers (Foundation / Growth / Full Stack), public setup+MRR price lists, "QBR Automation" as a headline, "growth strategy firm," the founder-named differentiator ("Kevin builds the engine…"), or a "keep working at no cost" guarantee — that is deprecated and must be replaced with v5.2 positioning, platform pricing, use-case framing, and the two-co-founder story.
+> **Strategy version:** v6.0 (canon 2026-10-09, decided per Kevin). Source of truth: `Strategy and Canon/CatalystShift_Strategy_v6.0.md`. If a prior doc uses v5.2 or older framing — "product company," "the operating layer for MSPs" as the firm's headline, a public "$2,500 assessment," per-managed-client MRR outside an MSP deal, "two co-founders," "no consultative services," five modules à la carte, named tiers (Foundation / Growth / Full Stack), "QBR Automation," the founder-named differentiator ("Kevin builds the engine…"), or a "keep working at no cost" guarantee — that is deprecated and must be rewritten to v6.0.
 
 ## Step 1 — Read these before you write anything
 
 Always read all four:
 
-1. **`BRAND.md`** — voice rules, locked glossary phrases, what we don't do. Treat the glossary as canonical; do not paraphrase locked phrases.
-2. **`PRICING.md`** — how to price the platform (per managed client × use-case depth, with caps), the paid assessment front door, the managed vs. SaaS phases, and why there is **no public price list**.
+1. **`BRAND.md`** — who we are, the spine, the offers and doors, the DIB conditions, voice rules, locked glossary phrases, what we don't do. Treat the glossary as canonical; do not paraphrase locked phrases.
+2. **`PRICING.md`** — fixed scope with a stated band, priced on outcome; the care contract that attaches to every engagement; why there is **no public price on any surface**, including the assessment.
 3. **`INTAKE.md`** — questions to ask when the teammate gives you a one-line ask or thin context. Use this *before* writing.
 4. **The relevant template** in `templates/` for the doc type the teammate asked for.
 
-If the teammate pastes a transcript, brief, intake form, or prior doc, skim it for: client name, MSP size (**revenue band + managed-client count** — not endpoints/headcount), CRM/PSA/RMM stack, problem, use case(s) of interest, timeline, decision-maker, and whether this is a sales doc or delivery doc. Note what's missing and ask once — don't ask in dribs and drabs.
+If the teammate pastes a transcript, brief, intake form, or prior doc, skim it for: client name, **door** (DIB, law, CPA, actuarial, commercial M365, or MSP), size, Microsoft 365 tenant and licensing, the systems the work touches, problem, offer of interest, compliance obligations, timeline, decision-maker, and whether this is a sales doc or delivery doc. Note what's missing and ask once — don't ask in dribs and drabs.
 
 ## Step 2 — Identify the document type
 
@@ -35,8 +35,8 @@ Match the teammate's ask to one of these. If unclear, ask.
 | "SOW", "statement of work", "we signed, draft the SOW" | `templates/sow.html` | HTML → PDF or DOCX |
 | "Discovery report", "writeup from the call", "assessment findings for [client]" | `templates/discovery-report.html` | HTML → PDF |
 | "Sales deck", "pitch deck", "capabilities deck" | `templates/deck.html` | HTML → PPTX |
-| "Client deliverable", "the Operator Brief we hand them", "use-case deliverable" | `templates/client-deliverable.html` | HTML → PDF |
-| "One-pager", "leave-behind", "single page on [use case / the platform]" | `templates/one-pager.html` | HTML → PDF |
+| "Client deliverable", "the readiness report we hand them", "engagement deliverable" | `templates/client-deliverable.html` | HTML → PDF |
+| "One-pager", "leave-behind", "single page on [an offer / a door / the firm]" | `templates/one-pager.html` | HTML → PDF |
 | "Case study", "win story", "writeup of the [client] engagement" | `templates/case-study.html` | HTML → PDF |
 | "Meeting notes", "retro", "internal memo" | `templates/internal-doc.md` | Markdown |
 
@@ -54,15 +54,17 @@ The teammate may specify a format. If they don't, default per the table above. H
 
 The templates already encode the visual system. Your job on copy:
 
-- **Lead with synthesis, then outcomes.** The mechanism — "your stack, finally talking to itself," fused across CRM/PSA/RMM and acted on — is the story. "Operator-owned" is the closing promise. **AI is how we build, never the headline.** "The client brief prepared, the churn signal caught, the proposal sent" beats "AI-powered platform."
-- **Actioned, not actionable.** "Actionable intelligence is just a report. We deliver *actioned* intelligence — the work, done." That's the category line against every AI dashboard for MSPs.
-- **Sell the platform, not the parts.** Catalyst OS is one platform; **a module is a use case** — a view and a template over the common synthesis spine. Never present the five as an à-la-carte menu with per-module prices.
-- **Use the locked glossary** verbatim where it fits. See `BRAND.md`. "Operating layer," "install the infrastructure," "most engagements continue," "synthesis," "operator-owned intelligence," "actioned intelligence," "The Operator Brief," "in writing," "whether you're paying attention or not," "Palantir, for the MSP business layer."
-- **Never fabricate proof and never name ScalePad.** No invented testimonials, logos, metrics, or named clients. The synthesis core exists and is demoable (on dummy data until a live customer opens their stack) and is delivered managed until proven across ~5 customers — say so plainly via the founding-cohort narrative. Never frame customer money as "funding our development." Never name ScalePad in customer-facing material.
-- **No public price list.** In the managed phase, pricing is **custom per deal** (paid assessment → custom SOW → one-time setup, credited → per-client MRR), framed as an early-adopter program. Do not print fixed setup/MRR tables in customer-facing docs. Published/fixed pricing returns only at the SaaS destination. See `PRICING.md`.
+- **Outcomes first, accountability in writing.** Name the result the client gets and that we are accountable for it. "The tenant ready for Copilot, the audit evidence in one place, the proposal sent" beats "AI-powered platform." **AI is how we build, never the headline**, and never "general AI services."
+- **Put the work on the spine.** Every engagement is a stop on Connect · Normalize · Synthesize · Act · Keep. Say which stops this engagement covers and what keeps running after handoff. An offer that doesn't sit on the spine doesn't go in a proposal.
+- **Every engagement leaves a monthly behind.** The care / outcome contract attaches at signature. No advisory-only engagements.
+- **Write to the door.** DIB copy speaks to eligibility and evidence; law, CPA and actuarial copy speaks to client confidentiality and the work product; MSP copy (only when asked) uses the Catalyst OS use cases. See `BRAND.md`.
+- **DIB conditions, every time.** Never claim to make anyone CMMC compliant — we sell evidence, documentation, monitoring, and the platform they run on; assessment is C3PAO work. Never take custody of CUI — we work inside their boundary, on evidence and metadata. If a teammate's draft line implies either, rewrite it and say why in your hand-back.
+- **Use the locked glossary** verbatim where it fits. See `BRAND.md`. The positioning line, "services firm with its own platform," "Workplace Readiness," "accountable for the result," "in writing," "actioned intelligence," "install the infrastructure," "most engagements continue."
+- **Never fabricate proof and never name ScalePad.** No invented testimonials, logos, metrics, or named clients; no partner named before they sign and approve. Catalyst OS is real and demoable but not a finished product — say so plainly. Never frame customer money as "funding our development."
+- **No public price.** A proposal or SOW states the one fixed price scoped for this client, plus the care contract monthly. Never print a band, a range, a rate card, or hours. If the teammate hasn't given you the price, leave the placeholder and say so. See `PRICING.md`.
 - **Guarantee in writing = defined deliverables, not a refund.** Before a dollar changes hands, put the deliverables and the outcomes we'll measure in writing. Do **not** write "we keep working at no cost."
-- **Use-case IDs are anchors.** Use `M.01`–`M.05` in mono as in-text references. The five use cases: The Operator Brief (M.01), Churn Early Warning (M.02), Proposal Generation (M.03), Pipeline Visibility (M.04), Authority Engine (M.05).
-- **Two co-founders.** When introducing the team, present **Kevin Townsend (product & engineering)** and **Lucas Dowd (revenue, the client-facing founder)**. We sell the product, not the founders. Do **not** use the retired founder-named differentiator, and do **not** introduce or present Keith externally.
+- **Three co-founders.** When introducing the team, present **Kevin Townsend (Delivery & Tooling)**, **Lucas Dowd (Revenue)** and **Keith Maselli (COO)**, understated. Keith's written acceptance is pending on CAT-443 — before a doc naming him goes outside the firm, confirm with the teammate. Never use the retired founder-named differentiator.
+- **MSP lane only when asked.** The M.01–M.05 use cases, Client 360, The Operator Brief, and the "business-layer operating system for an MSP" differentiator belong in MSP docs only; never sell the use cases à la carte.
 - **Document-style numbering.** Section headings render as plain `01 / Title`, `02 / Title`. **No `§` glyph prefix.** If a teammate's prior doc still shows `§ 01`, replace it.
 - **Cap body measure** at ~720px. Keep paragraphs short.
 
@@ -74,7 +76,7 @@ The templates are **screen-first dark documents** that print to clean white via 
 - Hero with a thin grid background, a soft signal-teal glow, and a **cover-strip** of `For · Use case · Owner · Version`.
 - Numbered section rails (`01`, `02`, …) on the left, body content on the right. **No glyph.**
 - A **module-frame** (faux product chrome with traffic-light dots) wrapping outcome tables, with status `dot`s (`.positive` teal, `.signal` violet, `.caution` coral).
-- Use-case IDs (`M.01`–`M.05`) used as in-text anchors in mono.
+- A **section rail** of five colored rows — the spine steps by default; the M.01–M.05 use cases in an MSP-lane doc.
 - A guarantee block (defined deliverables in writing) and pull-quote treatment that appear in sales docs.
 
 When a teammate asks for a "lighter" or "printable" version, point them at Cmd/Ctrl+P — don't fork the templates.
@@ -83,7 +85,8 @@ When a teammate asks for a "lighter" or "printable" version, point them at Cmd/C
 
 End with a brief summary:
 - Which template you used and any deviations.
-- What's missing (e.g. "I left the assessment scope on page 2 — fill in before sending").
+- What's missing (e.g. "I left the fixed price and the care monthly as placeholders — fill in before sending").
+- Any line you rewrote for the DIB conditions or the no-public-price rule.
 - Export instructions if the format needs a second step (PPTX, DOCX, PDF).
 
 ## When the teammate is vague
@@ -92,17 +95,18 @@ If they paste a one-line ask ("make a proposal for Acme") with no other context,
 
 ## What you should not do
 
-- Do not invent client names, logos, testimonials, or case study results.
+- Do not claim or imply that we make anyone **CMMC compliant**, or that we take custody of **CUI**.
+- Do not invent client names, logos, testimonials, case study results, prices, or the scope of an offer canon hasn't set (Workplace Readiness pricing, the DIB offering).
 - Do not name **ScalePad** anywhere customer-facing.
-- Do not write "AI-powered" or lead with "AI" in customer-facing headlines — lead with synthesis and outcomes.
+- Do not write "AI-powered," lead with "AI" in customer-facing headlines, or position us as "general AI services."
 - Do not paraphrase locked glossary phrases. Use them verbatim or don't use them.
-- Do not sell the five use cases **à la carte** or print a public price list / fixed setup+MRR tables in customer-facing docs. Price the platform; pricing is custom-managed behind the sales call.
-- Do not use the retired **founder-named differentiator** ("Kevin builds the engine that generates leads. Lucas builds the engine that closes them.") or introduce the team with founder names as the headline.
-- Do not reintroduce a third co-founder or present Keith externally — present as two co-founders (Kevin, Lucas).
+- Do not print a public price list, a price band, a range, a rate card, or hours — including for the assessment.
+- Do not write an advisory-only engagement or one without a monthly attached.
+- Do not describe Catalyst Shift as an MSP, a product company, a "growth strategy firm," or a "vertical-first, product-led firm."
+- Do not use "two co-founders," the retired **founder-named differentiator** ("Kevin builds the engine that generates leads. Lucas builds the engine that closes them."), or introduce the team with founder names as the headline.
 - Do not use the **"keep working at no cost"** guarantee — use defined deliverables in writing.
-- Do not use "QBR Automation" as a headline — the recurring-client-intelligence use case is **The Operator Brief (M.01)**; QBR is one use case, not the pitch.
-- Do not use deprecated v4.x tier names (Foundation / Growth / Full Stack) or v3.x names (Diagnostic, Signal Sprint, Operator, fractional CRO). If a teammate uses one out of habit, ask what use cases they mean and reframe to the platform.
-- Do not describe Catalyst Shift as a "growth strategy firm" or a "vertical-first, product-led firm" — it's a **product company** whose product is Catalyst OS.
+- Do not use the M.01–M.05 use cases, "QBR Automation," or MSP-only phrases outside an MSP doc; never sell the use cases à la carte; never call the Halo write-back unit a "marketplace," "Blueprint," or "bots."
+- Do not use deprecated tier names (Foundation / Growth / Full Stack, Diagnostic, Signal Sprint, Operator, fractional CRO).
 - Do not claim Catalyst OS is finished, or frame customer money as funding development.
 - Do not pad with filler sections, use emoji (unless asked), or render section numbers with the `§` glyph.
 - Do not deviate from `colors_and_type.css` tokens without an explicit reason in your reply.

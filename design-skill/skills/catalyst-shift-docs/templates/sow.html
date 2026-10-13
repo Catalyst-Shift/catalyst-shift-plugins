@@ -78,18 +78,18 @@
   <div class="hero-glow"></div>
   <div class="hero-inner">
     <div class="pill"><span class="badge">SOW</span></div>
-    <div class="doc-kicker">Statement of Work · Catalyst OS</div>
+    <div class="doc-kicker">Statement of Work · {{OFFER_NAME}}</div>
     <h1 class="doc">
       Statement of Work.<br>
-      <span class="subline">{{CLIENT_NAME}} · Catalyst OS</span>
+      <span class="subline">{{CLIENT_NAME}} · {{OFFER_NAME}}</span>
     </h1>
     <p class="lede">This SOW formalizes the engagement scoped in Proposal {{PROPOSAL_DOC_NUMBER}}. It supersedes the proposal upon signature by both parties.</p>
 
     <div class="cover-strip">
       <div class="cell"><div class="label">Effective</div><div class="value">{{EFFECTIVE_DATE}}<small>SOW · {{DOC_NUMBER}}</small></div></div>
       <div class="cell"><div class="label">Client</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_LEGAL_NAME}}</small></div></div>
-      <div class="cell"><div class="label">Scope</div><div class="value">Catalyst OS<small>{{USE_CASE_FOCUS}}</small></div></div>
-      <div class="cell"><div class="label">Fee</div><div class="value">Custom<small>setup (credited) + per-client MRR</small></div></div>
+      <div class="cell"><div class="label">Scope</div><div class="value">{{OFFER_NAME}}<small>{{SPINE_STOPS_COVERED_ONE_LINE}}</small></div></div>
+      <div class="cell"><div class="label">Fee</div><div class="value">{{ENGAGEMENT_PRICE}}<small>fixed scope + {{CARE_MONTHLY}} / mo care</small></div></div>
     </div>
   </div>
 </section>
@@ -119,17 +119,20 @@
       <div class="s-num">02</div>
       <div class="s-eyebrow">Scope</div>
       <div class="module-rail">
-        <div class="row active"><span class="id">OS</span><span>Catalyst OS · the platform</span></div>
-        <div class="row"><span class="id m01">M.01</span><span>The Operator Brief</span></div>
-        <div class="row"><span class="id m02">M.02</span><span>Churn Early Warning</span></div>
-        <div class="row"><span class="id m03">M.03</span><span>Proposal Generation</span></div>
-        <div class="row"><span class="id m04">M.04</span><span>Pipeline Visibility</span></div>
-        <div class="row"><span class="id m05">M.05</span><span>Authority Engine</span></div>
+        <!-- The spine (Strategy v6.0 §2). Mark the stops this engagement covers with class="row active".
+             MSP-lane doc only: swap these five rows for M.01 The Operator Brief · M.02 Churn Early Warning ·
+             M.03 Proposal Generation · M.04 Pipeline Visibility · M.05 Authority Engine (see BRAND.md). -->
+        <div class="row active"><span class="id">CS</span><span>{{OFFER_NAME}}</span></div>
+        <div class="row"><span class="id m01">01</span><span>Connect</span></div>
+        <div class="row"><span class="id m02">02</span><span>Normalize</span></div>
+        <div class="row"><span class="id m03">03</span><span>Synthesize</span></div>
+        <div class="row"><span class="id m04">04</span><span>Act</span></div>
+        <div class="row"><span class="id m05">05</span><span>Keep</span></div>
       </div>
     </aside>
     <div class="s-body">
       <h2 class="s-title">What is in scope.</h2>
-      <p>Catalyst Shift will install and operate <strong>Catalyst OS</strong> — the synthesis layer across {{CLIENT_NAME}}'s CRM, PSA, and RMM — beginning with <strong>{{LEAD_USE_CASE_NAME}}</strong>: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}.</p>
+      <p>Catalyst Shift will deliver <strong>{{OFFER_NAME}}</strong> for {{CLIENT_NAME}}: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}, and keep it running under the care contract in § 05.</p>
 
       <h3>Included</h3>
       <ul>
@@ -147,7 +150,7 @@
       </ul>
 
       <h3>Change orders</h3>
-      <p>Any expansion of scope is documented as a written change order signed by both parties. Change orders are billed at the rates in § 05 unless re-priced.</p>
+      <p>Any expansion of scope is documented as a written change order signed by both parties. Each change order states its own scope and fixed price, agreed in writing before the work starts.</p>
     </div>
   </div>
 </section>
@@ -228,21 +231,21 @@
 
       <div class="pricing-card">
         <div>
-          <div class="tier-id">Catalyst OS · Managed engagement</div>
-          <div class="tier-name">Setup + per-client MRR</div>
-          <div class="tier-line">Scoped by the paid assessment; custom per this deal — no public price list.</div>
+          <div class="tier-id">Fixed-scope engagement</div>
+          <div class="tier-name">{{OFFER_NAME}}</div>
+          <div class="tier-line">One fixed price for the scope in § 02, plus a monthly care contract from signature.</div>
         </div>
         <div class="fee-block">
-          <div class="fee">Custom</div>
-          <small>setup (credited) + per-client MRR</small>
+          <div class="fee">{{ENGAGEMENT_PRICE}}</div>
+          <small>+ {{CARE_MONTHLY}} / mo care</small>
         </div>
       </div>
 
-      <h4>One-time setup</h4>
-      <p><strong>{{SETUP_FEE}}</strong>, credited from the $2,500 assessment. {{PAYMENT_SCHEDULE}}</p>
+      <h4>Engagement</h4>
+      <p><strong>{{ENGAGEMENT_PRICE}}</strong>, fixed for the scope in § 02. {{PAYMENT_SCHEDULE}}</p>
 
-      <h4>Per-client MRR</h4>
-      <p><strong>{{PER_CLIENT_MRR}} per managed client / month</strong>, scaled by managed-client count and use-case depth. Annual term; billed monthly. Expansion (added clients or use cases) is scoped in writing.</p>
+      <h4>Care contract</h4>
+      <p><strong>{{CARE_MONTHLY}} / month</strong> from signature, billed monthly — {{WHAT_THE_CARE_CONTRACT_KEEPS_RUNNING}}. {{TERM}}. Further work is scoped in writing.</p>
 
       <h4>Late payment</h4>
       <p>Invoices are net-{{NET_DAYS}}. Past-due invoices accrue {{LATE_INTEREST}}% interest per month or the maximum allowed by law, whichever is lower.</p>

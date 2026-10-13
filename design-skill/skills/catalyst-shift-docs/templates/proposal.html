@@ -4,9 +4,10 @@
   ============================================================
   USAGE FOR CLAUDE:
     1. Replace every {{PLACEHOLDER}} with real content. If you don't have a value, ASK — do not invent.
-    2. Keep section structure (§ 01 … § 06) and module-style mono labels (M.01, etc.).
+    2. Keep section structure (§ 01 … § 06). The § 02 rail shows the spine (Connect · Normalize · Synthesize · Act · Keep); M.01–M.05 only in an MSP-lane doc.
     3. Use locked glossary phrases verbatim where they fit (see BRAND.md).
-    4. Pricing is custom per the paid assessment (one-time setup, credited + per-client MRR). NO public price list / fixed tiers. See PRICING.md.
+    4. Pricing is the ONE fixed price scoped for this client + the care contract monthly. Never print a band, range, rate card or hours; never fill {{ENGAGEMENT_PRICE}} from PRICING.md's internal bands. Say "credited" only if the teammate says the assessment is credited. See PRICING.md.
+    4a. DIB: never claim we make the client CMMC compliant; never imply custody of CUI. See BRAND.md.
     5. The "guarantee in writing" section is mandatory — defined deliverables, never "keep working at no cost."
     6. Every metric in tables/feed should have a status dot tone: positive | caution | negative | signal.
     7. Print-export goes through Cmd/Ctrl+P. The print stylesheet at the bottom
@@ -560,8 +561,8 @@ LEGACY-INLINE-CSS-END -->
     <div class="cover-strip">
       <div class="cell"><div class="label">Issued</div><div class="value">{{ISSUE_DATE}}<small>Doc · {{DOC_NUMBER}}</small></div></div>
       <div class="cell"><div class="label">For</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
-      <div class="cell"><div class="label">Scope</div><div class="value">{{USE_CASE_FOCUS}}<small>{{PLATFORM_ENGAGEMENT_ONE_LINE}}</small></div></div>
-      <div class="cell"><div class="label">Engagement</div><div class="value">Custom<small>Setup (credited) + per-client MRR · scoped by assessment</small></div></div>
+      <div class="cell"><div class="label">Scope</div><div class="value">{{OFFER_NAME}}<small>{{SPINE_STOPS_COVERED_ONE_LINE}}</small></div></div>
+      <div class="cell"><div class="label">Engagement</div><div class="value">Fixed scope<small>{{ENGAGEMENT_PRICE}} + {{CARE_MONTHLY}} / mo care</small></div></div>
     </div>
   </div>
 </section>
@@ -588,31 +589,34 @@ LEGACY-INLINE-CSS-END -->
       <div class="s-num">02</div>
       <div class="s-eyebrow">Recommendation</div>
       <div class="module-rail">
-        <div class="row active"><span class="id">OS</span><span>Catalyst OS · the platform</span></div>
-        <div class="row"><span class="id m01">M.01</span><span>The Operator Brief</span></div>
-        <div class="row"><span class="id m02">M.02</span><span>Churn Early Warning</span></div>
-        <div class="row"><span class="id m03">M.03</span><span>Proposal Generation</span></div>
-        <div class="row"><span class="id m04">M.04</span><span>Pipeline Visibility</span></div>
-        <div class="row"><span class="id m05">M.05</span><span>Authority Engine</span></div>
+        <!-- The spine (Strategy v6.0 §2). Mark the stops this engagement covers with class="row active".
+             MSP-lane doc only: swap these five rows for M.01 The Operator Brief · M.02 Churn Early Warning ·
+             M.03 Proposal Generation · M.04 Pipeline Visibility · M.05 Authority Engine (see BRAND.md). -->
+        <div class="row active"><span class="id">CS</span><span>{{OFFER_NAME}}</span></div>
+        <div class="row"><span class="id m01">01</span><span>Connect</span></div>
+        <div class="row"><span class="id m02">02</span><span>Normalize</span></div>
+        <div class="row"><span class="id m03">03</span><span>Synthesize</span></div>
+        <div class="row"><span class="id m04">04</span><span>Act</span></div>
+        <div class="row"><span class="id m05">05</span><span>Keep</span></div>
       </div>
     </aside>
     <div class="s-body">
       <h2 class="s-title">What we propose.</h2>
-      <p>We recommend installing <strong>Catalyst OS</strong> — the synthesis layer across your CRM, PSA, and RMM — starting with <strong>{{LEAD_USE_CASE_NAME}}</strong>: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}. It runs as a managed service while we build it out, and grows as you add clients and use cases.</p>
+      <p>We recommend <strong>{{OFFER_NAME}}</strong>: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}. We deliver it with our own tooling, we are accountable for the result in writing, and a care contract keeps it running from the day you sign.</p>
 
       <div class="pricing-card">
         <div>
-          <div class="tier-id">Catalyst OS · Managed engagement</div>
-          <div class="tier-name">{{LEAD_USE_CASE_NAME}} → platform</div>
-          <div class="tier-line">One-time setup (credited from your assessment) + per-client MRR, scaled by managed-client count and use-case depth. Scoped by the assessment — no public price list.</div>
+          <div class="tier-id">Fixed-scope engagement</div>
+          <div class="tier-name">{{OFFER_NAME}}</div>
+          <div class="tier-line">One fixed price for the scope in this proposal, plus a monthly care contract that starts at signature.</div>
         </div>
         <div class="fee-block">
-          <div class="fee">Custom</div>
-          <small>setup (credited) + per-client MRR</small>
+          <div class="fee">{{ENGAGEMENT_PRICE}}</div>
+          <small>+ {{CARE_MONTHLY}} / mo care</small>
         </div>
       </div>
 
-      <p><strong>Most engagements continue</strong> and deepen from here — more clients under the platform, more use cases live. We scope each expansion in writing.</p>
+      <p><strong>Most engagements continue</strong> from here — the care contract keeps the work running, and the next stop on the spine is scoped in writing.</p>
     </div>
   </div>
 </section>
@@ -628,11 +632,11 @@ LEGACY-INLINE-CSS-END -->
       <h2 class="s-title">How we work.</h2>
 
       <p class="pull">
-        <span class="a">Your stack already holds the answer.</span>
-        <span class="b">We make it talk — and then we act on it.</span>
+        <span class="a">Your systems already hold the answer.</span>
+        <span class="b">We connect them, make sense of them, and act on it.</span>
       </p>
 
-      <p>Catalyst OS synthesizes the data already scattered across your CRM, PSA, and RMM into one picture of the business, then does the work: {{1-2_SENTENCES_ON_HOW_SYNTHESIS_APPLIES_TO_THIS_SPECIFIC_CLIENT_PROBLEM}}</p>
+      <p>We connect the systems you already run, read-only, turn them into one picture, and then do the work: {{1-2_SENTENCES_ON_HOW_THE_SPINE_APPLIES_TO_THIS_SPECIFIC_CLIENT_PROBLEM}}</p>
 
       <div class="two-up">
         <div>
@@ -667,7 +671,7 @@ LEGACY-INLINE-CSS-END -->
           </div>
           <div class="feed-item">
             <span class="dot positive" aria-hidden="true"></span>
-            <span><span class="ev">Scope drafted</span><span class="det">Catalyst OS · {{LEAD_USE_CASE_NAME}}</span></span>
+            <span><span class="ev">Scope drafted</span><span class="det">{{OFFER_NAME}}</span></span>
             <span class="time">today</span>
           </div>
           <div class="feed-item">
@@ -677,7 +681,7 @@ LEGACY-INLINE-CSS-END -->
           </div>
           <div class="feed-item">
             <span class="dot signal" aria-hidden="true"></span>
-            <span><span class="ev">Onboarding queued</span><span class="det">CRM · ops stack · brand inputs</span></span>
+            <span><span class="ev">Onboarding queued</span><span class="det">{{ONBOARDING_INPUTS_E_G_TENANT_ACCESS}}</span></span>
             <span class="time">on signing</span>
           </div>
         </aside>
@@ -765,13 +769,13 @@ LEGACY-INLINE-CSS-END -->
     <div class="s-body">
       <h2 class="s-title">Fees and terms.</h2>
 
-      <p>Pricing is scoped by your <strong>paid assessment</strong> ($2,500, fully credited against this engagement) and delivered as a custom SOW. There is no public price list.</p>
+      <p>A fixed price for the scope above, and a monthly care contract that starts at signature. The SOW mirrors both.</p>
 
-      <h4>One-time setup</h4>
-      <p><strong>{{SETUP_FEE}}</strong>, credited from the assessment. Scales with integration complexity across your CRM, PSA, and RMM. {{PAYMENT_SCHEDULE}}</p>
+      <h4>Engagement</h4>
+      <p><strong>{{ENGAGEMENT_PRICE}}</strong>, fixed for the scope in § 02. {{PAYMENT_SCHEDULE}}</p>
 
-      <h4>Per-client MRR</h4>
-      <p><strong>{{PER_CLIENT_MRR}} per managed client / month</strong>, scaled by managed-client count and use-case depth. Annual term; the platform grows as you add clients and use cases.</p>
+      <h4>Care contract</h4>
+      <p><strong>{{CARE_MONTHLY}} / month</strong> from signature — {{WHAT_THE_CARE_CONTRACT_KEEPS_RUNNING}}. {{TERM}}.</p>
 
       <h4>What's not included</h4>
       <p>{{ANY_THIRD_PARTY_TOOLING_OR_SCOPE_EXCLUSIONS}}</p>

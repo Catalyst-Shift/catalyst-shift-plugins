@@ -1,7 +1,7 @@
 {
   "name": "design-skill",
-  "version": "3.1.0",
-  "description": "Catalyst Shift branded business document generation, aligned to Strategy v5.2 — synthesis-first positioning, platform pricing (no public price list), use cases (The Operator Brief …), paid-assessment front door, two co-founders. Proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, and internal docs. Outputs HTML, PDF, PPTX, DOCX, and Markdown.",
+  "version": "4.0.0",
+  "description": "Catalyst Shift branded business document generation, aligned to Strategy v6.0 — a services firm with its own platform (Microsoft 365 / Copilot partner, not an MSP), Workplace Readiness as the primary offer, GCC High / DIB first, the five-step spine, fixed-scope pricing with no public price list, three co-founders. Proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, and internal docs. Outputs HTML, PDF, PPTX, DOCX, and Markdown.",
   "author": {
     "name": "Catalyst Shift",
     "email": "kevin@catalystshift.ai"

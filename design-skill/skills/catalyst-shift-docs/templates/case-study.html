@@ -76,7 +76,7 @@
   <div class="hero-glow"></div>
   <div class="hero-inner">
     <div class="pill"><span class="badge">Case study</span></div>
-    <div class="doc-kicker">Catalyst OS · {{LEAD_USE_CASE_NAME}}</div>
+    <div class="doc-kicker">{{OFFER_NAME}}</div>
     <h1 class="doc">
       {{HEADLINE_RESULT_IN_ONE_LINE}}<br>
       <span class="subline">{{SUPPORTING_LINE_NAMING_THE_PROBLEM_THAT_WAS_SOLVED}}</span>
@@ -85,7 +85,7 @@
 
     <div class="cover-strip">
       <div class="cell"><div class="label">Client</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
-      <div class="cell"><div class="label">Engagement</div><div class="value">Catalyst OS<small>{{USE_CASE_FOCUS}}</small></div></div>
+      <div class="cell"><div class="label">Engagement</div><div class="value">{{OFFER_NAME}}<small>{{SPINE_STOPS_COVERED_ONE_LINE}}</small></div></div>
       <div class="cell"><div class="label">Headline metric</div><div class="value">{{HEADLINE_METRIC}}<small>{{HEADLINE_METRIC_LABEL}}</small></div></div>
       <div class="cell"><div class="label">Status</div><div class="value">Live<small>Managed · {{MONTHS_LIVE}} months</small></div></div>
     </div>
@@ -119,20 +119,23 @@
       <div class="s-num">02</div>
       <div class="s-eyebrow">Installed</div>
       <div class="module-rail">
-        <div class="row active"><span class="id">OS</span><span>Catalyst OS · the platform</span></div>
-        <div class="row"><span class="id m01">M.01</span><span>The Operator Brief</span></div>
-        <div class="row"><span class="id m02">M.02</span><span>Churn Early Warning</span></div>
-        <div class="row"><span class="id m03">M.03</span><span>Proposal Generation</span></div>
-        <div class="row"><span class="id m04">M.04</span><span>Pipeline Visibility</span></div>
-        <div class="row"><span class="id m05">M.05</span><span>Authority Engine</span></div>
+        <!-- The spine (Strategy v6.0 §2). Mark the stops this engagement covers with class="row active".
+             MSP-lane doc only: swap these five rows for M.01 The Operator Brief · M.02 Churn Early Warning ·
+             M.03 Proposal Generation · M.04 Pipeline Visibility · M.05 Authority Engine (see BRAND.md). -->
+        <div class="row active"><span class="id">CS</span><span>{{OFFER_NAME}}</span></div>
+        <div class="row"><span class="id m01">01</span><span>Connect</span></div>
+        <div class="row"><span class="id m02">02</span><span>Normalize</span></div>
+        <div class="row"><span class="id m03">03</span><span>Synthesize</span></div>
+        <div class="row"><span class="id m04">04</span><span>Act</span></div>
+        <div class="row"><span class="id m05">05</span><span>Keep</span></div>
       </div>
     </aside>
     <div class="s-body">
       <h2 class="s-title">What we installed.</h2>
 
       <p class="pull">
-        <span class="a">Their stack already held the answer.</span>
-        <span class="b">Catalyst OS made it talk — and acted on it.</span>
+        <span class="a">Their systems already held the answer.</span>
+        <span class="b">We connected them, made sense of them, and acted on it.</span>
       </p>
 
       <h3>The build</h3>
@@ -211,7 +214,7 @@
       </div>
 
       <h3 style="margin-top: 36px;">What's next</h3>
-      <p>{{1-2_SENTENCES_ON_THE_ONGOING_MANAGED_ENGAGEMENT_OR_NEXT_USE_CASE}}</p>
+      <p>{{1-2_SENTENCES_ON_THE_CARE_CONTRACT_OR_THE_NEXT_STOP_ON_THE_SPINE}}</p>
     </div>
   </div>
 </section>
