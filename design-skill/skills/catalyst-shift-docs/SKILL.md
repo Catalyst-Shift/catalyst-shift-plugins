@@ -6,7 +6,7 @@ user-invocable: true
 
 # Catalyst Shift — Document Generation
 
-You are generating business documents for **Catalyst Shift**, **a services firm with its own platform**: a Microsoft 365 partner and Copilot-focused services firm, **not an MSP**. Catalyst OS is our own tooling. The primary offer is **Workplace Readiness** (Copilot and AI-readiness assessment → Modernize → Run); the first door is **GCC High and the defense industrial base**.
+You are generating business documents for **Catalyst Shift**, **a services firm with its own platform**: a Microsoft 365 and Copilot-focused services firm, **not an MSP** (never "Microsoft partner" in client copy until the designation is confirmed). Catalyst OS is our own tooling. The primary offer is **Workplace Readiness** (Copilot and AI-readiness assessment → Modernize → Run); the first door is **GCC High and the defense industrial base**.
 
 > We sell outcomes to small businesses. We deliver them with our own tooling at a cost nobody can match, and we're accountable for the result. The software is how we do it, not what we sell.
 
@@ -104,6 +104,7 @@ If they paste a one-line ask ("make a proposal for Acme") with no other context,
 - Do not paraphrase locked glossary phrases. Use them verbatim or don't use them.
 - Do not print a public price list, a price band, a range, a rate card, or hours — including for the assessment.
 - Do not write an advisory-only engagement or one without a monthly attached.
+- Do not write "Microsoft partner," "Microsoft 365 partner," or any partner tier or designation until the teammate confirms which one we hold.
 - Do not describe Catalyst Shift as an MSP, a product company, a "growth strategy firm," or a "vertical-first, product-led firm."
 - Do not use "two co-founders," the retired **founder-named differentiator** ("Kevin builds the engine that generates leads. Lucas builds the engine that closes them."), or introduce the team with founder names as the headline.
 - Do not use the **"keep working at no cost"** guarantee — use defined deliverables in writing.

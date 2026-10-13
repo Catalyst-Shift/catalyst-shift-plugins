@@ -4,7 +4,7 @@ Aligned to **Strategy v6.0** (canon 2026-10-09, decided per Kevin). Source of tr
 
 ## Who Catalyst Shift is
 
-A **services firm with its own platform.** We are a **Microsoft 365 partner and Copilot-focused services firm, not an MSP.** Catalyst OS is our own tooling: how we deliver, not what we sell.
+A **services firm with its own platform.** We are a **Microsoft 365 and Copilot-focused services firm, not an MSP.** Do not call us a "Microsoft partner" or "Microsoft 365 partner" in client copy until the partner designation is confirmed; describe the work instead. Catalyst OS is our own tooling: how we deliver, not what we sell.
 
 **Positioning line (verbatim — use it when introducing the firm):**
 > We sell outcomes to small businesses. We deliver them with our own tooling at a cost nobody can match, and we're accountable for the result. The software is how we do it, not what we sell.

@@ -109,7 +109,7 @@ You can also paste a call transcript, an assessment, or a prior doc and Claude w
 
 ## v6.0 quick reference
 
-**What we are:** a **services firm with its own platform** — a Microsoft 365 partner and Copilot-focused services firm, not an MSP. We sell outcomes, deliver them with our own tooling (Catalyst OS), and are accountable for the result in writing.
+**What we are:** a **services firm with its own platform** — a Microsoft 365 and Copilot-focused services firm, not an MSP. We sell outcomes, deliver them with our own tooling (Catalyst OS), and are accountable for the result in writing.
 
 **Primary offer:** **Workplace Readiness** — Copilot and AI-readiness assessment → Modernize → Run. Its scope and price aren't set in canon yet; the teammate supplies them.
 
