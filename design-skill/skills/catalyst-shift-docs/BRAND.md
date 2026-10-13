@@ -1,6 +1,6 @@
 # Brand reference
 
-Aligned to **Strategy v6.0** (canon 2026-10-09, decided per Kevin). Source of truth: `Strategy and Canon/CatalystShift_Strategy_v6.0.md` in SharePoint HQ (Org Brain copy: `catalyst-brain` `strategy/strategy-v6.0.md`). Where this file and v6.0 disagree, v6.0 wins. Read this before writing any copy.
+Aligned to **Strategy v6.0** (canon 2026-10-09, decided per Kevin). Source of truth: `Strategy and Canon/CatalystShift_Strategy_v6.0.md` in SharePoint HQ (Org Brain copy: `catalyst-brain` `strategy/strategy-v6.0.md`). Where this file and v6.0 disagree, v6.0 wins — with one exception: the org-brain pitch and the DIB door wording below follow Kevin's direction of 2026-10-13, which runs ahead of v6.0 §0a ("Focus: GCC High and the defense industrial base") until the next canon revision. On those two points, follow this file. Read this before writing any copy.
 
 ## Who Catalyst Shift is
 
@@ -46,7 +46,7 @@ A **care / outcome contract attaches at signature to every engagement** — neve
 
 | Door | Status |
 |---|---|
-| **Defense industrial base (DIB)** | **The first door and the focus.** Small primes and subs, warm network only. Meet them wherever they are — commercial Microsoft 365, migrating, or already on GCC / GCC High. Do not lead with GCC High. Buys *eligibility*. |
+| **Defense industrial base (DIB)** | **The first door and the focus.** Small primes and subs, warm network only. Meet them wherever they are — commercial Microsoft 365, migrating, or already on GCC / GCC High. Do not lead with GCC High. Buys *eligibility*. *(Ahead of canon: Kevin, 2026-10-13. v6.0 §0a still says "GCC High and the DIB".)* |
 | Law offices, CPA firms, actuarial firms | Open doors. |
 | General commercial Microsoft 365 | Open, but not led with — general M365 consulting is a saturated market. |
 | MSP on HaloPSA | **Not a committed lane.** No product investment until a paying Halo customer proves the market. Write MSP-lane material only when the teammate asks for it. |
