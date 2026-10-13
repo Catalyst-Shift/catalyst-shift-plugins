@@ -4,7 +4,7 @@ Aligned to **Strategy v6.0** (canon 2026-10-09, decided per Kevin). Source of tr
 
 ## Who Catalyst Shift is
 
-A **services firm with its own platform.** We are a **Microsoft 365 partner and Copilot-focused services firm, not an MSP.** We sell **outcomes** to small operators, deliver them with our own tooling at a cost an ordinary shop can't match, and stay **accountable for the result in writing.** Catalyst OS is how we deliver. It is not what we sell.
+A **services firm with its own platform.** We are a **Microsoft 365 partner and Copilot-focused services firm, not an MSP.** Catalyst OS is our own tooling: how we deliver, not what we sell.
 
 **Positioning line (verbatim — use it when introducing the firm):**
 > We sell outcomes to small businesses. We deliver them with our own tooling at a cost nobody can match, and we're accountable for the result. The software is how we do it, not what we sell.
@@ -51,7 +51,7 @@ A **care / outcome contract attaches at signature to every engagement** — neve
 
 Blue-collar services SMB is not listed as a door (pending Keith on CAT-443). Door ownership is deferred until one door shows stronger footing — do not assign a founder to a door in client material.
 
-**The DIB conditions (written into every DIB offer):** we **never claim to make anyone CMMC compliant** — assessment is C3PAO work; we sell evidence, documentation, monitoring, and the platform they run on. We **never take custody of CUI** — we deploy inside their boundary and work on evidence and metadata. Our architectural controls (row-level security, hash-chained audit log, encryption at rest and in transit, RBAC, a subprocessor register) are real and are the reason a DIB buyer says yes; state them plainly, never as a certification.
+**The DIB conditions (written into every DIB offer):** we **never claim to make anyone CMMC compliant** — assessment is C3PAO work; we sell evidence, documentation, monitoring, and the platform they run on. We **never take custody of CUI** — we deploy inside their boundary and work on evidence and metadata. Name a specific security control (for example encryption, audit logging, or access control) only when the teammate confirms it applies to this engagement, and never as a certification.
 
 ## The MSP lane (background material only)
 

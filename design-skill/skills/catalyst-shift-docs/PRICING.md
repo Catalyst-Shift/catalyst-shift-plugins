@@ -4,9 +4,9 @@ Aligned to **Strategy v6.0** (canon 2026-10-09) §2, §3 and §4. Source of trut
 
 > **This supersedes the v5.2 model** (a $2,500 credited assessment as the only front door, the platform priced per managed client as the only shape). Those still describe the MSP lane, which is now background (see the bottom of this file).
 
-## The rule for services: fixed scope, a stated band, priced on outcome
+## The rule for services: fixed scope, priced on outcome
 
-- **Fixed-scope, fixed-price offers with a stated band, custom inside the band.**
+- **Fixed-scope, fixed-price offers**, priced per client by the teammate.
 - **Priced on outcome, never on effort.** Never quote hours or a day rate as the value.
 - **No public price list on any surface** — including the assessment. Never print a band, a range, or a rate card in a customer-facing doc. A proposal or SOW states the one price scoped for that client.
 - **DH/O (delivery hours per outcome) is the master metric.** It prices every engagement internally; it never appears in a doc.

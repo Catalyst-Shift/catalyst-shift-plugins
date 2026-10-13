@@ -119,7 +119,7 @@ You can also paste a call transcript, an assessment, or a prior doc and Claude w
 
 **DIB conditions:** never claim to make anyone CMMC compliant; never take custody of CUI.
 
-**Pricing:** fixed scope, fixed price, priced on outcome; a care contract attaches at signature. No public price list on any surface, including the assessment. Internal bands are in `PRICING.md` and never printed.
+**Pricing:** fixed scope, fixed price, priced on outcome; a care contract attaches at signature. No public price list on any surface, including the assessment. Every price comes from the teammate.
 
 **Team:** three co-founders — Kevin (Delivery & Tooling), Lucas (Revenue), Keith (COO; acceptance pending on CAT-443).
 

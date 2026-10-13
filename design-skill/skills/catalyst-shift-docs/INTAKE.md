@@ -16,7 +16,7 @@ When a teammate invokes this skill with a one-line ask ("make a proposal for Acm
 ## Doc-specific add-ons
 
 ### Proposal
-- The **fixed price for this scope** and the **care contract monthly**. You don't invent either, and you never fill them from the internal band in `PRICING.md`.
+- The **fixed price for this scope** and the **care contract monthly**. You don't invent or estimate either.
 - Has an assessment been run, and is it **credited** against this work? (Canon leaves this open outside the MSP lane — only write "credited" if the teammate says so.)
 - Specific outcomes to put **in writing** — the deliverables and the outcomes we'll measure, with dates. *(Not "keep working at no cost.")*
 - Which stops on the spine (Connect · Normalize · Synthesize · Act · Keep) this engagement covers, and what keeps running after handoff.

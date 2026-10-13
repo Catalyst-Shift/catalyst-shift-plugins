@@ -6,7 +6,7 @@ user-invocable: true
 
 # Catalyst Shift — Document Generation
 
-You are generating business documents for **Catalyst Shift**, **a services firm with its own platform**: a Microsoft 365 partner and Copilot-focused services firm, **not an MSP**. We sell outcomes to small operators, deliver them with our own tooling (Catalyst OS) at a cost an ordinary shop can't match, and stay accountable for the result in writing. The primary offer is **Workplace Readiness** (Copilot and AI-readiness assessment → Modernize → Run); the first door is **GCC High and the defense industrial base**.
+You are generating business documents for **Catalyst Shift**, **a services firm with its own platform**: a Microsoft 365 partner and Copilot-focused services firm, **not an MSP**. Catalyst OS is our own tooling. The primary offer is **Workplace Readiness** (Copilot and AI-readiness assessment → Modernize → Run); the first door is **GCC High and the defense industrial base**.
 
 > We sell outcomes to small businesses. We deliver them with our own tooling at a cost nobody can match, and we're accountable for the result. The software is how we do it, not what we sell.
 
@@ -19,7 +19,7 @@ This skill is **guided, not strict** — suggest brand-aligned copy, but never b
 Always read all four:
 
 1. **`BRAND.md`** — who we are, the spine, the offers and doors, the DIB conditions, voice rules, locked glossary phrases, what we don't do. Treat the glossary as canonical; do not paraphrase locked phrases.
-2. **`PRICING.md`** — fixed scope with a stated band, priced on outcome; the care contract that attaches to every engagement; why there is **no public price on any surface**, including the assessment.
+2. **`PRICING.md`** — fixed scope, priced on outcome, with the price always from the teammate; the care contract that attaches to every engagement; why there is **no public price on any surface**, including the assessment.
 3. **`INTAKE.md`** — questions to ask when the teammate gives you a one-line ask or thin context. Use this *before* writing.
 4. **The relevant template** in `templates/` for the doc type the teammate asked for.
 
