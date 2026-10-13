@@ -5,7 +5,7 @@ When a teammate invokes this skill with a one-line ask ("make a proposal for Acm
 ## Universal questions (always ask if missing)
 
 1. **Client / company name** — and one line on what they do.
-2. **Door** — GCC High / DIB (prime or sub), law office, CPA firm, actuarial firm, general commercial M365, or MSP on Halo. The door decides the language, the limits that apply, and the price posture.
+2. **Door** — DIB (prime or sub; note whether they're on commercial M365, migrating, or on GCC / GCC High), law office, CPA firm, actuarial firm, general commercial M365, or MSP on Halo. The door decides the language, the limits that apply, and the price posture.
 3. **Size** — headcount and Microsoft 365 seats; for an MSP, revenue band and managed-client count.
 4. **Systems** — their Microsoft 365 tenant (commercial or GCC High), licensing (Copilot or not), and the line-of-business systems the work touches. For an MSP: CRM + PSA + RMM.
 5. **Decision-maker** — name, role, what they care about most.

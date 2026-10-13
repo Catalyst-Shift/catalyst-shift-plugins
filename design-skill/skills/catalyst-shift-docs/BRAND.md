@@ -6,6 +6,8 @@ Aligned to **Strategy v6.0** (canon 2026-10-09, decided per Kevin). Source of tr
 
 A **services firm with its own platform.** We are a **Microsoft 365 and Copilot-focused services firm, not an MSP.** Do not call us a "Microsoft partner" or "Microsoft 365 partner" in client copy until the partner designation is confirmed; describe the work instead. Catalyst OS is our own tooling: how we deliver, not what we sell.
 
+**The problem we lead with: the org brain** (Kevin, 2026-10-13, ahead of the next canon revision). A firm's knowledge is scattered across its systems and people. We centralize, consolidate and synthesize it — the same synthesis core we built in Catalyst OS — with **Microsoft 365 Copilot as the vehicle**. Lead the pitch with that problem, not with a tenant type or a compliance regime.
+
 **Positioning line (verbatim — use it when introducing the firm):**
 > We sell outcomes to small businesses. We deliver them with our own tooling at a cost nobody can match, and we're accountable for the result. The software is how we do it, not what we sell.
 
@@ -44,7 +46,7 @@ A **care / outcome contract attaches at signature to every engagement** — neve
 
 | Door | Status |
 |---|---|
-| **GCC High / defense industrial base (DIB)** | **The first door and the focus.** Small primes and subs, warm network only. Buys *eligibility*. |
+| **Defense industrial base (DIB)** | **The first door and the focus.** Small primes and subs, warm network only. Meet them wherever they are — commercial Microsoft 365, migrating, or already on GCC / GCC High. Do not lead with GCC High. Buys *eligibility*. |
 | Law offices, CPA firms, actuarial firms | Open doors. |
 | General commercial Microsoft 365 | Open, but not led with — general M365 consulting is a saturated market. |
 | MSP on HaloPSA | **Not a committed lane.** No product investment until a paying Halo customer proves the market. Write MSP-lane material only when the teammate asks for it. |

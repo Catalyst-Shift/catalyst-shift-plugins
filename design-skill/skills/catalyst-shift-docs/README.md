@@ -12,7 +12,7 @@ Built for the three co-founders — Kevin, Lucas and Keith. Same brand, same voi
 
 You ask Claude something like:
 
-> "Make a CS proposal for Acme Machining — Workplace Readiness. They're a 60-person DIB sub on GCC High, no Copilot yet, CMMC Level 2 coming up on their prime's contract. Fixed price is $X, care is $Y a month."
+> "Make a CS proposal for Acme Machining — Workplace Readiness. They're a 60-person DIB sub on commercial M365, migrating to GCC High, no Copilot yet, CMMC Level 2 coming up on their prime's contract. Fixed price is $X, care is $Y a month."
 
 Claude reads the skill, asks any missing questions in one bundle, and writes a full proposal into your working folder. Same for SOWs, discovery reports, decks, etc.
 
@@ -115,7 +115,9 @@ You can also paste a call transcript, an assessment, or a prior doc and Claude w
 
 **The spine:** Connect · Normalize · Synthesize · Act · Keep. Every engagement is a stop on it.
 
-**Doors:** GCC High / DIB first. Law, CPA, actuarial and commercial M365 open. MSP on Halo is background only (the M.01–M.05 use cases live there).
+**Pitch:** the org-brain problem, with M365 Copilot as the vehicle.
+
+**Doors:** DIB first, wherever they are (commercial, migrating, or GCC / GCC High). Law, CPA, actuarial and commercial M365 open. MSP on Halo is background only (the M.01–M.05 use cases live there).
 
 **DIB conditions:** never claim to make anyone CMMC compliant; never take custody of CUI.
 

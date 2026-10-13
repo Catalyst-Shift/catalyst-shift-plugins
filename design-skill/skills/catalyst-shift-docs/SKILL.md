@@ -6,7 +6,7 @@ user-invocable: true
 
 # Catalyst Shift — Document Generation
 
-You are generating business documents for **Catalyst Shift**, **a services firm with its own platform**: a Microsoft 365 and Copilot-focused services firm, **not an MSP** (never "Microsoft partner" in client copy until the designation is confirmed). Catalyst OS is our own tooling. The primary offer is **Workplace Readiness** (Copilot and AI-readiness assessment → Modernize → Run); the first door is **GCC High and the defense industrial base**.
+You are generating business documents for **Catalyst Shift**, **a services firm with its own platform**: a Microsoft 365 and Copilot-focused services firm, **not an MSP** (never "Microsoft partner" in client copy until the designation is confirmed). Catalyst OS is our own tooling. The primary offer is **Workplace Readiness** (Copilot and AI-readiness assessment → Modernize → Run); the pitch leads with **the org-brain problem** (centralize, consolidate and synthesize what the firm knows, with Microsoft 365 Copilot as the vehicle); the first door is **the defense industrial base, wherever they are** — commercial, migrating, or GCC / GCC High. Never lead with GCC High.
 
 > We sell outcomes to small businesses. We deliver them with our own tooling at a cost nobody can match, and we're accountable for the result. The software is how we do it, not what we sell.
 
