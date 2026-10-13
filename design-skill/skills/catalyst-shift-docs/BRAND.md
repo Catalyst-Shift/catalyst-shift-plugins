@@ -134,6 +134,7 @@ Use these verbatim. Do not paraphrase.
 - No retired founder-named differentiator; no introducing the team with founder names as the headline.
 - No claim that Catalyst OS is fully built and shipped; no dated public roadmap; no "funding development" framing.
 - No fabricated testimonials, case studies, logos, or metrics.
+- No cold or purchased lists; no custom per-customer code at GA; no external commitment to Halo written as a decision.
 - No emoji, no exclamation marks, no filler ("transformative," "world-class," "synergize").
 - No purple/violet gradients on the logo mark — solid teal only. Violet (`--accent #8B7CF6`) is the AI/automation register and secondary CTAs — never the lockup.
 - No bouncy springs, parallax, or scroll-pinned chrome.

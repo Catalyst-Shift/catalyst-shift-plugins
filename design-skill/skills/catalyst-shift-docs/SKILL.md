@@ -110,5 +110,6 @@ If they paste a one-line ask ("make a proposal for Acme") with no other context,
 - Do not use the M.01–M.05 use cases, "QBR Automation," or MSP-only phrases outside an MSP doc; never sell the use cases à la carte; never call the Halo write-back unit a "marketplace," "Blueprint," or "bots."
 - Do not use deprecated tier names (Foundation / Growth / Full Stack, Diagnostic, Signal Sprint, Operator, fractional CRO).
 - Do not claim Catalyst OS is finished, or frame customer money as funding development.
+- Do not write in cold or purchased-list outreach, promise custom per-customer code at GA, or write any commitment to Halo as decided.
 - Do not pad with filler sections, use emoji (unless asked), or render section numbers with the `§` glyph.
 - Do not deviate from `colors_and_type.css` tokens without an explicit reason in your reply.
