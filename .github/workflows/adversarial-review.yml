@@ -101,7 +101,7 @@ jobs:
         id: review
         if: steps.bump.outputs.skip != '1'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           DEEP: ${{ steps.depth.outputs.deep }}
         run: |
           set -euo pipefail
