@@ -39,7 +39,7 @@ Anything but `PREFLIGHT_OK` (including an API error) means **stop**: tell Kevin 
   | catalyst-shift | catalyst-shift-site |
   | catalyst-shift-plugins | business-ops (label `platform`) |
   | lbl-nextjs | lbl-nextjs |
-  | nourish-rep-enablement | nourish-rep-enablement |
+  | nourish-enablement | nourish-rep-enablement |
 
 - Skip anything labelled `blocked-external` or `trigger-gated`, anything assigned to someone other than Kevin (unassigned cards are fair game), and any card that isn't code in this repo (a call, an email, a decision).
 - No acceptance checklist? Draft one with `/spec`. Keep it to 3–8 lines checkable from the diff. Post it as a comment headed `Checklist drafted by Claude — edit if wrong`, then start.
@@ -52,7 +52,7 @@ gstack is the method in session, not a gate. Nothing merges or waits on it; only
 
 | Every card | When it fits | Not in /next |
 | -- | -- | -- |
-| `/review`, `/ship` | `/investigate` (bugs), `/qa` or `/qa-only` (anything with a UI), `/cso` (deep paths), `/careful` (risky edits, and always on deep paths), `/autoplan` (a new surface with real scope) | `/land-and-deploy` (auto-merge replaced it), the full plan-review chain on small cards |
+| `/review`, `/ship` (not in a fragment repo, §5) | `/investigate` (bugs), `/qa` or `/qa-only` (anything with a UI), `/cso` (deep paths), `/careful` (risky edits, and always on deep paths), `/autoplan` (a new surface with real scope) | `/land-and-deploy` (auto-merge replaced it), the full plan-review chain on small cards |
 
 If a gstack skill isn't installed in the session, get the same outcome another way (a subagent review, a scripted Playwright drive), say so in the PR body, and keep going. **A missing tool is never a reason for Blocked**, except for the §3 attack steps and `/careful` on deep paths, which can't be substituted either.
 
@@ -71,7 +71,7 @@ If a gstack skill isn't installed in the session, get the same outcome another w
 2. `scripts/codex-pass.sh adversarial` (the platform repo; elsewhere use `/codex` in adversarial mode)
 3. `/cso` if you touched deep paths
 
-These are canon, not method: the substitution rule in §2 doesn't cover them. Run the real tools. Each must finish cleanly and cover the whole current diff. If one is missing, errors, stops early (no auth, no quota) or returns only a partial report, the card goes to **Blocked** with the missing tool named, until the canon changes. For each finding: fix it, or add one line to the PR body saying why it isn't a problem. The attack has to cover what you push: if you edit after it ran (a finding fix, `/ship`'s version and CHANGELOG bump), run the §3 steps again on the changed diff before pushing. Run the tests the repo can run.
+These are canon, not method: the substitution rule in §2 doesn't cover them. Run the real tools. Each must finish cleanly and cover the whole current diff. If one is missing, errors, stops early (no auth, no quota) or returns only a partial report, the card goes to **Blocked** with the missing tool named, until the canon changes. For each finding: fix it, or add one line to the PR body saying why it isn't a problem. The attack has to cover what you push: if you edit after it ran (a finding fix; the version and CHANGELOG bump, or in a fragment repo the changelog fragment), run the §3 steps again on the changed diff before pushing. Run the tests the repo can run.
 
 ## 4. Forks: recommend, ask, keep going
 
@@ -91,10 +91,13 @@ If he doesn't answer, move the card to **Blocked** with the question as a commen
 
 ## 5. Ship
 
-- `/ship` handles version, CHANGELOG and the PR. Do the version and CHANGELOG bump before the last §3 pass, so the diff you push is the diff that was attacked. Title carries `[concept]` or `[harden]`. Body: what · why · checklist with each line ticked · what did not change · Decisions made.
+- **A fragment repo** is one whose fresh `origin/main` has a `changelog.d/` directory. There, the PR adds one new fragment in `changelog.d/`, named and formatted as `changelog.d/README.md` says (no README: match the fragments already there). It leaves `VERSION`, `CHANGELOG.md`, the project's own version (in `package.json` and its lockfile entry; dependency versions the card needs may change) and every other fragment untouched; the repo's `/release` assigns versions in a PR of its own. **Don't run `/ship`:** it writes the version bump, commits and pushes in one run, with no step to skip. Prepare every file change first: if the repo has its own open-PR command (`.claude/commands/open-pr.md`), follow its steps **up to, not including, the push** (in nourish that's the self-review, the migration renumber and the fragment), since those steps edit the diff. Then run the repo's full verify (`npm run verify` where it exists, since it holds the changelog check), the last §3 pass on the complete diff, and only then commit, push and open the PR (with that command's PR body, or `gh pr create`).
+- **A release card** in a fragment repo (its job is cutting the next version) runs the repo's `/release` the same way (up to the push, then the last §3 pass, then push) and adds no fragment. Its pre-open checks (in nourish, that no other release PR is open) run before the push. Its PR title is the one `/release` gives (in nourish, `[release] vX.Y.Z`), and its card closes with that version.
+- **Otherwise,** `/ship` handles version, CHANGELOG and the PR. Do the version and CHANGELOG bump before the last §3 pass, so the diff you push is the diff that was attacked.
+- The PR title carries `[concept]` or `[harden]` (a release card's carries what `/release` gives; any other PR in a fragment repo carries no version number). Body: what · why · checklist with each line ticked · what did not change · Decisions made.
 - `gh pr merge --auto --squash`. Move the card to **In Review** and comment the PR link.
 - **Don't wait for the merge.** Go back to step 0 for the next card.
-- When a PR from this session merges, close its card with version + PR number, and file anything that surfaced (a date, a dependency, or a deliverable) as a new card.
+- When a PR from this session merges, close its card with its PR number, plus its version only where the repo bumps per PR (in a fragment repo, only a release card), and file anything that surfaced (a date, a dependency, or a deliverable) as a new card.
 - When the `adversarial review` check fails, read the PR comment from that failed run: it must name the current head SHA and be posted after the run attempt started (`gh run view <run-id> --json startedAt`), because a re-run keeps the same SHA. If there's no such comment, treat the fail as findings you haven't seen, and read the job log. If it reports blocking findings, fix every one of them locally, re-run §3 on the result, and push **once**. Every push is a new paid review run. Notes in the comment are optional, not findings. If the fail is an infrastructure error with no findings (a timeout, an API error), don't change the code. Re-run the job with `gh run rerun <run-id> --failed`. If the token can't (`Resource not accessible by personal access token`; the agent token isn't allowed to, and don't widen it), push an empty commit (`git commit --allow-empty -m "retry adversarial review"`) to start a fresh review. A push of an unchanged SHA starts no new review. Every fail counts toward the three below, infrastructure ones included. **Three fails on one card** → card to Blocked with the findings pasted in, and move on.
 
 ## 6. Handoff
