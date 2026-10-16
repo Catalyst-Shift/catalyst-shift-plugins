@@ -2,7 +2,7 @@
 
 ## 0.4.2 — 2026-10-16
 
-- `/next`: in a repo that keeps changelog fragments (it has a `changelog.d/` directory), a PR writes its fragment in the format `changelog.d/README.md` gives and never edits `VERSION` or a version's entry in `CHANGELOG.md`; `/ship`'s bump is skipped and the repo's `/release` assigns versions. Repos without `changelog.d/` bump per PR as in 0.4.1. §3's re-attack rule names whichever of the two the repo uses, and a merged card closes with its PR number, plus its version only where the repo bumps per PR. Without this, `/next` in nourish-enablement (CAT-1160) would bump `VERSION` and fail its changelog check. (CAT-1163)
+- `/next`: in a fragment repo (fresh `origin/main` has `changelog.d/README.md`), a PR adds one new fragment in that README's format and leaves `VERSION`, `CHANGELOG.md`, version fields in `package.json` and lockfiles, and other fragments untouched. `/next` doesn't run `/ship` there, because `/ship` bumps, commits and pushes in one run; it runs the tests, commits, pushes and opens the PR itself. A release card runs the repo's `/release` instead. Other repos bump per PR through `/ship` as in 0.4.1. §3's re-attack rule names whichever of the two the repo uses, and a merged card closes with its PR number, plus its version only where the repo bumps per PR. The pickup table now names the repo `nourish-enablement` (its Linear project stays `nourish-rep-enablement`). Without this, `/next` in nourish-enablement (CAT-1160) would bump `VERSION` and fail its changelog check. (CAT-1163)
 
 ## 0.4.1 — 2026-09-29
 
