@@ -34,6 +34,8 @@ preflight && echo PREFLIGHT_OK || { echo PREFLIGHT_FAIL; false; }
 
 Anything but `PREFLIGHT_OK` (including an API error) means **stop**: tell the person running the loop that `main` doesn't enforce `adversarial review` for this identity (the check isn't required in an active ruleset, the ruleset lets this identity bypass it, or protection is set by classic branch protection, which this endpoint doesn't see), and start no card or merge. Auto-merge without the enforced check merges unreviewed code. If the repo also has its own merge-gate script (nourish: `node scripts/check-merge-gate.mjs`), run it as well; a non-zero exit from either means stop.
 
+**Open PRs.** On a repo whose ruleset requires up-to-date branches (lbl-nextjs), update this session's open PRs that are BEHIND with every other check green (§5).
+
 **Budget.** Estimate how much context this session has used. **Don't start a new card past ~450k tokens. At 650k, stop** at the next clean point (a pushed commit, or a PR opened) and hand off (§6). Keeping context under 650k keeps token costs down, and that matters more than finishing one more card.
 
 ## 1. Pick the card
