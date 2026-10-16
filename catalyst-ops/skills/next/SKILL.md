@@ -71,7 +71,7 @@ If a gstack skill isn't installed in the session, get the same outcome another w
 2. `scripts/codex-pass.sh adversarial` (the platform repo; elsewhere use `/codex` in adversarial mode)
 3. `/cso` if you touched deep paths
 
-These are canon, not method: the substitution rule in §2 doesn't cover them. Run the real tools. Each must finish cleanly and cover the whole current diff. If one is missing, errors, stops early (no auth, no quota) or returns only a partial report, the card goes to **Blocked** with the missing tool named, until the canon changes. For each finding: fix it, or add one line to the PR body saying why it isn't a problem. The attack has to cover what you push: if you edit after it ran (a finding fix, `/ship`'s version and CHANGELOG bump), run the §3 steps again on the changed diff before pushing. Run the tests the repo can run.
+These are canon, not method: the substitution rule in §2 doesn't cover them. Run the real tools. Each must finish cleanly and cover the whole current diff. If one is missing, errors, stops early (no auth, no quota) or returns only a partial report, the card goes to **Blocked** with the missing tool named, until the canon changes. For each finding: fix it, or add one line to the PR body saying why it isn't a problem. The attack has to cover what you push: if you edit after it ran (a finding fix; the version and CHANGELOG bump, or in a repo with `changelog.d/` the changelog fragment), run the §3 steps again on the changed diff before pushing. Run the tests the repo can run.
 
 ## 4. Forks: recommend, ask, keep going
 
@@ -91,10 +91,12 @@ If he doesn't answer, move the card to **Blocked** with the question as a commen
 
 ## 5. Ship
 
-- `/ship` handles version, CHANGELOG and the PR. Do the version and CHANGELOG bump before the last §3 pass, so the diff you push is the diff that was attacked. Title carries `[concept]` or `[harden]`. Body: what · why · checklist with each line ticked · what did not change · Decisions made.
+- **If the repo has a `changelog.d/` directory, it keeps changelog fragments:** write this PR's fragment there, named and formatted as `changelog.d/README.md` says. Don't edit `VERSION` or a version's entry in `CHANGELOG.md`, and skip `/ship`'s version and CHANGELOG step (or revert what it wrote before you commit); the repo's `/release` assigns versions in a PR of its own. Write the fragment before the last §3 pass.
+- **Otherwise,** `/ship` handles version, CHANGELOG and the PR. Do the version and CHANGELOG bump before the last §3 pass, so the diff you push is the diff that was attacked.
+- Title carries `[concept]` or `[harden]`. Body: what · why · checklist with each line ticked · what did not change · Decisions made.
 - `gh pr merge --auto --squash`. Move the card to **In Review** and comment the PR link.
 - **Don't wait for the merge.** Go back to step 0 for the next card.
-- When a PR from this session merges, close its card with version + PR number, and file anything that surfaced (a date, a dependency, or a deliverable) as a new card.
+- When a PR from this session merges, close its card with its PR number, plus the version where the repo bumps per PR (not where it keeps `changelog.d/` fragments), and file anything that surfaced (a date, a dependency, or a deliverable) as a new card.
 - When the `adversarial review` check fails, read the PR comment from that failed run: it must name the current head SHA and be posted after the run attempt started (`gh run view <run-id> --json startedAt`), because a re-run keeps the same SHA. If there's no such comment, treat the fail as findings you haven't seen, and read the job log. If it reports blocking findings, fix every one of them locally, re-run §3 on the result, and push **once**. Every push is a new paid review run. Notes in the comment are optional, not findings. If the fail is an infrastructure error with no findings (a timeout, an API error), don't change the code. Re-run the job with `gh run rerun <run-id> --failed`. If the token can't (`Resource not accessible by personal access token`; the agent token isn't allowed to, and don't widen it), push an empty commit (`git commit --allow-empty -m "retry adversarial review"`) to start a fresh review. A push of an unchanged SHA starts no new review. Every fail counts toward the three below, infrastructure ones included. **Three fails on one card** → card to Blocked with the findings pasted in, and move on.
 
 ## 6. Handoff
