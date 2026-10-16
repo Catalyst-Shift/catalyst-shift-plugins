@@ -2,9 +2,9 @@
 
 A Claude skill that generates branded Catalyst Shift documents — proposals, SOWs, discovery reports, sales decks, client deliverables, case studies, one-pagers, and internal docs — in HTML, PDF, PPTX, DOCX, or Markdown.
 
-Built for **Kevin and Lucas** (with Keith supporting the build internally). Same brand, same voice, same templates, every time.
+Built for the three co-founders — Kevin, Lucas and Keith. Same brand, same voice, same templates, every time.
 
-> **Strategy version:** v5.2 (canon 2026-06-30; amended 2026-07-03). If generated docs still say "vertical-first product-led firm," sell five modules à la carte, quote named tiers (Foundation / Growth / Full Stack) or public setup+MRR price lists, headline "QBR Automation," use the founder-named differentiator, or promise "keep working at no cost," your local copy is stale — see **Updating** below.
+> **Strategy version:** v6.0 (canon 2026-10-09). If generated docs still call Catalyst Shift a product company or "the operating layer for MSPs," print a "$2,500 assessment" or per-managed-client MRR, say "two co-founders" or "no consultative services," sell five modules à la carte, or promise "keep working at no cost," your local copy is stale — see **Updating** below.
 
 ---
 
@@ -12,11 +12,11 @@ Built for **Kevin and Lucas** (with Keith supporting the build internally). Same
 
 You ask Claude something like:
 
-> "Make a CS proposal for Acme MSP — leading with The Operator Brief, off the paid assessment. They're $1.8M revenue, 22 managed clients, ConnectWise + NinjaOne + HubSpot. Owner is drowning in client reviews and three clients are showing churn signals."
+> "Make a CS proposal for Acme Machining — Workplace Readiness. They're a 60-person DIB sub on commercial M365, migrating to GCC High, no Copilot yet, CMMC Level 2 coming up on their prime's contract. Fixed price is $X, care is $Y a month."
 
 Claude reads the skill, asks any missing questions in one bundle, and writes a full proposal into your working folder. Same for SOWs, discovery reports, decks, etc.
 
-The skill has the v5.2 brand voice, the locked glossary, the synthesis-first story, the platform pricing model (custom-managed, no public price list), the paid-assessment front door, the defined-deliverables guarantee, the template structures, and the visual system baked in. You provide the deal-specific content.
+The skill has the v6.0 positioning (a services firm with its own platform), the spine, the offers and doors, the DIB conditions (never claim CMMC compliance, never hold CUI), the locked glossary, the pricing rules (fixed scope, no public price, a care contract on every engagement), the defined-deliverables guarantee, the template structures, and the visual system baked in. You provide the deal-specific content.
 
 ---
 
@@ -24,9 +24,9 @@ The skill has the v5.2 brand voice, the locked glossary, the synthesis-first sto
 
 ```
 catalyst-shift-docs/
-├── SKILL.md                  # entry point Claude reads first (v5.2)
-├── BRAND.md                  # voice rules + locked glossary (v5.2)
-├── PRICING.md                # price-the-platform model, assessment, no public list (v5.2)
+├── SKILL.md                  # entry point Claude reads first (v6.0)
+├── BRAND.md                  # positioning, offers, doors, voice, glossary (v6.0)
+├── PRICING.md                # fixed-scope pricing, care contract, no public price (v6.0)
 ├── INTAKE.md                 # questions to ask when context is thin
 ├── README.md                 # this file
 ├── assets/
@@ -90,11 +90,11 @@ Drop the `catalyst-shift-docs` folder in. Restart Claude Desktop.
 Ask Claude in plain English. The skill description fires on phrases like:
 
 - "Write a Catalyst Shift proposal for [client]…"
-- "Draft an SOW for [client] — off the assessment, setup + per-client MRR, start May 15."
-- "Make a CS discovery report from this listen-call transcript…"
-- "Build a 10-slide CS sales deck for an IBPI peer-group room."
-- "Generate a one-pager on **The Operator Brief (M.01)**."
-- "One-pager on the early-adopter program."
+- "Draft an SOW for [client] — fixed price $X, care $Y/mo, start May 15."
+- "Make a CS discovery report from this call transcript…"
+- "Build a 10-slide CS deck for a DIB prime's supplier group."
+- "Generate a one-pager on **Workplace Readiness**."
+- "One-pager for CPA firms."
 - "I need a case study writeup for [client] — here are the outcomes…"
 - "Format this as a CS client deliverable."
 - "Internal doc: co-founder sync notes from today."
@@ -103,35 +103,29 @@ Or, vaguer:
 
 - "Make a CS proposal." → Claude will ask the intake questions in `INTAKE.md`.
 
-You can also paste a listen-call transcript, an assessment, or a prior doc and Claude will use it. **If the prior doc is v4.x/v3.x**, Claude will rewrite to v5.2 (platform-priced synthesis layer, use cases, paid-assessment front door, two co-founders).
+You can also paste a call transcript, an assessment, or a prior doc and Claude will use it. **If the prior doc is v5.2 or older**, Claude will rewrite it to v6.0.
 
 ---
 
-## v5.2 quick reference
+## v6.0 quick reference
 
-**What we are:** a **product company.** The product is **Catalyst OS** — the business-layer operating system for an MSP, built on a **synthesis core** that makes the stack (CRM + PSA + RMM) talk to itself and *acts* on it. Delivered managed until proven across ~5 customers, then graduates toward software (the Palantir pattern). **We sell the platform, not modules à la carte.**
+**What we are:** a **services firm with its own platform** — a Microsoft 365 and Copilot-focused services firm, not an MSP. We sell outcomes, deliver them with our own tooling (Catalyst OS), and are accountable for the result in writing.
 
-The five **use cases** (a module is a use case — a view over the synthesis spine):
+**Primary offer:** **Workplace Readiness** — Copilot and AI-readiness assessment → Modernize → Run. Its scope and price aren't set in canon yet; the teammate supplies them.
 
-| ID | Use case |
-|---|---|
-| **M.01** | The Operator Brief *(renamed QBR output — the default first use case)* |
-| **M.02** | Churn Early Warning |
-| **M.03** | Proposal Generation |
-| **M.04** | Pipeline Visibility |
-| **M.05** | Authority Engine |
+**The spine:** Connect · Normalize · Synthesize · Act · Keep. Every engagement is a stop on it.
 
-**Pricing:** price the platform, deliver custom. Per managed client × use-case depth, with caps. Managed now: **paid assessment ($2,500, credited) → custom SOW → setup (credited) → per-client MRR.** **No public price list.** SaaS tiers (Intelligence / Action / Operator-Owned) are illustrative and future-only. Managed floor = Action. See `PRICING.md`.
+**Pitch:** the org-brain problem, with M365 Copilot as the vehicle.
 
-**Front door:** the paid assessment builds the custom proposal; the free self-serve Scorecard is lead capture ahead of it. No consultative/advisory services.
+**Doors:** DIB first, wherever they are (commercial, migrating, or GCC / GCC High). Law, CPA, actuarial and commercial M365 open. MSP on Halo is background only (the M.01–M.05 use cases live there).
 
-**Team:** two co-founders — Kevin (product/eng) and Lucas (revenue, client-facing). Keith supports the build internally, not presented externally.
+**DIB conditions:** never claim to make anyone CMMC compliant; never take custody of CUI.
+
+**Pricing:** fixed scope, fixed price, priced on outcome; a care contract attaches at signature. No public price list on any surface, including the assessment. Every price comes from the teammate.
+
+**Team:** three co-founders — Kevin (Delivery & Tooling), Lucas (Revenue), Keith (COO; acceptance pending on CAT-443).
 
 **Guarantee:** defined deliverables **in writing** — never "keep working at no cost."
-
-Plus the **early-adopter program**, **IBPI member** terms (15% setup + 10% Y1 MRR + 5% rebate), and **ASCII Spark**. See `PRICING.md`.
-
----
 
 ## Output formats
 
@@ -151,21 +145,22 @@ The script README is at `scripts/README.md`.
 
 **Will:**
 
-- Lead with **synthesis** and outcomes; use locked glossary phrases verbatim ("operating layer," "your stack, finally talking to itself," "actioned intelligence," "operator-owned intelligence," "The Operator Brief," "in writing," "most engagements continue," "Palantir, for the MSP business layer").
-- Sell the **platform**, framing the five as use cases over one synthesis spine.
-- Price custom off the **paid assessment** — no public price list, no fixed tiers.
-- Ask in one bundled message for anything it doesn't have (revenue band, managed-client count, stack, decision-maker, lead use case, early-adopter/IBPI status).
+- Lead with outcomes and accountability; use locked glossary phrases verbatim.
+- Put every engagement on the spine and attach the care contract.
+- Write to the door — DIB, law, CPA, actuarial, commercial M365, or (when asked) MSP.
+- Use only the price the teammate gives for this client — never a band or a list.
+- Ask in one bundled message for anything it doesn't have (door, size, tenant, decision-maker, offer, price).
 - Format outputs to match the live site's type, color, and editorial structure.
-- Replace v4.x/v3.x language in any prior doc you paste in.
+- Replace v5.2 and older language in any prior doc you paste in.
 
 **Won't:**
 
-- Fabricate testimonials, client logos, or results. The synthesis core is demoable and delivered managed until proven across ~5 customers — Claude says so via the founding-cohort narrative.
-- Name **ScalePad**, or write "AI-powered" / lead with "AI" in customer-facing headlines.
-- Sell use cases à la carte, publish a price list, or quote the illustrative SaaS tiers as a managed price.
-- Use the retired founder-named differentiator, present Keith externally, or introduce a third co-founder.
-- Use the "keep working at no cost" guarantee, or headline "QBR Automation."
-- Describe CS as a "growth strategy firm" or "vertical-first product-led firm" — it's a product company.
+- Claim to make anyone CMMC compliant, or imply custody of CUI.
+- Fabricate testimonials, client logos, results, prices, or offer scope canon hasn't set.
+- Name **ScalePad**, write "AI-powered," lead with "AI," or pitch "general AI services."
+- Publish a price list, band or rate card; write an advisory-only engagement.
+- Call Catalyst Shift an MSP or a product company, say "two co-founders," or use the retired founder-named differentiator.
+- Use the "keep working at no cost" guarantee, or the M.01–M.05 use cases outside an MSP doc.
 - Render section numbers with the `§` glyph, pad with filler, or use emoji.
 - Override your judgment — if you tell it to change copy, it changes copy.
 
@@ -196,11 +191,11 @@ Almost never a browser cache issue. Check in this order:
 
 ## Built on
 
-The same design system as the live site (v2 tokens, v5.2 content). Hallmarks:
+The same design system as the live site (v2 tokens, v6.0 content). Hallmarks:
 
 - **Tokens** in `assets/colors_and_type.css` — graphite surfaces, signal teal, accent violet, warm coral.
 - **Type** General Sans (display) · DM Sans (body) · IBM Plex Mono (UI/labels), all self-hosted in `assets/fonts/`.
-- **Document grammar** — sticky nav, hero with grid + glow, cover-strip, plain numbered section rails (`01 / Title`, no glyph), module-frame product chrome with status dots, defined-deliverables guarantee block, use-case IDs (M.01–M.05) used as in-text mono anchors.
+- **Document grammar** — sticky nav, hero with grid + glow, cover-strip, plain numbered section rails (`01 / Title`, no glyph), module-frame product chrome with status dots, defined-deliverables guarantee block, a five-row section rail (the spine; M.01–M.05 in MSP docs).
 - **Dark-only, screen-first.** All templates render dark on screen and invert to clean white when printed via Cmd/Ctrl+P. There is no `-light` variant.
 
 v1 token names (`--gold`, `--teal`, `--action`, `--terracotta`) remain as aliases inside `colors_and_type.css` so anything written against the old palette keeps rendering. If the live site evolves, mirror the change here.

@@ -118,7 +118,7 @@
       <div class="cell"><div class="label">Issued</div><div class="value">{{ISSUE_DATE}}<small>Doc · {{DOC_NUMBER}}</small></div></div>
       <div class="cell"><div class="label">For</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
       <div class="cell"><div class="label">Inputs</div><div class="value">{{N_STAKEHOLDERS}} stakeholders<small>{{N_HOURS}}h · {{N_DOCS}} docs reviewed</small></div></div>
-      <div class="cell"><div class="label">Recommends</div><div class="value">Catalyst OS<small>Start: {{LEAD_USE_CASE_NAME}}</small></div></div>
+      <div class="cell"><div class="label">Recommends</div><div class="value">{{OFFER_NAME}}<small>Start: {{FIRST_SPINE_STOP}}</small></div></div>
     </div>
   </div>
 </section>
@@ -215,7 +215,7 @@
     </aside>
     <div class="s-body">
       <h2 class="s-title">Where the leaks are.</h2>
-      <p>A snapshot of {{CLIENT_NAME}}'s operating layer today, scored against the dimensions a healthy revenue engine needs.</p>
+      <p>A snapshot of how {{CLIENT_NAME}} runs today, scored against the dimensions that matter for this engagement.</p>
 
       <div class="module-frame" style="margin-top: 16px;">
         <div class="chrome">
@@ -252,24 +252,27 @@
       <div class="s-num">05</div>
       <div class="s-eyebrow">Path forward</div>
       <div class="module-rail">
-        <div class="row active"><span class="id">OS</span><span>Catalyst OS · the platform</span></div>
-        <div class="row"><span class="id m01">M.01</span><span>The Operator Brief</span></div>
-        <div class="row"><span class="id m02">M.02</span><span>Churn Early Warning</span></div>
-        <div class="row"><span class="id m03">M.03</span><span>Proposal Generation</span></div>
-        <div class="row"><span class="id m04">M.04</span><span>Pipeline Visibility</span></div>
-        <div class="row"><span class="id m05">M.05</span><span>Authority Engine</span></div>
+        <!-- The spine (Strategy v6.0 §2). Mark the stops this engagement covers with class="row active".
+             MSP-lane doc only: swap these five rows for M.01 The Operator Brief · M.02 Churn Early Warning ·
+             M.03 Proposal Generation · M.04 Pipeline Visibility · M.05 Authority Engine (see BRAND.md). -->
+        <div class="row active"><span class="id">CS</span><span>{{OFFER_NAME}}</span></div>
+        <div class="row"><span class="id m01">01</span><span>Connect</span></div>
+        <div class="row"><span class="id m02">02</span><span>Normalize</span></div>
+        <div class="row"><span class="id m03">03</span><span>Synthesize</span></div>
+        <div class="row"><span class="id m04">04</span><span>Act</span></div>
+        <div class="row"><span class="id m05">05</span><span>Keep</span></div>
       </div>
     </aside>
     <div class="s-body">
       <h2 class="s-title">What we'd recommend.</h2>
-      <p>Based on the diagnosis above, the right starting move is to install <strong>Catalyst OS</strong>, beginning with <strong>{{LEAD_USE_CASE_NAME}}</strong>: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}.</p>
+      <p>Based on the diagnosis above, the right starting move is <strong>{{OFFER_NAME}}</strong>: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}.</p>
 
       <p class="pull">
-        <span class="a">Your stack already holds the answer.</span>
-        <span class="b">We make it talk — and then we act on it.</span>
+        <span class="a">Your systems already hold the answer.</span>
+        <span class="b">We connect them, make sense of them, and act on it.</span>
       </p>
 
-      <p>The full proposal — scope, deliverables, custom pricing (one-time setup, credited + per-client MRR, from your paid assessment), outcomes, and the deliverables we commit to in writing — follows this report under separate cover.</p>
+      <p>The full proposal — scope, deliverables, the fixed price for that scope and the monthly care contract, outcomes, and the deliverables we commit to in writing — follows this report under separate cover.</p>
     </div>
   </div>
 </section>
