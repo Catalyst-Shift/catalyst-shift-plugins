@@ -179,7 +179,7 @@ status() {
   echo "Open factory PRs (no new pickups at $WAITING_CAP):"
   while read -r dir branch key; do
     pr=$(cd "$dir" && gh pr list --head "$branch" --state open --json number,url,headRefOid,body \
-      --jq '.[0] | select(.) | "#\(.number) \(.url) " + (if (.body | test("(?m)^Reviewed: " + .headRefOid)) then "stamped" else "not stamped" end)' </dev/null 2>/dev/null) || continue
+      --jq '.[0] | select(.) | .headRefOid as $sha | "#\(.number) \(.url) " + (if ((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b")) then "stamped" else "not stamped" end)' </dev/null 2>/dev/null) || continue
     [ -n "$pr" ] && echo "  ${key:-$(cardkey "$branch")}  $pr"
   done < <(launched)
   if [ -e "$STATE/paused" ]; then echo "Paused: yes (rm $STATE/paused to resume)"; else echo "Paused: no"; fi
