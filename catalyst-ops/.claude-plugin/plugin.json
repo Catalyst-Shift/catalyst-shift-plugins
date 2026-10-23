@@ -1,0 +1,11 @@
+{
+  "name": "catalyst-ops",
+  "version": "0.6.1",
+  "description": "How Catalyst Shift operates (the Claude dev factory, catalyst-brain strategy/2026-10-23-claude-dev-factory.md). Three skills: next (build one card by hand — the named card or the top Ready For Factory card → In Progress → branch from fresh origin/main → gstack (/investigate, /review, /cso on deep paths, /qa on the preview) → /ship opens a PR that carries the evidence → a fresh session (not the builder) runs /review (+ /cso on deep paths) and writes the Reviewed: <head sha> stamp that the review stamp CI check enforces; never auto-merges or merges, Blocked on hard stops; the factory's dispatcher does normal pickup), ways-of-working (three homes + the build method: card-as-spec, the Ready For Factory dispatcher, gstack, people merge by stage, review by risk, recommend-ask-proceed with hard stops), and decision-governance (proposed-vs-decided labelling, ratification rules). Behavior only; canon content stays in the strategy doc and the canon note.",
+  "author": {
+    "name": "Catalyst Shift",
+    "email": "kevin@catalystshift.ai"
+  },
+  "homepage": "https://github.com/Catalyst-Shift/catalyst-shift-plugins",
+  "repository": "https://github.com/Catalyst-Shift/catalyst-shift-plugins"
+}

@@ -1,0 +1,8 @@
+[Unit]
+Description=Claude factory dispatcher: start sessions for Ready For Factory cards and review their PRs
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/share/mise/shims:%h/.local/bin:/usr/local/bin:/usr/bin
+ExecStart=%h/.local/bin/claude-factory-dispatch

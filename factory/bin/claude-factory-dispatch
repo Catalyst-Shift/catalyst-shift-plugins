@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# Claude factory dispatcher (CAT-1298; canon: catalyst-brain
+# strategy/2026-10-23-claude-dev-factory.md). Runs every 5 minutes from
+# claude-factory.timer. Each tick:
+#   1. removes finished factory worktrees (builder and reviewer) once nothing in
+#      them would be lost;
+#   2. starts a fresh reviewer session for each finished builder whose open PR
+#      has no `Reviewed: <head sha>` line yet (one reviewer per head sha;
+#      ~/.local/state/claude-factory/reviewed/cat-NNN-<sha> records it);
+#   3. fills free slots with Ready For Factory cards from Linear, one
+#      unattended Claude session per card in its own worktree.
+# Everything runs on the Claude subscription (claude.ai login), never an API key.
+#
+#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>")
+#   pause:  touch ~/.local/state/claude-factory/paused
+#   watch:  systemctl --user list-units 'factory-*'; logs in ~/.local/state/claude-factory/
+set -euo pipefail
+
+CONF=${CLAUDE_FACTORY_CONF:-$HOME/.config/claude-factory/repos.conf}
+# At most this many factory sessions (builders + reviewers) run at once.
+CAP=${CLAUDE_FACTORY_CAP:-2}
+# No new pickups while this many factory PRs are open and waiting on review (strategy v6.4 §4).
+WAITING_CAP=${CLAUDE_FACTORY_WAITING_CAP:-3}
+STATE=$HOME/.local/state/claude-factory
+LINEAR=mcp__claude_ai_Linear
+HOST=${HOSTNAME:-$(uname -n)}
+
+# Subscription only: never let an API key in the environment turn this into paid usage.
+unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
+
+CLAUDE=${CLAUDE_BIN:-$(command -v claude)} || { echo "claude not found on PATH (or set CLAUDE_BIN)" >&2; exit 1; }
+[ -f "$CONF" ] || { echo "no config at $CONF (see repos.conf.example)" >&2; exit 1; }
+
+mkdir -p "$STATE" "$STATE/reviewed"
+exec 9>"$STATE/lock"
+flock -n 9 || exit 0
+
+running() { systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-cat-*' 'factory-review-cat-*' | wc -l; }
+active() { systemctl --user is-active --quiet "$1.service"; }
+cardkey() { printf '%s' "$1" | grep -oiE 'cat-[0-9]+' | head -1 | tr '[:upper:]' '[:lower:]'; }
+
+# Branches this dispatcher launched. LAUNCHED lines are "<repo folder> <branch> [<card key>]"
+# (older lines have no key; it is read from the branch name).
+LAUNCHED=$STATE/launched
+launched() {
+  [ -f "$LAUNCHED" ] || return 0
+  awk 'NF >= 2 && !seen[$1 " " $2]++' "$LAUNCHED"
+}
+
+# Open PRs from branches this dispatcher launched.
+waiting() {
+  local n=0 dir branch _
+  while read -r dir branch _; do
+    if [ "$(cd "$dir" && gh pr list --head "$branch" --state open --json number --jq length </dev/null 2>/dev/null || echo 0)" != "0" ]; then
+      n=$((n + 1))
+    fi
+  done < <(launched)
+  echo "$n"
+}
+
+repos() { grep -vE '^[[:space:]]*(#|$)' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
+
+# A finished session's worktree goes once nothing in it would be lost. Each
+# worktree has the name of the unit that uses it: factory-cat-NNN (builder) or
+# factory-review-cat-NNN (reviewer).
+cleanup() {
+  local dir=$1 wt name
+  for wt in "$dir"/.claude/worktrees/factory-cat-* "$dir"/.claude/worktrees/factory-review-cat-*; do
+    [ -d "$wt" ] || continue
+    name=$(basename "$wt")
+    active "$name" && continue
+    if [ -z "$(git -C "$wt" status --porcelain)" ] && [ -z "$(git -C "$wt" rev-list --max-count=1 HEAD --not --remotes)" ]; then
+      git -C "$dir" worktree remove "$wt" && echo "removed finished worktree $wt"
+    fi
+  done
+}
+
+pick() {
+  local project=$1
+  (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
+    --allowedTools="${LINEAR}__list_issues,${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment" \
+    "In Linear, list issues in project '$project' whose status is 'Ready For Factory'. If there are none, print exactly NONE and stop.
+Otherwise take one: highest priority first (Urgent, High, Medium, Low, then no priority), oldest first within a priority. Update that issue: status 'In Progress', assignee 'me'. Add a comment on it: 'Picked up by the factory dispatcher on $HOST at $(date -Is). An unattended Claude session is working on it.'
+Then print exactly one final line: PICK <identifier> <gitBranchName>" </dev/null 2>&1) | tee "$STATE/pick-$project.log" |
+    grep -oE '^PICK CAT-[0-9]+ [A-Za-z0-9._/-]+$' | tail -1 || true
+}
+
+# Starts a transient user unit running one unattended Claude session.
+run_unit() {
+  local unit=$1 dir=$2 log=$3
+  shift 3
+  systemd-run --user --quiet --unit="$unit" --collect \
+    --working-directory="$dir" \
+    --setenv=PATH="$PATH" \
+    --property=UnsetEnvironment="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN" \
+    --property=StandardOutput="append:$log" --property=StandardError="append:$log" \
+    "$CLAUDE" "$@" </dev/null
+}
+
+launch() {
+  local dir=$1 id=$2 branch=$3 key
+  key=$(cardkey "$id")
+  run_unit "factory-$key" "$dir" "$STATE/$key.log" \
+    -p --permission-mode auto -w "factory-$key" --output-format text \
+    "You are an unattended factory session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
+
+Card: $id in Linear. It is already In Progress and assigned to the person who runs this machine. Branch: $branch
+
+1. You start in a fresh git worktree. Put it on the card's branch first: if scripts/session.sh supports --here, run: scripts/session.sh --here $branch
+   Otherwise: git fetch origin, then git switch --no-track -c $branch origin/main (or git switch --track -c $branch origin/$branch if that branch is already pushed), and set up .env.local and dependencies the way this repo's CLAUDE.md describes.
+2. Read the card and its comments, then follow this repo's CLAUDE.md for how to build, test, review and open the PR.
+3. Rollout stage 1: people merge everything. Open the PR, but do not turn on auto-merge and do not merge, whatever CLAUDE.md says about auto-merge.
+4. A separate reviewer session, started by the dispatcher after you finish, reviews the PR and stamps it. Do not write a 'Reviewed:' line in the PR body yourself.
+5. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). Do none of these. Also stop if the card is too unclear to build without guessing at a product decision. In either case comment on the card saying exactly what you need, move it to Blocked, and end. Smaller forks: pick a recommendation and record it under Decisions made in the PR body.
+6. Finish with a comment on the card: the PR link, what you ran, and anything a reviewer should look at first."
+  echo "$dir $branch $key" >>"$LAUNCHED"
+  echo "started $id in $dir (unit factory-$key, log $STATE/$key.log)"
+}
+
+# Reviewer for one PR: a fresh session in a fresh worktree, detached at the PR head.
+review() {
+  local dir=$1 branch=$2 key=$3 number=$4 sha=$5 id wt
+  id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
+  wt=$dir/.claude/worktrees/factory-review-$key
+  if [ -e "$wt" ]; then
+    echo "$id: PR #$number needs a review, but $wt is left over with unpushed work; not starting one"
+    return 0
+  fi
+  git -C "$dir" fetch --quiet origin "$branch" </dev/null
+  git -C "$dir" worktree add --quiet --detach "$wt" "$sha" </dev/null
+  run_unit "factory-review-$key" "$wt" "$STATE/review-$key.log" \
+    -p --permission-mode auto --output-format text \
+    "You are an unattended factory reviewer on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
+
+You did not write this code. Another session built card $id and opened PR #$number on branch $branch. Your job is to review it as a fresh pair of eyes and stamp it.
+
+1. You are in a fresh git worktree, detached at the PR head $sha. Set up .env.local and dependencies the way this repo's CLAUDE.md describes if the checks need them. Read the card and its comments, and the PR (gh pr view $number).
+2. Run gstack /review on the PR diff against its base branch. If the diff touches any path listed in .github/CODEOWNERS (the repo's deep paths), also run gstack /cso.
+3. For each finding: fix it and push to the PR branch (commit here, then git push origin HEAD:$branch), or answer it in a PR comment saying why it stays. Run what CI runs before each push.
+4. When done, put exactly one stamp line in the PR body. Read the body with gh pr view $number --json body --jq .body, remove any existing line starting with 'Reviewed:', add this line, and write it back with gh pr edit $number --body-file <file>:
+   Reviewed: <full 40-character head sha after your own pushes, from git rev-parse HEAD once pushed> — /review
+   (write '— /review, /cso' if you ran /cso). Check that the sha equals gh pr view $number --json headRefOid --jq .headRefOid.
+5. Never merge the PR and never turn on auto-merge.
+6. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). If a finding can only be fixed by one of these, do not do it: comment on the card and the PR saying exactly what is needed, move the card to Blocked in Linear, do not stamp the PR, and end.
+7. Finish with a comment on the card: what you ran, what you fixed, what you answered, and the stamp."
+  date -Is >"$STATE/reviewed/$key-$sha"
+  echo "started review of $id PR #$number at $sha in $dir (unit factory-review-$key, log $STATE/review-$key.log)"
+}
+
+# Start a reviewer for each finished builder whose open PR head has no stamp yet.
+reviews() {
+  local dir branch key pr number sha body
+  while read -r dir branch key; do
+    [ "$(running)" -lt "$CAP" ] || return 0
+    key=${key:-$(cardkey "$branch")}
+    [ -n "$key" ] || continue
+    active "factory-$key" && continue
+    active "factory-review-$key" && continue
+    pr=$(cd "$dir" && gh pr list --head "$branch" --state open --json number,headRefOid --jq '.[0] | select(.) | "\(.number) \(.headRefOid)"' </dev/null 2>/dev/null) || continue
+    [ -n "$pr" ] || continue
+    read -r number sha <<<"$pr"
+    body=$(cd "$dir" && gh pr view "$number" --json body --jq .body </dev/null 2>/dev/null) || continue
+    grep -qE "^Reviewed: $sha\b" <<<"$body" && continue
+    # One reviewer per head sha. If it ran and left no stamp, a person looks.
+    [ -e "$STATE/reviewed/$key-$sha" ] && continue
+    review "$dir" "$branch" "$key" "$number" "$sha"
+  done < <(launched)
+}
+
+while read -r dir project; do cleanup "$dir"; done < <(repos)
+
+if [ -e "$STATE/paused" ]; then
+  echo "paused ($STATE/paused exists)"
+  exit 0
+fi
+
+reviews
+
+waiting_now=$(waiting)
+if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
+  echo "$waiting_now factory PRs waiting on review (cap $WAITING_CAP); no new pickups"
+  exit 0
+fi
+
+while read -r dir project; do
+  [ "$(running)" -lt "$CAP" ] || break
+  line=$(pick "$project")
+  [ -n "$line" ] || continue
+  read -r _ id branch <<<"$line"
+  launch "$dir" "$id" "$branch"
+done < <(repos)

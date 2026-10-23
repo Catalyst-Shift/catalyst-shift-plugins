@@ -1,0 +1,11 @@
+# Deep paths only (CAT-1243, strategy-v6.4). Mirrors scripts/protected-paths.mjs.
+# No catch-all owner: only a PR touching one of these needs a code-owner approval.
+/.github/                                 @kkreative @keithcatalyst
+CLAUDE.md                                 @kkreative @keithcatalyst
+**/.claude-plugin/                        @kkreative @keithcatalyst
+**/hooks/                                 @kkreative @keithcatalyst
+/catalyst-ops/skills/ways-of-working/     @kkreative @keithcatalyst
+/catalyst-ops/skills/next/                @kkreative @keithcatalyst
+/scripts/protected-paths*                 @kkreative @keithcatalyst
+/tests/protected-paths*                   @kkreative @keithcatalyst
+**/.env*                                  @kkreative @keithcatalyst
