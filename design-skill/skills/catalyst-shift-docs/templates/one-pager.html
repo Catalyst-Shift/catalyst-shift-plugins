@@ -1,0 +1,167 @@
+<!doctype html>
+<!--
+  Catalyst Shift — One-pager Template (site-fidelity, dark, screen-first)
+  ============================================================
+  USAGE FOR CLAUDE:
+    1. Single-page sales/leave-behind document. Fits on one printed page.
+    2. Replace every {{PLACEHOLDER}}. Do not invent figures.
+    3. The one-pager is the lightest touch — no full sections, just hero +
+       three signals + one outcomes mini-table + one CTA. Keep it tight.
+    4. Print via Cmd/Ctrl+P — print rules in doc-shell.css invert the canvas.
+  ============================================================
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>One-pager — Catalyst Shift</title>
+<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="stylesheet" href="../assets/colors_and_type.css">
+<link rel="stylesheet" href="../assets/doc-shell.css">
+<style>
+  /* one-pager: tighter hero, single body section, no sticky rail */
+  .hero { padding: 56px var(--doc-gutter) 48px; }
+  h1.doc { font-size: clamp(40px, 5vw, 64px); }
+  .signals {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    max-width: 980px; margin: 0;
+  }
+  @media (max-width: 720px) { .signals { grid-template-columns: 1fr; } }
+  .signal-card {
+    border: 1px solid var(--border); border-radius: var(--r-3);
+    background: var(--surface); padding: 22px 22px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .signal-card .id {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+  }
+  .signal-card h3 {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 19px; line-height: 1.2; letter-spacing: -0.02em;
+    color: var(--text); margin: 0;
+  }
+  .signal-card p {
+    font-size: 14.5px; line-height: 1.55; color: var(--text-dim); margin: 0;
+  }
+  .cta-bar {
+    display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center;
+    margin-top: 32px; padding: 24px 28px;
+    background: linear-gradient(180deg, var(--surface-hi), var(--surface));
+    border: 1px solid var(--signal-soft); border-radius: var(--r-4);
+    box-shadow: 0 0 80px -30px var(--signal-glow);
+  }
+  .cta-bar .copy h3 {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 22px; letter-spacing: -0.02em; color: var(--text);
+    margin: 0 0 4px;
+  }
+  .cta-bar .copy p { font-size: 14.5px; color: var(--text-dim); margin: 0; }
+  .cta-bar .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 42px; padding: 0 20px;
+    background: var(--signal); color: var(--signal-ink);
+    border-radius: var(--r-2); text-decoration: none;
+    font-family: var(--font-body); font-weight: 600; font-size: 14px;
+    white-space: nowrap;
+  }
+  @media print {
+    .signals { grid-template-columns: repeat(3, 1fr) !important; gap: 12px !important; }
+    .signal-card { page-break-inside: avoid; }
+    .cta-bar { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="lockup" href="#">
+      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        
+        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
+        <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
+        <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
+      </svg>
+      <span class="wordmark">Catalyst<span class="sh">Shift</span></span>
+    </a>
+    <div class="nav-meta">
+      <span>One-pager</span>
+      <span>{{ISSUE_DATE}}</span>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-inner">
+    <div class="pill"><span class="badge">Catalyst Shift</span></div>
+    <div class="doc-kicker">For founder-led {{ICP_SHORT}}</div>
+    <h1 class="doc">
+      {{ONE_LINE_VALUE_PROP}}<br>
+      <span class="subline">{{SUPPORTING_LINE}}</span>
+    </h1>
+    <p class="lede">{{2_SENTENCE_LEDE_DESCRIBING_WHO_ITS_FOR_AND_WHAT_GETS_INSTALLED}}</p>
+  </div>
+</section>
+
+<section class="s">
+  <div class="s-inner">
+    <div class="signals">
+      <div class="signal-card">
+        <span class="id">01 · Synthesize</span>
+        <h3>{{SIGNAL_1_HEADLINE}}</h3>
+        <p>{{SIGNAL_1_BODY}}</p>
+      </div>
+      <div class="signal-card">
+        <span class="id">02 · Act</span>
+        <h3>{{SIGNAL_2_HEADLINE}}</h3>
+        <p>{{SIGNAL_2_BODY}}</p>
+      </div>
+      <div class="signal-card">
+        <span class="id">03 · Keep</span>
+        <h3>{{SIGNAL_3_HEADLINE}}</h3>
+        <p>{{SIGNAL_3_BODY}}</p>
+      </div>
+    </div>
+
+    <div class="module-frame" style="margin-top: 48px; max-width: 980px;">
+      <div class="chrome">
+        <span class="dots"><span></span><span></span><span></span></span>
+        <span class="crumb">catalyst&nbsp;os · proof</span>
+        <span class="right">M.PROOF</span>
+      </div>
+      <div class="data-toolbar">
+        <span class="module-id">M.PROOF — RECENT</span>
+        <span class="title">What we've installed</span>
+        <span class="meta">last 12 months</span>
+      </div>
+      <table class="outcomes">
+        <thead><tr><th>Engagement</th><th>Status</th><th>Result</th><th>In</th></tr></thead>
+        <tbody>
+          <tr><td class="outcome">{{PROOF_1_CLIENT}}</td><td><span class="dot positive">delivered</span></td><td class="metric">{{PROOF_1_RESULT}}</td><td class="deadline">{{PROOF_1_DURATION}}</td></tr>
+          <tr><td class="outcome">{{PROOF_2_CLIENT}}</td><td><span class="dot positive">delivered</span></td><td class="metric">{{PROOF_2_RESULT}}</td><td class="deadline">{{PROOF_2_DURATION}}</td></tr>
+          <tr><td class="outcome">{{PROOF_3_CLIENT}}</td><td><span class="dot signal">in flight</span></td><td class="metric">{{PROOF_3_RESULT}}</td><td class="deadline">{{PROOF_3_DURATION}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="cta-bar">
+      <div class="copy">
+        <h3>Want a 30-minute listen?</h3>
+        <p>We'll walk through how your business runs today, show you what we would deliver, and tell you whether we're the right fit. No deck, no pitch.</p>
+      </div>
+      <a class="btn" href="mailto:{{CS_CONTACT_EMAIL}}">Book a listen →</a>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="inner">
+    <span>Catalyst Shift · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
+    <span>{{ISSUE_DATE}}</span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Claude Remote Control for one repo. The instance is the repo's folder name
+# under ~/Projects:  systemctl --user enable --now claude-rc@lbl-nextjs.service
+[Unit]
+Description=Claude Remote Control for %i
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/%i
+Environment=PATH=%h/.local/share/mise/shims:%h/.local/bin:/usr/local/bin:/usr/bin
+UnsetEnvironment=ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
+ExecStart=/usr/bin/env claude remote-control --spawn worktree
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

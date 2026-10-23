@@ -1,0 +1,10 @@
+# Claude factory: one line per repo the dispatcher picks cards for.
+#   <repo folder> <Linear project>
+# The folder is a git clone (~ is allowed). The project is the Linear project
+# name whose Ready For Factory cards belong to that repo. Every line is
+# commented out here on purpose: an uncommented line means this machine starts
+# claiming that project's cards, so add only the repos you run.
+#
+# ~/Projects/catalyst-shift catalyst-shift-site
+# ~/Projects/lbl-nextjs lbl-nextjs
+# ~/Projects/nourish-enablement nourish-rep-enablement

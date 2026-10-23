@@ -1,0 +1,39 @@
+# review stamp (CAT-1299). Passes only when the PR body has a line
+#   Reviewed: <40-char head sha> — <what ran>
+# naming the PR's current head commit, so a new push needs a new review.
+# No model, no checkout, no secrets beyond GITHUB_TOKEN. The body is passed
+# through env, never pasted into the script.
+name: review stamp
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  review-stamp:
+    name: review stamp
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check the stamp names the head commit
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          if [ "$AUTHOR" = "dependabot[bot]" ]; then
+            echo "::notice::Dependabot PR: no review stamp needed."; exit 0
+          fi
+          stamps=$(printf '%s\n' "$BODY" | tr -d '\r' | sed -nE 's/^Reviewed: ([0-9a-f]{40})([^0-9A-Za-z_].*)?$/\1/p')
+          if printf '%s\n' "$stamps" | grep -x "$HEAD_SHA" >/dev/null; then
+            echo "Reviewed at head $HEAD_SHA."; exit 0
+          elif [ -z "$stamps" ]; then
+            echo "::error::No review stamp. After a review, add this line to the PR body: Reviewed: $HEAD_SHA — <what ran>"
+          else
+            echo "::error::The review stamp is for an older commit. Review the new head, then change the line to: Reviewed: $HEAD_SHA — <what ran>"
+          fi
+          exit 1
