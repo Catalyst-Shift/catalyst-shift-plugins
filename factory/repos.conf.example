@@ -5,6 +5,10 @@
 # commented out here on purpose: an uncommented line means this machine starts
 # claiming that project's cards, so add only the repos you run.
 #
+# This machine's Linear label, added with `factory` to every card it picks up
+# (kevin-omarchy or keith-omarchy):
+# label kevin-omarchy
+#
 # ~/Projects/catalyst-shift catalyst-shift-site
 # ~/Projects/lbl-nextjs lbl-nextjs
 # ~/Projects/nourish-enablement nourish-rep-enablement

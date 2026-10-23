@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FACTORY = join(ROOT, "factory");
@@ -69,4 +70,34 @@ test("install.sh never enables or starts a unit, and never overwrites repos.conf
   const run = s.split("\n").filter((l) => !/^(#|echo\b|miss\b|ok\b)/.test(l.trim()) && !/echo "/.test(l));
   for (const l of run) assert.doesNotMatch(l, /systemctl --user (enable|start|restart)|loginctl enable-linger/, l);
   assert.match(s, /if \[ -e "\$CONF" \]/);
+});
+
+test("status lists open factory PRs with their stamp state and takes no lock", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-status-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
+  for (const d of [bin, state, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  const a = "a".repeat(40), b = "b".repeat(40);
+  // gh stub: applies the dispatcher's own --jq to a fixture PR list (needs jq).
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --jq) q=$2; shift;; esac; shift; done
+case $h in
+  b/cat-1-x) j='[{"number":1,"url":"u1","headRefOid":"${a}","body":"x\\nReviewed: ${a} — /review"}]';;
+  b/cat-2-y) j='[{"number":2,"url":"u2","headRefOid":"${b}","body":"Reviewed: ${a} — /review"}]';;
+  *) j='[]';;
+esac
+printf '%s' "$j" | jq -r "$q"
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"), `label kevin-omarchy\n${t} proj\n`);
+  writeFileSync(join(state, "launched"), `${t} b/cat-1-x cat-1\n${t} b/cat-2-y cat-2\n${t} b/cat-3-z cat-3\n`);
+  const r = spawnSync("bash", [DISPATCH, "status"], {
+    encoding: "utf8",
+    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: "/bin/true" },
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /cat-1 {2}#1 u1 stamped/);
+  assert.match(r.stdout, /cat-2 {2}#2 u2 not stamped/);
+  assert.doesNotMatch(r.stdout, /cat-3/);
+  assert.match(r.stdout, /Paused: no/);
+  assert.deepEqual(readdirSync(state).sort(), ["launched"], "status wrote state");
 });
