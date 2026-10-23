@@ -15,6 +15,7 @@ git -C ~/Projects/catalyst-shift-plugins pull && ~/Projects/catalyst-shift-plugi
 touch ~/.local/state/claude-factory/paused      # pause: no new sessions or reviews
 rm ~/.local/state/claude-factory/paused         # resume
 
+claude-factory-dispatch status                    # one screen: running, waiting PRs, paused
 systemctl --user list-units 'factory-*'          # what's running
 journalctl --user -u claude-factory -n 50        # what the dispatcher did
 tail -f ~/.local/state/claude-factory/cat-123.log          # one builder
@@ -24,6 +25,11 @@ systemctl --user stop factory-cat-123            # stop one builder
 systemctl --user stop factory-review-cat-123     # stop one reviewer
 systemctl --user disable --now claude-factory.timer   # turn the dispatcher off
 ```
+
+**One view of everything in flight:** every card the factory picks up gets the
+Linear labels `factory` and this machine's label (set `label kevin-omarchy` or
+`label keith-omarchy` in repos.conf). A saved Linear view filtered on `factory`,
+grouped by status, shows both machines' work on any device.
 
 **Caps:** at most 2 sessions run at once (builders and reviewers together), and
 no new card is picked up while 3 or more PRs from branches the factory launched

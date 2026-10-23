@@ -11,8 +11,9 @@
 #      unattended Claude session per card in its own worktree.
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
-#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>")
+#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>")
 #   pause:  touch ~/.local/state/claude-factory/paused
+#   status: claude-factory-dispatch status
 #   watch:  systemctl --user list-units 'factory-*'; logs in ~/.local/state/claude-factory/
 set -euo pipefail
 
@@ -30,10 +31,9 @@ unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
 
 CLAUDE=${CLAUDE_BIN:-$(command -v claude)} || { echo "claude not found on PATH (or set CLAUDE_BIN)" >&2; exit 1; }
 [ -f "$CONF" ] || { echo "no config at $CONF (see repos.conf.example)" >&2; exit 1; }
-
-mkdir -p "$STATE" "$STATE/reviewed"
-exec 9>"$STATE/lock"
-flock -n 9 || exit 0
+# Every card this machine picks up gets the Linear label `factory` plus this
+# machine's label, so one Linear view filtered on `factory` shows all of it.
+MACHINE_LABEL=$(awk '$1 == "label" { print $2; exit }' "$CONF")
 
 running() { systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-cat-*' 'factory-review-cat-*' | wc -l; }
 active() { systemctl --user is-active --quiet "$1.service"; }
@@ -58,7 +58,7 @@ waiting() {
   echo "$n"
 }
 
-repos() { grep -vE '^[[:space:]]*(#|$)' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
+repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
 
 # A finished session's worktree goes once nothing in it would be lost. Each
 # worktree has the name of the unit that uses it: factory-cat-NNN (builder) or
@@ -80,7 +80,7 @@ pick() {
   (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
     --allowedTools="${LINEAR}__list_issues,${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment" \
     "In Linear, list issues in project '$project' whose status is 'Ready For Factory'. If there are none, print exactly NONE and stop.
-Otherwise take one: highest priority first (Urgent, High, Medium, Low, then no priority), oldest first within a priority. Update that issue: status 'In Progress', assignee 'me'. Add a comment on it: 'Picked up by the factory dispatcher on $HOST at $(date -Is). An unattended Claude session is working on it.'
+Otherwise take one: highest priority first (Urgent, High, Medium, Low, then no priority), oldest first within a priority. Update that issue: status 'In Progress', assignee 'me', and add the labels 'factory'${MACHINE_LABEL:+ and '$MACHINE_LABEL'} (keep its existing labels). Add a comment on it: 'Picked up by the factory dispatcher on $HOST at $(date -Is). An unattended Claude session is working on it.'
 Then print exactly one final line: PICK <identifier> <gitBranchName>" </dev/null 2>&1) | tee "$STATE/pick-$project.log" |
     grep -oE '^PICK CAT-[0-9]+ [A-Za-z0-9._/-]+$' | tail -1 || true
 }
@@ -166,6 +166,33 @@ reviews() {
     review "$dir" "$branch" "$key" "$number" "$sha"
   done < <(launched)
 }
+
+# One screen: what's running, what's waiting on review, and whether it's paused.
+status() {
+  local unit since dir branch key pr
+  echo "Running (cap $CAP):"
+  systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-cat-*' 'factory-review-cat-*' |
+    while read -r unit _; do
+      since=$(systemctl --user show "$unit" -p ActiveEnterTimestamp --value)
+      echo "  ${unit%.service}  since $since"
+    done
+  echo "Open factory PRs (no new pickups at $WAITING_CAP):"
+  while read -r dir branch key; do
+    pr=$(cd "$dir" && gh pr list --head "$branch" --state open --json number,url,headRefOid,body \
+      --jq '.[0] | select(.) | "#\(.number) \(.url) " + (if (.body | test("(?m)^Reviewed: " + .headRefOid)) then "stamped" else "not stamped" end)' </dev/null 2>/dev/null) || continue
+    [ -n "$pr" ] && echo "  ${key:-$(cardkey "$branch")}  $pr"
+  done < <(launched)
+  if [ -e "$STATE/paused" ]; then echo "Paused: yes (rm $STATE/paused to resume)"; else echo "Paused: no"; fi
+}
+
+if [ "${1:-}" = "status" ]; then
+  status
+  exit 0
+fi
+
+mkdir -p "$STATE" "$STATE/reviewed"
+exec 9>"$STATE/lock"
+flock -n 9 || exit 0
 
 while read -r dir project; do cleanup "$dir"; done < <(repos)
 
