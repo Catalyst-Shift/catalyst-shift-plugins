@@ -7,7 +7,9 @@
 #   2. starts a fresh reviewer session for each finished builder whose open PR
 #      has no `Reviewed: <head sha>` line yet (one reviewer per head sha;
 #      ~/.local/state/claude-factory/reviewed/cat-NNN-<sha> records it);
-#   3. fills free slots with Ready For Factory cards from Linear, one
+#   3. settles each finished builder that left no PR: if its card is still
+#      In Progress, moves it to Blocked (once per launch; state/settled/cat-NNN);
+#   4. fills free slots with Ready For Factory cards from Linear, one
 #      unattended Claude session per card in its own worktree.
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
@@ -118,6 +120,8 @@ Card: $id in Linear. It is already In Progress and assigned to the person who ru
    - Blocked (step 5): Blocked, with what you need.
    Never leave it In Progress."
   echo "$dir $branch $key" >>"$LAUNCHED"
+  # A card can come back (Blocked, then Ready For Factory again): settle it again.
+  rm -f "$STATE/settled/$key"
   echo "started $id in $dir (unit factory-$key, log $STATE/$key.log)"
 }
 
@@ -173,9 +177,9 @@ reviews() {
 
 # A finished builder must leave its card In Review, Blocked or Done. If the
 # card is still In Progress with no PR (the session crashed, timed out or
-# forgot), move it to Blocked with a pointer to the log, once per card.
+# forgot), move it to Blocked with a pointer to the log, once per launch.
 settle() {
-  local dir branch key id pr
+  local dir branch key id pr out
   mkdir -p "$STATE/settled"
   while read -r dir branch key; do
     key=${key:-$(cardkey "$branch")}
@@ -186,9 +190,14 @@ settle() {
     pr=$(cd "$dir" && gh pr list --head "$branch" --state all --json number --jq length </dev/null 2>/dev/null) || continue
     id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
     if [ "$pr" = "0" ]; then
-      (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
+      # Recorded only when haiku confirms the status it read or set: a Linear
+      # outage or a missing connector is retried next tick, not recorded.
+      out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
         --allowedTools="${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment" \
-        "Get Linear issue $id. If its status is 'In Progress', move it to 'Blocked' and add this comment: 'The factory session on $HOST ended without a PR and without moving this card. Its log is $STATE/$key.log on that machine. A person should check it.' Otherwise change nothing. Print the status it ends in." </dev/null >>"$STATE/settle.log" 2>&1) || continue
+        "Get Linear issue $id. If its status is 'In Progress', move it to 'Blocked' and add this comment: 'The factory session on $HOST ended without a PR and without moving this card. Its log is $STATE/$key.log on that machine. A person should check it.' Otherwise change nothing.
+Then print exactly one final line: SETTLED <the status it ends in>" </dev/null 2>&1) || true)
+      printf '%s %s\n%s\n' "$(date -Is)" "$id" "$out" >>"$STATE/settle.log"
+      grep -qE '^SETTLED [A-Za-z]' <<<"$out" || continue
     fi
     date -Is >"$STATE/settled/$key"
   done < <(launched)

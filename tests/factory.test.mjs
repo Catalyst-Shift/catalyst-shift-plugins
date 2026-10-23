@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -49,6 +49,8 @@ test("every claude and systemd-run call in the dispatcher reads stdin from /dev/
   assert.match(s, /PICK <identifier> <gitBranchName>" <\/dev\/null/);
   // run_unit(): every builder and reviewer start goes through it
   assert.match(s, /"\$CLAUDE" "\$@" <\/dev\/null/);
+  // settle(): the haiku call ends its prompt with </dev/null
+  assert.match(s, /SETTLED <the status it ends in>" <\/dev\/null/);
 });
 
 test("the dispatcher finds claude via CLAUDE_BIN or command -v, and uses the shared state dir", () => {
@@ -100,4 +102,74 @@ printf '%s' "$j" | jq -r "$q"
   assert.doesNotMatch(r.stdout, /cat-3/);
   assert.match(r.stdout, /Paused: no/);
   assert.deepEqual(readdirSync(state).sort(), ["launched"], "status wrote state");
+});
+
+// settle (CAT-1317): a finished builder with no PR and a card still In
+// Progress gets moved to Blocked by a haiku call, once per launch. Run one
+// tick against a temporary HOME with gh, systemctl and claude stubbed.
+test("settle only touches finished builders with no PR, and only records a confirmed result", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-settle-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
+  for (const d of [bin, state, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  // cat-1 builder running, cat-2 reviewer running, cat-3 no PR, cat-4 a merged
+  // PR, cat-5 gh fails, cat-6 the haiku call never confirms a status, cat-7
+  // was settled on an earlier tick.
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --state) s=$2; shift;; --jq) q=$2; shift;; esac; shift; done
+case $h in
+  b/cat-5-*) exit 1;;
+  b/cat-4-*) [ "$s" = all ] && j='[{"number":4}]' || j='[]';;
+  *) j='[]';;
+esac
+printf '%s' "$j" | jq -r "$q"
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in
+  *is-active*factory-cat-1.service*|*is-active*factory-review-cat-2.service*) exit 0;;
+  *is-active*) exit 3;;
+esac
+exit 0
+`, { mode: 0o755 });
+  const calls = join(t, "claude-calls");
+  writeFileSync(join(bin, "claude"), `#!/usr/bin/env bash
+[ "$(readlink /proc/$$/fd/0)" = /dev/null ] || echo "stdin was not /dev/null" >>"${calls}"
+p=\${!#}
+printf '%s\\n' "$p" | head -1 >>"${calls}"
+case $p in
+  *"issue CAT-6."*) echo "I could not reach Linear.";;
+  *"issue CAT-"*) printf 'Moved it.\nSETTLED Blocked\n';;
+  *) echo "\${PICK:-NONE}";;
+esac
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemd-run"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"), `label kevin-omarchy\n${t} proj\n`);
+  writeFileSync(join(state, "launched"), [1, 2, 3, 4, 5, 6, 7].map((n) => `${t} b/cat-${n}-x cat-${n}`).join("\n") + "\n");
+  mkdirSync(join(state, "settled"));
+  writeFileSync(join(state, "settled", "cat-7"), "earlier\n");
+  const tick = (extra = {}) => spawnSync("bash", [DISPATCH], {
+    encoding: "utf8",
+    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), ...extra },
+  });
+
+  let r = tick();
+  assert.equal(r.status, 0, r.stderr);
+  const asked = read(calls);
+  assert.doesNotMatch(asked, /stdin was not/);
+  for (const n of [3, 6]) assert.match(asked, new RegExp(`Get Linear issue CAT-${n}\\.`));
+  for (const n of [1, 2, 4, 5, 7]) assert.doesNotMatch(asked, new RegExp(`issue CAT-${n}\\.`));
+  assert.deepEqual(readdirSync(join(state, "settled")).sort(), ["cat-3", "cat-4", "cat-7"]);
+
+  // Paused: no Linear calls at all.
+  writeFileSync(calls, "");
+  writeFileSync(join(state, "paused"), "");
+  r = tick();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(read(calls), "");
+
+  // A card picked up again (Blocked, then back to Ready For Factory) is settled again.
+  rmSync(join(state, "paused"));
+  r = tick({ PICK: "PICK CAT-3 b/cat-3-x" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /started CAT-3/);
+  assert.ok(!existsSync(join(state, "settled", "cat-3")), "relaunch kept the old settled record");
 });
