@@ -2,8 +2,10 @@
 Description=Run the Claude factory dispatcher every 5 minutes
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=5min
+# Fixed clock times (:00, :05, ...) on every machine, so the "offset" line in
+# repos.conf keeps two machines from claiming cards at the same moment.
+OnCalendar=*:0/5
+AccuracySec=1s
 
 [Install]
 WantedBy=timers.target

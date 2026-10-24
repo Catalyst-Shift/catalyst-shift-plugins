@@ -38,6 +38,15 @@ it, or approve the proposed follow-up card. *Blocked*: the card says what it
 needs. If a session dies without moving its card, the next dispatcher tick
 moves it to Blocked with a pointer to the log.
 
+**Two machines, same projects:** Kevin's and Keith's machines can both list
+every project. Each picks Ready For Factory cards that are assigned to its
+owner or unassigned, never cards assigned to the other person, and it re-checks
+the card before and after claiming it. To steer a card to one machine, assign
+it. Both timers fire at the same clock times (:00, :05, ...), and `offset 150`
+in Keith's repos.conf makes his machine pick 2½ minutes later, so the two never
+claim at the same moment. Every Linear team the factory serves needs the
+statuses Ready For Factory, In Progress, In Review, Blocked and Done.
+
 **Caps:** at most 2 sessions run at once (builders and reviewers together), and
 no new card is picked up while 3 or more PRs from branches the factory launched
 are open. Reviews still run while that cap holds; they are how PRs get unstuck.

@@ -36,10 +36,15 @@ CLAUDE=${CLAUDE_BIN:-$(command -v claude)} || { echo "claude not found on PATH (
 # Every card this machine picks up gets the Linear label `factory` plus this
 # machine's label, so one Linear view filtered on `factory` shows all of it.
 MACHINE_LABEL=$(awk '$1 == "label" { print $2; exit }' "$CONF")
+# Two machines can serve the same projects. They tick at the same clock times,
+# so one of them waits this many seconds before picking ("offset <seconds>").
+OFFSET=$(awk '$1 == "offset" { print $2; exit }' "$CONF")
+case "${OFFSET:-0}" in ''|*[!0-9]*) OFFSET=0 ;; esac
 
-running() { systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-cat-*' 'factory-review-cat-*' | wc -l; }
+running() { systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' | wc -l; }
 active() { systemctl --user is-active --quiet "$1.service"; }
-cardkey() { printf '%s' "$1" | grep -oiE 'cat-[0-9]+' | head -1 | tr '[:upper:]' '[:lower:]'; }
+# A card key is a Linear identifier (CAT-123, LUM-45), lowercased for unit and file names.
+cardkey() { printf '%s' "$1" | grep -oiE '(^|[^a-z])[a-z]+-[0-9]+' | head -1 | sed 's/^[^a-zA-Z]//' | tr '[:upper:]' '[:lower:]'; }
 
 # Branches this dispatcher launched. LAUNCHED lines are "<repo folder> <branch> [<card key>]"
 # (older lines have no key; it is read from the branch name).
@@ -60,14 +65,14 @@ waiting() {
   echo "$n"
 }
 
-repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
+repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
 
 # A finished session's worktree goes once nothing in it would be lost. Each
 # worktree has the name of the unit that uses it: factory-cat-NNN (builder) or
 # factory-review-cat-NNN (reviewer).
 cleanup() {
   local dir=$1 wt name
-  for wt in "$dir"/.claude/worktrees/factory-cat-* "$dir"/.claude/worktrees/factory-review-cat-*; do
+  for wt in "$dir"/.claude/worktrees/factory-*; do
     [ -d "$wt" ] || continue
     name=$(basename "$wt")
     active "$name" && continue
@@ -81,10 +86,10 @@ pick() {
   local project=$1
   (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
     --allowedTools="${LINEAR}__list_issues,${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment" \
-    "In Linear, list issues in project '$project' whose status is 'Ready For Factory'. If there are none, print exactly NONE and stop.
-Otherwise take one: highest priority first (Urgent, High, Medium, Low, then no priority), oldest first within a priority. Update that issue: status 'In Progress', assignee 'me', and add the labels 'factory'${MACHINE_LABEL:+ and '$MACHINE_LABEL'} (keep its existing labels). Add a comment on it: 'Picked up by the factory dispatcher on $HOST at $(date -Is). An unattended Claude session is working on it.'
-Then print exactly one final line: PICK <identifier> <gitBranchName>" </dev/null 2>&1) | tee "$STATE/pick-$project.log" |
-    grep -oE '^PICK CAT-[0-9]+ [A-Za-z0-9._/-]+$' | tail -1 || true
+    "In Linear, list issues in project '$project' whose status is 'Ready For Factory' and that are either assigned to me or unassigned. Ignore issues assigned to anyone else. If there are none, print exactly NONE and stop.
+Otherwise take one: highest priority first (Urgent, High, Medium, Low, then no priority), oldest first within a priority. Right before claiming it, get that issue again: if its status is no longer 'Ready For Factory' or it is now assigned to someone other than me, print exactly NONE and stop. Otherwise update that issue: status 'In Progress', assignee 'me', and add the labels 'factory'${MACHINE_LABEL:+ and '$MACHINE_LABEL'} (keep its existing labels). Add a comment on it: 'Picked up by the factory dispatcher on $HOST at $(date -Is). An unattended Claude session is working on it.'
+Then get the issue once more. If its assignee is not me (another machine claimed it at the same moment), add no further changes and print exactly NONE. Otherwise print exactly one final line: PICK <identifier> <gitBranchName>" </dev/null 2>&1) | tee "$STATE/pick-$project.log" |
+    grep -oE '^PICK [A-Z]+-[0-9]+ [A-Za-z0-9._/-]+$' | tail -1 || true
 }
 
 # Starts a transient user unit running one unattended Claude session.
@@ -207,7 +212,7 @@ Then print exactly one final line: SETTLED <the status it ends in>" </dev/null 2
 status() {
   local unit since dir branch key pr
   echo "Running (cap $CAP):"
-  systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-cat-*' 'factory-review-cat-*' |
+  systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' |
     while read -r unit _; do
       since=$(systemctl --user show "$unit" -p ActiveEnterTimestamp --value)
       echo "  ${unit%.service}  since $since"
@@ -239,6 +244,8 @@ fi
 
 reviews
 settle
+
+[ "$OFFSET" -gt 0 ] && sleep "$OFFSET"
 
 waiting_now=$(waiting)
 if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
