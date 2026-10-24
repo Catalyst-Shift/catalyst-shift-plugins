@@ -58,6 +58,22 @@ same files or tables puts its own card back in Ready For Factory, blocked by
 that card. Only the card that went In Progress later waits, so two cards never
 block each other.
 
+**Every PR gets reviewed, not only factory cards:** any open, non-draft PR
+in a repo listed in repos.conf whose head has no current `Reviewed:` stamp gets
+a fresh reviewer session, however it was opened (a cloud thread, Remote
+Control, a laptop). Each machine reviews the PRs its own person opened: by
+default the GitHub login `gh` runs as on that machine. `review-authors kkreative
+keithcatalyst` in repos.conf replaces that list, for example while only one
+machine runs; never list the same login on both machines. Dependabot PRs are
+skipped, and so is any PR with the label `no-factory-review` (add it to opt a
+PR out). The reviewer pushes at most a one-line fix to a branch it didn't
+build; anything bigger it answers or reports in a PR comment and leaves the PR
+unstamped. One reviewer per head sha, recorded in
+`~/.local/state/claude-factory/reviewed/<repo>/<pr>-<sha>`; it shows in
+`claude-factory-dispatch status` while it runs, and logs to
+`review-<repo>-pr-<n>.log`. `<repo>` is the folder name lowercased, with anything
+other than letters and digits turned into `-` (`My_Repo` becomes `my-repo`).
+
 **Caps (per machine):** at most 2 sessions run at once (builders and reviewers
 together), and no new card is picked up while 3 or more PRs from branches this
 machine's factory launched are open. Reviews still run while that cap holds;
@@ -117,6 +133,8 @@ install.sh prints how to retire any it finds.
    person, say) changes the head, so the next tick reviews again. If a reviewer
    ends without stamping, the dispatcher doesn't retry that sha: look at
    `review-cat-NNN.log`.
+   Any other open PR without a stamp goes through the same review on unit
+   `factory-review-<repo>-pr-<n>` (see "Every PR gets reviewed" above).
 4. **Clean up.** Each tick removes a finished builder or reviewer worktree once
    it has no uncommitted changes and nothing unpushed.
 
@@ -130,7 +148,8 @@ install.sh prints how to retire any it finds.
 | `repos.conf.example` | `~/.config/claude-factory/repos.conf` (first install only) |
 
 State and logs live in `~/.local/state/claude-factory/`: `launched` (the branches
-it started), `reviewed/`, `pick-<project>.log`, `cat-NNN.log`, `review-cat-NNN.log`.
+it started), `reviewed/`, `pick-<project>.log`, `cat-NNN.log`, `review-cat-NNN.log`,
+`review-<repo>-pr-<n>.log`.
 
 The dispatcher finds `claude` with `command -v claude` on the service's PATH
 (`~/.local/share/mise/shims`, `~/.local/bin`, `/usr/local/bin`, `/usr/bin`).

@@ -14,6 +14,11 @@
 # claim at the same moment: Kevin 0, Keith 150 (seconds).
 # offset 0
 #
+# Open PRs the factory didn't build are reviewed by the machine of whoever
+# opened them: by default the GitHub login gh runs as here. List logins to
+# replace that (never the same login on both machines):
+# review-authors kkreative
+#
 # ~/Projects/catalyst-shift catalyst-shift-site
 # ~/Projects/lbl-nextjs lbl-nextjs
 # ~/Projects/nourish-enablement nourish-rep-enablement

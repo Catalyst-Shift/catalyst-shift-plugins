@@ -227,8 +227,183 @@ echo "\${PICK:-NONE}"
   assert.match(read(join(state, "launched")), /keith\/lum-45-some-title lum-45$/m);
 });
 
-test("install.sh skips label and offset lines like the dispatcher does", () => {
-  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\)'/;
+test("install.sh skips label, offset and review-authors lines like the dispatcher does", () => {
+  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\)'/;
   assert.match(read(INSTALL), skip);
   assert.match(read(DISPATCH), skip);
+});
+
+// CAT-1320: every open PR in a configured repo gets a reviewer, not only the
+// factory's own. One tick against a temporary HOME; gh applies the
+// dispatcher's own --jq to a fixture (needs jq), systemd-run and systemctl
+// share a file of running units, git only records what it was asked.
+test("pr_reviews reviews any open unstamped PR by a review author, within the cap, once per sha", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-prs-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
+  const repo = join(t, "My_Repo"), units = join(t, "units"), calls = join(t, "calls");
+  for (const d of [bin, state, repo, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  const sha = (c) => c.repeat(40);
+  const pr = (number, login, extra = {}) => ({
+    number, headRefOid: sha(String(number % 10)), headRefName: `b/${number}`, body: "", author: { login },
+    isDraft: false, labels: [], ...extra,
+  });
+  const prs = [
+    pr(1, "kkreative"),                                                   // reviewed
+    pr(2, "kkreative", { isDraft: true }),                                // draft
+    pr(3, "app/dependabot"),                                              // dependabot
+    pr(4, "keithcatalyst"),                                               // other author until review-authors lists it
+    pr(5, "kkreative", { labels: [{ name: "no-factory-review" }] }),      // opted out
+    pr(6, "kkreative", { body: `x\r\nReviewed: ${sha("6")} — /review\r\n` }), // stamped at head
+    pr(7, "kkreative", { headRefName: "b/cat-7-x", body: `Reviewed: ${sha("0")} — /review` }), // factory branch
+    pr(8, "kkreative", { body: `Reviewed: ${sha("0")} — /review` }),     // stale stamp: reviewed, but over the cap at first
+  ];
+  const fixture = join(t, "prs.json");
+  writeFileSync(fixture, JSON.stringify(prs));
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+[ "$1 $2" = "api user" ] && { [ -n "$NO_USER" ] && exit 1; echo kkreative; exit 0; }
+sub="$1 $2"; shift 2; n=; h=; q=.
+[ "$sub" = "pr view" ] && { n=$1; shift; }
+while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --jq) q=$2; shift;; esac; shift; done
+if [ -n "$n" ]; then jq -r ".[] | select(.number == $n) | $q" "${fixture}"
+elif [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "${fixture}"
+else jq -r "$q" "${fixture}"; fi
+`, { mode: 0o755 });
+  writeFileSync(units, "");
+  writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; esac; done
+printf '%s' "\${!#}" >"${units}.$u"
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in
+  *list-units*) cat "${units}";;
+  *is-active*) grep -qxF "\${!#}" "${units}";;
+esac
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "git"), `#!/usr/bin/env bash
+echo "git $*" >>"${calls}"
+case "$*" in
+  *pull/11/head*) exit 1;;
+  # The fixture's head for PR n is its last digit 40 times; PR 12 moved since the list.
+  *"rev-parse refs/factory/pr/"*) n=\${!#}; n=\${n##*/}; [ "$n" = 12 ] && { echo moved; exit 0; }; printf "$((n % 10))%.0s" $(seq 40); echo;;
+  *"worktree add"*) mkdir -p "\${@: -2:1}";;
+  *"worktree remove"*) rm -rf "\${!#}";;
+esac
+exit 0
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "claude"), "#!/bin/sh\necho NONE\n", { mode: 0o755 });
+  const conf = join(home, ".config/claude-factory/repos.conf");
+  writeFileSync(conf, `label kevin-omarchy\n${repo} proj\n`);
+  writeFileSync(join(state, "launched"), `${repo} b/cat-7-x cat-7\n`);
+  const tick = (cap, extra = {}) => spawnSync("bash", [DISPATCH], {
+    encoding: "utf8",
+    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap), ...extra },
+  });
+  const started = () => read(units).trim().split("\n").filter(Boolean).map((u) => u.replace(/\.service$/, ""));
+  const reviewed = () => readdirSync(join(state, "reviewed", "my-repo")).sort();
+
+  // Cap 2: the factory card's reviewer (cat-7) takes one slot, PR #1 the other.
+  let r = tick(2);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(started(), ["factory-review-cat-7", "factory-review-my-repo-pr-1"]);
+  assert.deepEqual(reviewed(), [`1-${sha("1")}`]);
+  assert.match(read(calls), /fetch --quiet origin \+refs\/pull\/1\/head:refs\/factory\/pr\/1/);
+  assert.ok(existsSync(join(repo, ".claude/worktrees/factory-review-my-repo-pr-1")));
+  assert.match(r.stdout, /started review of PR #1 by kkreative/);
+
+  // Both still running: the cap holds, nothing new starts.
+  r = tick(2);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(started().length, 2);
+
+  // Both finished: their worktrees go (with the fetched ref), PR #8 starts,
+  // PR #1 is not retried at the same sha.
+  writeFileSync(units, "");
+  writeFileSync(calls, "");
+  r = tick(2);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(started(), ["factory-review-my-repo-pr-8"]);
+  assert.match(read(calls), /update-ref -d refs\/factory\/pr\/1/);
+  assert.deepEqual(reviewed(), [`1-${sha("1")}`, `8-${sha("8")}`]);
+
+  // review-authors replaces the gh login: keithcatalyst's PR #4 now counts.
+  writeFileSync(units, "");
+  writeFileSync(conf, `label kevin-omarchy\nreview-authors kkreative keithcatalyst\n${repo} proj\n`);
+  r = tick(2);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(started(), ["factory-review-my-repo-pr-4"]);
+  // Never: the draft, dependabot, the opted-out PR, the stamped one, the factory branch.
+  assert.deepEqual(reviewed(), [`1-${sha("1")}`, `4-${sha("4")}`, `8-${sha("8")}`]);
+  assert.match(read(`${units}.factory-review-my-repo-pr-4`), /git push origin 'HEAD:b\/4'/);
+
+  // A fork PR (login in another case) is reviewed but told to push nothing; a
+  // branch name that isn't plain is skipped; a failed checkout leaves no marker
+  // and no fetched ref, so the next tick tries again.
+  writeFileSync(fixture, JSON.stringify([
+    pr(9, "KKreative", { isCrossRepository: true }),
+    pr(10, "kkreative", { headRefName: "b/x;y" }),
+    pr(11, "kkreative"),
+    pr(12, "kkreative"),                 // pushed again between the list and the fetch
+  ]));
+  writeFileSync(units, "");
+  writeFileSync(calls, "");
+  writeFileSync(conf, `label kevin-omarchy\n${repo} proj\n`);
+  r = tick(5);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(started(), ["factory-review-my-repo-pr-9"]);
+  const forkPrompt = read(`${units}.factory-review-my-repo-pr-9`);
+  assert.match(forkPrompt, /from a fork: push nothing/);
+  assert.doesNotMatch(forkPrompt, /git push/);
+  assert.match(r.stdout, /PR #10 .*branch name 'b\/x;y' is not plain/);
+  assert.match(r.stdout, /PR #11 .*could not check out/);
+  assert.match(read(calls), /update-ref -d refs\/factory\/pr\/11/);
+  assert.ok(!existsSync(join(state, "reviewed/my-repo", `11-${sha("1")}`)), "failed checkout left a marker");
+  assert.match(r.stdout, /PR #12 .*could not check out/);
+  assert.ok(!existsSync(join(state, "reviewed/my-repo", `12-${sha("2")}`)), "moved head left a marker");
+
+  // gh can't say who it runs as and no review-authors line: nothing is reviewed.
+  writeFileSync(units, "");
+  rmSync(join(state, "reviewed/my-repo"), { recursive: true });
+  r = tick(5, { NO_USER: "1" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /no review authors/);
+  assert.deepEqual(started(), []);
+});
+
+test("the reviewer of another PR pushes at most a one-line fix, never merges, and stamps the checked head", () => {
+  const s = read(DISPATCH);
+  const body = s.slice(s.indexOf("review_pr() {"), s.indexOf("pr_reviews() {"));
+  assert.match(body, /only when the fix is one line/);
+  assert.match(body, /Push nothing else/);
+  assert.match(body, /Never merge the PR and never turn on auto-merge/);
+  assert.match(body, /still equals the commit you reviewed/);
+  assert.match(body, /leave the body unstamped and post one PR comment/);
+});
+
+// CAT-1320: a reviewer worktree detached at a fork's PR head is reachable only
+// from refs/factory/pr/<n>. Real git: cleanup removes it once it's finished,
+// drops that ref, and a prune of origin can't strand it.
+test("cleanup removes a finished PR reviewer worktree held only by refs/factory/pr/<n>", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-cleanup-"));
+  const bin = join(t, "bin"), repo = join(t, "repo");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "systemctl"), "#!/bin/sh\nexit 3\n", { mode: 0o755 });
+  const sh = (cmd) => {
+    const r = spawnSync("bash", ["-c", cmd], {
+      encoding: "utf8",
+      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: t, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
+    });
+    assert.equal(r.status, 0, `${cmd}\n${r.stderr}`);
+    return r.stdout;
+  };
+  sh(`git init -q --bare ${t}/origin.git && git clone -q ${t}/origin.git ${repo} 2>/dev/null
+cd ${repo} && git commit -q --allow-empty -m base && git push -q origin HEAD:main
+git checkout -q --detach && git commit -q --allow-empty -m fork-head
+git update-ref refs/factory/pr/5 HEAD && git checkout -q main
+git worktree add -q --detach .claude/worktrees/factory-review-repo-pr-5 refs/factory/pr/5
+git fetch -q --prune origin`);
+  const s = read(DISPATCH);
+  const fn = (name) => s.slice(s.indexOf(`${name}() {`), s.indexOf("\n}\n", s.indexOf(`${name}() {`)) + 3);
+  const out = sh(`${s.split("\n").find((l) => l.startsWith("active()"))}\n${fn("cleanup")}\ncleanup ${repo}`);
+  assert.match(out, /removed finished worktree .*factory-review-repo-pr-5/);
+  assert.equal(sh(`git -C ${repo} for-each-ref refs/factory`), "");
 });
