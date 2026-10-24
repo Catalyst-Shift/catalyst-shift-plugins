@@ -1,5 +1,9 @@
 # Changelog — catalyst-ops
 
+## 0.6.2 — 2026-10-24 (CAT-1319)
+
+- `/next` skips a card whose Linear "blocked by" issues aren't all Done or Canceled, and adds "blocked by" relations when it drafts a card that depends on another.
+
 ## 0.6.1 — 2026-10-23
 
 - `decision-governance`: the cautionary example no longer names people or internal dates, and the canon pointer is `Catalyst-Shift/catalyst-brain` `strategy/` (this repo is public; CAT-1303).
