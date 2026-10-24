@@ -9,6 +9,11 @@
 # (kevin-omarchy or keith-omarchy):
 # label kevin-omarchy
 #
+# Both machines can list the same projects. Each picks cards assigned to its
+# owner or unassigned, and one machine waits before picking so they never
+# claim at the same moment: Kevin 0, Keith 150 (seconds).
+# offset 0
+#
 # ~/Projects/catalyst-shift catalyst-shift-site
 # ~/Projects/lbl-nextjs lbl-nextjs
 # ~/Projects/nourish-enablement nourish-rep-enablement

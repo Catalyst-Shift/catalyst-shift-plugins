@@ -70,7 +70,7 @@ echo "== To turn it on (install.sh never does this itself)"
 echo "  loginctl enable-linger $USER     # keep it running while you are logged out (now: Linger=${linger:-unknown})"
 echo "  systemctl --user enable --now claude-factory.timer"
 if [ -f "$CONF" ]; then
-  { grep -vE '^[[:space:]]*(#|$|label[[:space:]])' "$CONF" || true; } | while read -r dir _; do
+  { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]])' "$CONF" || true; } | while read -r dir _; do
     echo "  systemctl --user enable --now claude-rc@$(basename "$dir").service"
   done
 fi
