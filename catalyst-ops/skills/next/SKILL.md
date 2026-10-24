@@ -80,6 +80,7 @@ The repo's CLAUDE.md may add hard stops, never fewer.
   ```
 
   The sha is the PR's head commit (`gh pr view <n> --json headRefOid -q .headRefOid`). The `review stamp` CI check fails unless it matches, so a fix pushed after the review needs a new review on the new head before the stamp is written again. The session that built the card never writes the stamp from its own review.
+  - **The factory dispatcher runs on this machine for this repo** (`systemctl --user is-active claude-factory.timer` succeeds and the repo is in `~/.config/claude-factory/repos.conf`): start no reviewer and spawn none. Within a tick it starts a fresh reviewer for any open PR you opened that has no stamp at its head, and stamps it. A second reviewer would race it on the PR body and the branch. Tell the person running it that the dispatcher will review and stamp PR #N.
   - **Run by hand, someone watching:** tell them to start a new session to review and stamp PR #N, and leave the stamp to that session.
   - **Nobody watching:** spawn a fresh subagent that sees only the PR diff and the card (not this session's transcript or plan). It runs `/review`, and `/cso` on a deep path, and reports its findings. Fix or answer each one; if that pushes a commit, have a fresh subagent review the new head. Then write the stamp with the final head sha and what the subagent ran.
 - Move the card to **In Review** and comment the PR link. Then stop: one card per session.
