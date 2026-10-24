@@ -409,8 +409,10 @@ git fetch -q --prune origin`);
 });
 
 // CAT-1323: `claude -w` locks its worktree and the lock outlives the session.
-// cleanup unlocks a finished builder's clean worktree and removes it; it leaves
-// one whose unit is still active, and never fails the tick (set -e).
+// cleanup unlocks a finished builder's clean worktree and removes it once the
+// pid in the lock is gone. It leaves one whose unit is still active, one whose
+// lock pid is still alive (a session started by hand under a factory-* name),
+// and one locked by hand with no pid, and never fails the tick (set -e).
 test("cleanup unlocks and removes a finished builder worktree left locked by claude -w", () => {
   const t = mkdtempSync(join(tmpdir(), "factory-locked-"));
   const bin = join(t, "bin"), repo = join(t, "repo");
@@ -429,13 +431,20 @@ exit 3
   };
   sh(`git init -q --bare ${t}/origin.git && git clone -q ${t}/origin.git ${repo} 2>/dev/null
 cd ${repo} && git commit -q --allow-empty -m base && git push -q origin HEAD:main
-for n in 1 2; do git worktree add -q --detach .claude/worktrees/factory-cat-$n origin/main
-  git worktree lock --reason "claude session factory-cat-$n (pid 1)" .claude/worktrees/factory-cat-$n; done`);
+for n in 1 2 3 4; do git worktree add -q --detach .claude/worktrees/factory-cat-$n origin/main; done
+git worktree lock --reason "claude session factory-cat-1 (pid 2147483646)" .claude/worktrees/factory-cat-1
+git worktree lock --reason "claude session factory-cat-2 (pid 2147483646)" .claude/worktrees/factory-cat-2
+git worktree lock --reason "claude agent factory-cat-3 (pid ${process.pid} start 1)" .claude/worktrees/factory-cat-3
+git worktree lock --reason "kept by hand" .claude/worktrees/factory-cat-4`);
   const s = read(DISPATCH);
   const fn = (name) => s.slice(s.indexOf(`${name}() {`), s.indexOf("\n}\n", s.indexOf(`${name}() {`)) + 3);
-  const out = sh(`set -euo pipefail\n${s.split("\n").find((l) => l.startsWith("active()"))}\n${fn("cleanup")}\ncleanup ${repo}\necho tick-continues`);
+  const out = sh(`set -euo pipefail\n${s.split("\n").find((l) => l.startsWith("active()"))}\n${fn("cleanup")}\ncleanup ${repo} 2>&1\necho tick-continues`);
   assert.match(out, /removed finished worktree .*factory-cat-1/);
+  assert.match(out, /could not remove .*factory-cat-3; leaving it/);
+  assert.match(out, /could not remove .*factory-cat-4; leaving it/);
   assert.match(out, /tick-continues/);
   assert.ok(!existsSync(join(repo, ".claude/worktrees/factory-cat-1")));
   assert.ok(existsSync(join(repo, ".claude/worktrees/factory-cat-2")), "removed a worktree whose unit is still active");
+  assert.ok(existsSync(join(repo, ".claude/worktrees/factory-cat-3")), "unlocked a worktree whose lock pid is alive");
+  assert.ok(existsSync(join(repo, ".claude/worktrees/factory-cat-4")), "unlocked a worktree locked by hand");
 });
