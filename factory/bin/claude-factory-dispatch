@@ -14,7 +14,11 @@
 #      pushes or merges (CAT-1327);
 #   4. settles each finished builder that left no PR: if its card is still
 #      In Progress, moves it to Blocked (once per launch; state/settled/<card key>);
-#   5. fills free slots with Ready For Factory cards from Linear, one
+#   5. keeps each launched card's Linear label in step with its PR (CAT-1336):
+#      stamped at its head with CI green adds `needs-merge`; merged moves the
+#      card to Done and drops the label; closed unmerged drops the label (once
+#      per change; state/merge/<card key>-<pr number>);
+#   6. fills free slots with Ready For Factory cards from Linear, one
 #      unattended Claude session per card in its own worktree.
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
@@ -369,21 +373,104 @@ Then print exactly one final line: SETTLED <the status it ends in>" </dev/null 2
   done < <(launched)
 }
 
-# One screen: what's running, what's waiting on review, and whether it's paused.
+# The newest PR from a launched branch, as "<number> <state> <stamped> <url>":
+# state is OPEN, MERGED, CLOSED, or OLD for a PR merged or closed more than 7
+# days ago (left alone, so old launches never reach Linear); stamped is true
+# when the body has `Reviewed: <head sha>`.
+factory_pr() {
+  (cd "$1" && gh pr list --head "$2" --state all --limit 1 --json number,state,closedAt,url,headRefOid,body \
+    --jq '.[0] | select(.) | .headRefOid as $sha
+      | (if .state != "OPEN" and ((.closedAt // "1970-01-01T00:00:00Z") | fromdateiso8601) < now - 604800 then "OLD" else .state end) as $state
+      | "\(.number) \($state) \((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b")) \(.url)"' </dev/null 2>/dev/null)
+}
+
+# CI is green when the PR has checks and the latest run of each passed or was
+# skipped (gh pr checks, which ignores runs a later one replaced).
+green() {
+  [ "$(cd "$1" && gh pr checks "$2" --json bucket --jq 'length > 0 and all(.[]; .bucket == "pass" or .bucket == "skipping")' </dev/null 2>/dev/null || true)" = true ]
+}
+
+# One cheap haiku call allowed only to read and update a Linear issue. It
+# succeeds only when the output has the exact confirmation line asked for.
+linear_issue() {
+  local id=$1 confirm=$2 prompt=$3 out
+  out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
+    --allowedTools="${LINEAR}__get_issue,${LINEAR}__save_issue" \
+    "$prompt" </dev/null 2>&1) || true)
+  printf '%s %s\n%s\n' "$(date -Is)" "$id" "$out" >>"$STATE/merge.log"
+  grep -qxF "$confirm" <<<"$out"
+}
+
+# CAT-1336: keep each launched card's `needs-merge` label in step with its PR,
+# so a card waiting on a person to merge says so, and a merged PR closes its
+# card. state/merge/<card key>-<pr number> holds the last change Linear
+# confirmed for that PR ("labelled|done|closed <pr number>"): each change is one
+# haiku call, made once, and a call that isn't confirmed is retried next tick.
+# The record is per PR, not per card: a card relaunched on a new branch has two
+# PRs in launched, and one shared record would make them undo each other's
+# change every tick. The label is a
+# workspace label that already exists; nothing creates it. PRs the factory
+# didn't build are never touched here.
+merges() {
+  local dir branch key id pr number state stamped url last rec
+  mkdir -p "$STATE/merge"
+  while read -r dir branch key; do
+    key=${key:-$(cardkey "$branch")}
+    [ -n "$key" ] || continue
+    pr=$(factory_pr "$dir" "$branch") || continue
+    read -r number state stamped url <<<"$pr"
+    [[ $number =~ ^[0-9]+$ ]] || continue
+    rec=$STATE/merge/$key-$number
+    last=$(cat "$rec" 2>/dev/null || true)
+    id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
+    case $state in
+      OPEN)
+        [ "$stamped" = true ] && [ "$last" != "labelled $number" ] && green "$dir" "$number" || continue
+        linear_issue "$id" "NEEDS-MERGE on" "Get Linear issue $id. If it does not have the label 'needs-merge', update it to add the existing label 'needs-merge' and keep all its other labels. Never create a label, and change nothing else (not its status, assignee or description). Then print exactly one final line: NEEDS-MERGE <on or off: whether the issue now has the label needs-merge>" || continue
+        echo "labelled $number" >"$rec"
+        echo "$id: PR #$number is stamped and green; labelled needs-merge ($url)" ;;
+      MERGED)
+        [ "$last" != "done $number" ] || continue
+        linear_issue "$id" "STATUS Done NEEDS-MERGE off" "Get Linear issue $id. Its PR $url has merged. If its status is not 'Done', move it to 'Done'. If it has the label 'needs-merge', remove that label and keep all its other labels. Change nothing else. Then print exactly one final line: STATUS <the status it ends in> NEEDS-MERGE <on or off: whether the issue still has the label needs-merge>" || continue
+        echo "done $number" >"$rec"
+        echo "$id: PR #$number merged; card Done, needs-merge removed" ;;
+      CLOSED)
+        # Only a label this dispatcher added is taken off; the status stays.
+        [ "$last" = "labelled $number" ] || continue
+        linear_issue "$id" "NEEDS-MERGE off" "Get Linear issue $id. If it has the label 'needs-merge', remove that label and keep all its other labels. Change nothing else (not its status). Then print exactly one final line: NEEDS-MERGE <on or off: whether the issue still has the label needs-merge>" || continue
+        echo "closed $number" >"$rec"
+        echo "$id: PR #$number closed without merging; needs-merge removed" ;;
+    esac
+  done < <(launched)
+}
+
+# One screen: what's running, what's waiting on a person to merge, what's
+# waiting on review, and whether it's paused.
 status() {
-  local unit since dir branch key pr
+  local unit since dir branch key pr number state stamped url merge='' open=''
   echo "Running (cap $CAP):"
   systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' |
     while read -r unit _; do
       since=$(systemctl --user show "$unit" -p ActiveEnterTimestamp --value)
       echo "  ${unit%.service}  since $since"
     done
-  echo "Open factory PRs (no new pickups at $WAITING_CAP):"
   while read -r dir branch key; do
-    pr=$(cd "$dir" && gh pr list --head "$branch" --state open --json number,url,headRefOid,body \
-      --jq '.[0] | select(.) | .headRefOid as $sha | "#\(.number) \(.url) " + (if ((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b")) then "stamped" else "not stamped" end)' </dev/null 2>/dev/null) || continue
-    [ -n "$pr" ] && echo "  ${key:-$(cardkey "$branch")}  $pr"
+    pr=$(factory_pr "$dir" "$branch") || continue
+    read -r number state stamped url <<<"$pr"
+    [ "$state" = OPEN ] || continue
+    key=${key:-$(cardkey "$branch")}
+    if [ "$stamped" = true ] && green "$dir" "$number"; then
+      merge+="  $key  #$number $url"$'\n'
+    elif [ "$stamped" = true ]; then
+      open+="  $key  #$number $url stamped, CI not green"$'\n'
+    else
+      open+="  $key  #$number $url not stamped"$'\n'
+    fi
   done < <(launched)
+  echo "Waiting on you to merge (stamped, CI green):"
+  printf '%s' "$merge"
+  echo "Other open factory PRs (no new pickups at $WAITING_CAP open in all):"
+  printf '%s' "$open"
   if [ -e "$STATE/paused" ]; then echo "Paused: yes (rm $STATE/paused to resume)"; else echo "Paused: no"; fi
 }
 
@@ -406,6 +493,7 @@ fi
 reviews
 pr_reviews
 settle
+merges
 
 waiting_now=$(waiting)
 if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
