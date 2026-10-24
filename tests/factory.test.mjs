@@ -496,10 +496,12 @@ test("a Dependabot PR is reviewed only when review-authors lists dependabot, by 
   ]));
   writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
 [ "$1 $2" = "api user" ] && { echo kkreative; exit 0; }
+src="${fixture}"; [ "$1 $2" = "pr checks" ] && { src="${t}/checks-$3.json"; [ -e "$src" ] || src="${t}/no-checks.json"; }
 shift 2; q=.
 while [ $# -gt 0 ]; do case $1 in --jq) q=$2; shift;; esac; shift; done
-jq -r "$q" "${fixture}"
+jq -r "$q" "$src"
 `, { mode: 0o755 });
+  writeFileSync(join(t, "no-checks.json"), "[]");
   writeFileSync(units, "");
   writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
 for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; esac; done
@@ -576,6 +578,9 @@ exit 0
     assert.match(args, /^--disallowedTools=Bash\(git push\*\),Bash\(gh pr merge\*\),Bash\(gh api\*\)$/m);
     const allowed = args.match(/^--allowedTools=(.*)$/m)[1].split(",");
     assert.ok(allowed.includes("Bash(npm audit --package-lock-only*)"), allowed);
+    // CAT-1337: it reads the PR's CI, and only that: no log access was added.
+    assert.ok(allowed.includes("Bash(gh pr checks *)"), allowed);
+    assert.ok(!allowed.some((x) => /gh run/.test(x)), allowed);
     for (const a of allowed) assert.doesNotMatch(a, /install|\bci\b|npx|npm run|npm test|npm exec|git push|git commit|gh pr merge|gh api|^Bash$|Bash\(\*\)/, a);
   }
 
@@ -584,6 +589,22 @@ exit 0
   r = tick("kkreative dependabot");
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(started(), []);
+
+  // CAT-1337: while a required check is still running, the Dependabot PR waits
+  // (no review, no marker, so a later tick reviews it); once it has finished,
+  // pass or fail, the review starts and the reviewer judges the result.
+  rmSync(join(state, "reviewed/repo", `3-${sha("3")}`));
+  writeFileSync(join(t, "checks-3.json"), JSON.stringify([{ name: "validate", bucket: "pending" }]));
+  r = tick("kkreative dependabot");
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(started(), []);
+  assert.deepEqual(reviewed(), [`1-${sha("1")}`]);
+  assert.match(r.stdout, /PR #3 in .*: required CI still running; dependency review waits for a later tick/);
+  writeFileSync(join(t, "checks-3.json"), JSON.stringify([{ name: "validate", bucket: "fail" }]));
+  r = tick("kkreative dependabot");
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(started(), ["factory-review-repo-pr-3"]);
+  assert.deepEqual(reviewed(), [`1-${sha("1")}`, `3-${sha("3")}`]);
 });
 
 test("the dependency reviewer's prompt forbids pushing, merging and auto-merge, and installs nothing", () => {
@@ -612,4 +633,23 @@ test("the dependency reviewer's prompt forbids pushing, merging and auto-merge, 
   assert.match(dep, /Only if the verdict is 'looks routine'/);
   assert.match(dep, /^ {3}Reviewed: \$sha — dependency review \(no pushes\)$/m);
   assert.match(dep, /--permission-mode dontAsk --setting-sources user --strict-mcp-config/);
+});
+
+// CAT-1337: a Dependabot PR whose CI is red (a failing check, or a required one
+// still running) is never 'looks routine', so it is never stamped.
+test("the dependency reviewer says needs a look when CI is red, naming the checks", () => {
+  const s = read(DISPATCH);
+  const body = s.slice(s.indexOf("review_pr() {"), s.indexOf("pr_reviews() {"));
+  const dep = body.slice(body.indexOf('if [ "$dep" = true ]'), body.indexOf("\n  else\n"));
+  assert.match(dep, /--allowedTools="[^"]*Bash\(gh pr checks \*\)/);
+  assert.doesNotMatch(dep, /--allowedTools="[^"]*gh run/, "the allowlist is not widened for logs");
+  assert.match(dep, /Run gh pr checks \$number, then gh pr checks \$number --required/);
+  assert.match(dep, /any check is failing \(fail or cancel\), or if any required check has not finished \(pending\)/);
+  assert.match(dep, /Name each failing or unfinished check/);
+  assert.match(dep, /If gh pr checks cannot run, say so; that counts as a check that did not run/);
+  assert.match(dep, /'looks routine' only if steps 2 to 5 found/);
+  assert.match(dep, /CI is not red, and every check ran/);
+  assert.match(dep, /the verdict is 'needs a look: CI <state>'/);
+  // The CI check comes before the verdict, and the stamp still needs 'looks routine'.
+  assert.ok(dep.indexOf("5. CI.") < dep.indexOf("6. Verdict.") && dep.indexOf("6. Verdict.") < dep.indexOf("8. Only if the verdict is 'looks routine'"));
 });

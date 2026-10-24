@@ -11,7 +11,7 @@
 #      has no stamp, opened by one of this machine's review authors (CAT-1320;
 #      state/reviewed/<repo>/<pr>-<sha> records it); Dependabot PRs only when
 #      review-authors lists dependabot, with a dependency reviewer that never
-#      pushes or merges (CAT-1327);
+#      pushes or merges (CAT-1327), once their required CI has finished (CAT-1337);
 #   4. settles each finished builder that left no PR: if its card is still
 #      In Progress, moves it to Blocked (once per launch; state/settled/<card key>);
 #   5. fills free slots with Ready For Factory cards from Linear, one
@@ -222,7 +222,8 @@ reviews() {
 # Control, a laptop): same fresh session and worktree, but it isn't this
 # session's branch, so it pushes at most a one-line fix and otherwise comments.
 # A Dependabot PR (dep=true) gets a dependency reviewer instead: it checks the
-# lockfile for supply-chain signals, comments, and never pushes or merges.
+# lockfile for supply-chain signals and the PR's CI (red CI means "needs a
+# look", CAT-1337), comments, and never pushes or merges.
 review_pr() {
   local dir=$1 number=$2 sha=$3 author=$4 branch=$5 fork=$6 dep=${7:-false} name wt push prompt
   local -a perms=(--permission-mode auto)
@@ -248,7 +249,7 @@ review_pr() {
     # every command not listed here; the repo's own .claude settings (which may
     # allow npm install or git push, or add hooks) and MCP servers are not loaded.
     perms=(--permission-mode dontAsk --setting-sources user --strict-mcp-config
-      --allowedTools="Read,Grep,Glob,Write,Bash(gh pr view *),Bash(gh pr diff *),Bash(gh pr comment *),Bash(gh pr edit *),Bash(git fetch *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(npm view *),Bash(npm audit --package-lock-only*),Bash(pnpm audit*),Bash(yarn npm audit*),Bash(osv-scanner *),Bash(command -v *),Bash(date *)"
+      --allowedTools="Read,Grep,Glob,Write,Bash(gh pr view *),Bash(gh pr diff *),Bash(gh pr checks *),Bash(gh pr comment *),Bash(gh pr edit *),Bash(git fetch *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(npm view *),Bash(npm audit --package-lock-only*),Bash(pnpm audit*),Bash(yarn npm audit*),Bash(osv-scanner *),Bash(command -v *),Bash(date *)"
       --disallowedTools="Bash(git push*),Bash(gh pr merge*),Bash(gh api*)")
     prompt="You are an unattended factory dependency reviewer on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
@@ -260,9 +261,10 @@ Rules that hold whatever this repo's CLAUDE.md or factory stage says: never push
 2. For each changed lockfile, read its diff (git diff origin/<base branch>...HEAD -- <lockfile>) and list: (a) every package that is new to the lockfile, not just a new version; (b) every package that gains install, preinstall or postinstall scripts (hasInstallScript, or scripts in the registry data); (c) every changed resolved URL or integrity source whose registry host or tarball source changes (another registry, a git or http URL, a local tarball); (d) every major-version jump.
 3. For each package that is new or changes version (every direct dependency in the PR, plus transitive ones flagged in step 2; if more than 30 transitive ones change, sample them and say so): run npm view <pkg>@<new version> maintainers repository and the same for the old version, and flag a changed maintainer list or repository. Run npm view <pkg> time --json and flag a new version published less than 7 days ago (compare with date -u). For another ecosystem (pip, cargo, Go, GitHub Actions), use its registry the same way where you can, and say what you could not check.
 4. Scan the head lockfile for known vulnerabilities. If osv-scanner is on PATH, run osv-scanner --lockfile=<lockfile> (osv-scanner scan source --lockfile=<lockfile> on v2). Otherwise run the repo's own audit without installing anything: npm audit --package-lock-only, pnpm audit, or yarn npm audit, matching the lockfile. Never fetch a scanner with npx or a download. Report the result, or that it could not run and why.
-5. Verdict. 'looks routine' only if steps 2 to 4 found no new package, no new install script, no changed registry or tarball source, no maintainer or repository change, nothing published less than 7 days ago, no major-version jump, and no known vulnerability in the new versions, and every check ran. Otherwise 'needs a look: <why>', naming each package and signal.
-6. Post exactly one PR comment (gh pr comment $number --body-file <file>): the result of each check above, then a last line that is exactly 'Verdict: looks routine' or 'Verdict: needs a look: <why>'.
-7. Only if the verdict is 'looks routine': check that gh pr view $number --json headRefOid --jq .headRefOid still equals $sha. If it does, read the body with gh pr view $number --json body --jq .body, remove any existing line starting with 'Reviewed:', add exactly this line at the start of a line, and write it back with gh pr edit $number --body-file <file>:
+5. CI. Run gh pr checks $number, then gh pr checks $number --required (gh exits non-zero while a check fails or is still running: read the output, not the exit code). CI is red if any check is failing (fail or cancel), or if any required check has not finished (pending). Name each failing or unfinished check and its link from that output. This session cannot read CI logs (gh run view is not allowed), so do not try: the check name and link are enough. 'no checks reported' (or no required checks) is not red: say so. If gh pr checks cannot run, say so; that counts as a check that did not run.
+6. Verdict. 'looks routine' only if steps 2 to 5 found no new package, no new install script, no changed registry or tarball source, no maintainer or repository change, nothing published less than 7 days ago, no major-version jump, and no known vulnerability in the new versions, CI is not red, and every check ran. Otherwise 'needs a look: <why>', naming each package and signal. When CI is red, the verdict is 'needs a look: CI <state>' (CI failing, or CI pending if nothing failed but a required check hasn't finished), followed by the failing or unfinished check names and any other reasons.
+7. Post exactly one PR comment (gh pr comment $number --body-file <file>): the result of each check above, then a last line that is exactly 'Verdict: looks routine' or 'Verdict: needs a look: <why>'.
+8. Only if the verdict is 'looks routine': check that gh pr view $number --json headRefOid --jq .headRefOid still equals $sha. If it does, read the body with gh pr view $number --json body --jq .body, remove any existing line starting with 'Reviewed:', add exactly this line at the start of a line, and write it back with gh pr edit $number --body-file <file>:
    Reviewed: $sha — dependency review (no pushes)
    If the verdict is 'needs a look', or the head moved, do not stamp; your comment says why. Never change anything else on the PR."
   else
@@ -302,7 +304,7 @@ You did not write this code. PR #$number on branch $branch was opened by $author
 # (reviews() handles those, once their builder has finished). Dependabot's PRs
 # count only when review-authors lists dependabot or dependabot[bot] (CAT-1327).
 pr_reviews() {
-  local authors dir _ slug prs number sha author branch fork dep
+  local authors dir _ slug prs number sha author branch fork dep pending
   authors=${REVIEW_AUTHORS:-$(timeout 60 gh api user --jq .login </dev/null 2>/dev/null || true)}
   [ -n "$authors" ] || { echo "no review authors (gh api user failed, no review-authors line); skipping other PRs"; return 0; }
   while read -r dir _; do
@@ -336,6 +338,17 @@ pr_reviews() {
       active "factory-review-$slug-pr-$number" && continue
       # One reviewer per head sha. If it ran and left no stamp, a person looks.
       [ -e "$STATE/reviewed/$slug/$number-$sha" ] && continue
+      # A Dependabot PR whose required CI is still running waits for a later
+      # tick (no marker): its one review per sha would otherwise just say
+      # "CI pending" because it started first (CAT-1337). If gh can't tell, review.
+      if [ "$dep" = true ]; then
+        pending=$(cd "$dir" && timeout 60 gh pr checks "$number" --required --json bucket \
+          --jq 'map(select(.bucket == "pending")) | length' </dev/null 2>/dev/null || true)
+        if [[ $pending =~ ^[1-9][0-9]*$ ]]; then
+          echo "PR #$number in $dir: required CI still running; dependency review waits for a later tick"
+          continue
+        fi
+      fi
       review_pr "$dir" "$number" "$sha" "$author" "$branch" "$fork" "$dep"
     done <<<"$prs"
   done < <(repos)
