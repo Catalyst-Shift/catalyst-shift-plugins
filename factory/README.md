@@ -50,6 +50,14 @@ This needs both clocks synced (systemd-timesyncd or similar). Every Linear team
 the factory serves needs the statuses Ready For Factory, In Progress, In
 Review, Blocked and Done.
 
+**Dependencies:** when one card must land before another, mark it in Linear
+(Blocked by / Blocks). The dispatcher never picks a card while anything it is
+blocked by is unfinished (not Done, Canceled or Duplicate), whichever machine
+has the blocker. A session that finds an earlier In Progress card touching the
+same files or tables puts its own card back in Ready For Factory, blocked by
+that card. Only the card that went In Progress later waits, so two cards never
+block each other.
+
 **Caps (per machine):** at most 2 sessions run at once (builders and reviewers
 together), and no new card is picked up while 3 or more PRs from branches this
 machine's factory launched are open. Reviews still run while that cap holds;
