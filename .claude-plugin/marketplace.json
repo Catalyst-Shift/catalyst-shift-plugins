@@ -12,7 +12,7 @@
     {
       "name": "catalyst-ops",
       "source": "./catalyst-ops",
-      "description": "Catalyst Shift operating canon — next (build one card by hand: card → gstack → PR with the evidence → a fresh session’s review stamp, merged by Kevin or Keith), ways-of-working (three homes + the Claude dev factory), decision-governance (proposed-vs-decided labelling, ratification rules)."
+      "description": "Catalyst Shift operating canon — card (write a card the factory can build: why, executable checklist, risk, rollback, blocked-by links), next (build one card by hand: card → gstack → PR with the evidence → a fresh session’s review stamp, merged by Kevin or Keith), ways-of-working (three homes + the Claude dev factory), decision-governance (proposed-vs-decided labelling, ratification rules)."
     }
   ]
 }

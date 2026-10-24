@@ -1,5 +1,10 @@
 # Changelog — catalyst-ops
 
+## 0.7.0 — 2026-10-24 (CAT-1324)
+
+- New `card` skill (`/card`): writes or fixes a Linear card in the factory format — why, 3–8 executable checklist lines, risk class, rollback line, blocked-by relations — and strips the retired pre-factory wording (data-fence paste blocks, bot roles, pstack, Cursor settings).
+- `/next` drafts a missing checklist with `/card` instead of gstack's `/spec`.
+
 ## 0.6.2 — 2026-10-24
 
 - `/next` skips a card whose Linear "blocked by" issues aren't all Done, Canceled or Duplicate, and adds "blocked by" relations when it drafts a card that depends on another. After claiming, it checks the project's other In Progress cards: if one that went In Progress earlier would change the same files or tables, the card goes back to Ready For Factory, blocked by that card. Only the later card waits, so two cards never block each other. (CAT-1319)
