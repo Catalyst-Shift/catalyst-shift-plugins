@@ -65,15 +65,36 @@ a fresh reviewer session, however it was opened (a cloud thread, Remote
 Control, a laptop). Each machine reviews the PRs its own person opened: by
 default the GitHub login `gh` runs as on that machine. `review-authors kkreative
 keithcatalyst` in repos.conf replaces that list, for example while only one
-machine runs; never list the same login on both machines. Dependabot PRs are
-skipped, and so is any PR with the label `no-factory-review` (add it to opt a
-PR out). The reviewer pushes at most a one-line fix to a branch it didn't
-build; anything bigger it answers or reports in a PR comment and leaves the PR
+machine runs; never list the same login on both machines. Any PR with the
+label `no-factory-review` is skipped (add it to opt a PR out), and Dependabot
+PRs get their own reviewer (below). The reviewer pushes at most a one-line fix
+to a branch it didn't build; anything bigger it answers or reports in a PR comment and leaves the PR
 unstamped. One reviewer per head sha, recorded in
 `~/.local/state/claude-factory/reviewed/<repo>/<pr>-<sha>`; it shows in
 `claude-factory-dispatch status` while it runs, and logs to
 `review-<repo>-pr-<n>.log`. `<repo>` is the folder name lowercased, with anything
 other than letters and digits turned into `-` (`My_Repo` becomes `my-repo`).
+
+**Dependabot PRs (CAT-1327):** skipped unless `review-authors` lists
+`dependabot` (or `dependabot[bot]`), on one machine only, for example
+`review-authors kkreative keithcatalyst dependabot`. Then each open Dependabot
+PR gets a dependency reviewer instead of `/review`. It installs nothing and
+runs nothing from the PR. It reads the lockfile diff for brand-new packages,
+new install scripts, a changed registry or tarball source, and major-version
+jumps; asks npm (`npm view <pkg>@<ver> maintainers repository`,
+`npm view <pkg> time`) for a changed maintainer or repository and for versions
+published less than 7 days ago; and scans the lockfile with `osv-scanner` if
+it is installed, or the repo's own audit (`npm audit --package-lock-only`,
+`pnpm audit`, `yarn npm audit`) if not. It posts one PR comment ending
+`Verdict: looks routine` or `Verdict: needs a look: <why>`. Only when routine
+does it add `Reviewed: <head sha> — dependency review (no pushes)` to the PR
+body; Dependabot PRs are exempt from the `review stamp` check, so the line is
+for people and for the dispatcher's one-review-per-sha record. It never
+pushes, never merges and never turns on auto-merge, whatever the repo's
+factory stage (the session is also denied `git push` and `gh pr merge`):
+a person merges every dependency PR. It shares the cap, the
+`reviewed/<repo>/<pr>-<sha>` record, and the `review-<repo>-pr-<n>.log` log
+with the other PR reviews.
 
 **Caps (per machine):** at most 2 sessions run at once (builders and reviewers
 together), and no new card is picked up while 3 or more PRs from branches this
