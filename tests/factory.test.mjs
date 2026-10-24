@@ -67,6 +67,26 @@ test("the builder is told not to stamp; the reviewer stamps and never merges", (
   assert.match(s, /Never merge the PR and never turn on auto-merge/);
 });
 
+test("only the card reviewer may turn on auto-merge, and only under the stage 2 rule (CAT-1326)", () => {
+  const s = read(DISPATCH);
+  const build = s.slice(s.indexOf("launch() {"), s.indexOf("review() {"));
+  const card = s.slice(s.indexOf("review() {"), s.indexOf("reviews() {"));
+  const other = s.slice(s.indexOf("review_pr() {"), s.indexOf("pr_reviews() {"));
+  assert.match(build, /do not turn on auto-merge and do not merge/);
+  assert.doesNotMatch(build, /--auto/);
+  // The card reviewer: the merge command appears once, inside the stage 2 rule.
+  assert.equal(card.split("--auto --squash").length - 1, 1);
+  const rule = card.slice(card.indexOf("Stage 2 rule:"), card.indexOf("\n6. "));
+  assert.match(rule, /gh pr merge \$number --auto --squash only if all of these hold/);
+  assert.match(rule, /exactly 'Factory stage: 2'/);
+  assert.match(rule, /Risk section says Low/);
+  assert.match(rule, /gh pr diff \$number --name-only matches a path in the base branch's \.github\/CODEOWNERS/);
+  assert.match(rule, /never turn on auto-merge/);
+  // A PR without a factory card never auto-merges.
+  assert.doesNotMatch(other, /--auto/);
+  assert.match(other, /a PR without a factory card never auto-merges/);
+});
+
 test("install.sh never enables or starts a unit, and never overwrites repos.conf", () => {
   const s = read(INSTALL);
   const run = s.split("\n").filter((l) => !/^(#|echo\b|miss\b|ok\b)/.test(l.trim()) && !/echo "/.test(l));
