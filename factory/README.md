@@ -71,7 +71,8 @@ build; anything bigger it answers or reports in a PR comment and leaves the PR
 unstamped. One reviewer per head sha, recorded in
 `~/.local/state/claude-factory/reviewed/<repo>/<pr>-<sha>`; it shows in
 `claude-factory-dispatch status` while it runs, and logs to
-`review-<repo>-pr-<n>.log`.
+`review-<repo>-pr-<n>.log`. `<repo>` is the folder name lowercased, with anything
+other than letters and digits turned into `-` (`My_Repo` becomes `my-repo`).
 
 **Caps (per machine):** at most 2 sessions run at once (builders and reviewers
 together), and no new card is picked up while 3 or more PRs from branches this
