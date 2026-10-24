@@ -91,8 +91,12 @@ does it add `Reviewed: <head sha> — dependency review (no pushes)` to the PR
 body; Dependabot PRs are exempt from the `review stamp` check, so the line is
 for people and for the dispatcher's one-review-per-sha record. It never
 pushes, never merges and never turns on auto-merge, whatever the repo's
-factory stage (the session is also denied `git push` and `gh pr merge`):
-a person merges every dependency PR. It shares the cap, the
+factory stage: a person merges every dependency PR. Release notes in a
+Dependabot PR are written by package authors, so the session doesn't rely on
+the prompt: it runs in `dontAsk` mode with a short allowlist (`gh pr
+view/diff/comment/edit`, `git fetch/diff/log/show`, `npm view`, the
+lockfile-only audits, `osv-scanner`), denies `git push`, `gh pr merge` and
+`gh api`, and loads neither the repo's `.claude` settings nor MCP servers. It shares the cap, the
 `reviewed/<repo>/<pr>-<sha>` record, and the `review-<repo>-pr-<n>.log` log
 with the other PR reviews.
 

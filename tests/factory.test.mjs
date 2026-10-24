@@ -545,6 +545,7 @@ exit 0
   // The other-PR reviewer is unchanged: it may push a one-line fix and has no tool denials.
   assert.match(read(`${units}.factory-review-repo-pr-1`), /git push origin 'HEAD:b\/1'/);
   assert.doesNotMatch(read(`${units}.factory-review-repo-pr-1.args`), /disallowedTools/);
+  assert.match(read(`${units}.factory-review-repo-pr-1.args`), /\/claude\n-p\n--permission-mode\nauto\n--output-format\ntext\n$/);
 
   // The Dependabot PR counts toward the cap: PR #1's reviewer still runs, cap 1.
   r = tick("kkreative dependabot", 1);
@@ -565,7 +566,17 @@ exit 0
     assert.match(prompt, /dependency reviewer/);
     assert.doesNotMatch(prompt, /git push origin/);
     assert.match(prompt, new RegExp(`Reviewed: ${sha("3")} — dependency review \\(no pushes\\)`));
-    assert.match(read(`${units}.factory-review-repo-pr-3.args`), /^--disallowedTools=Bash\(git push \*\),Bash\(gh pr merge \*\)$/m);
+    // Enforced, not just asked: dontAsk with an allowlist, no repo settings or
+    // MCP servers, push/merge/gh api denied, and nothing that installs or runs code.
+    const args = read(`${units}.factory-review-repo-pr-3.args`);
+    assert.match(args, /^--permission-mode\ndontAsk$/m);
+    assert.doesNotMatch(args, /^auto$/m);
+    assert.match(args, /^--setting-sources\nuser$/m);
+    assert.match(args, /^--strict-mcp-config$/m);
+    assert.match(args, /^--disallowedTools=Bash\(git push\*\),Bash\(gh pr merge\*\),Bash\(gh api\*\)$/m);
+    const allowed = args.match(/^--allowedTools=(.*)$/m)[1].split(",");
+    assert.ok(allowed.includes("Bash(npm audit --package-lock-only*)"), allowed);
+    for (const a of allowed) assert.doesNotMatch(a, /install|\bci\b|npx|npm run|npm test|npm exec|git push|git commit|gh pr merge|gh api|^Bash$|Bash\(\*\)/, a);
   }
 
   // Finished: not reviewed again at the same sha.
@@ -600,5 +611,5 @@ test("the dependency reviewer's prompt forbids pushing, merging and auto-merge, 
   assert.match(dep, /'Verdict: looks routine' or 'Verdict: needs a look: <why>'/);
   assert.match(dep, /Only if the verdict is 'looks routine'/);
   assert.match(dep, /^ {3}Reviewed: \$sha — dependency review \(no pushes\)$/m);
-  assert.match(dep, /deny=\(--disallowedTools="Bash\(git push \*\),Bash\(gh pr merge \*\)"\)/);
+  assert.match(dep, /--permission-mode dontAsk --setting-sources user --strict-mcp-config/);
 });
