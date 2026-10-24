@@ -6,14 +6,14 @@
 #      them would be lost;
 #   2. starts a fresh reviewer session for each finished builder whose open PR
 #      has no `Reviewed: <head sha>` line yet (one reviewer per head sha;
-#      ~/.local/state/claude-factory/reviewed/cat-NNN-<sha> records it);
+#      ~/.local/state/claude-factory/reviewed/<card key>-<sha> records it);
 #   3. settles each finished builder that left no PR: if its card is still
-#      In Progress, moves it to Blocked (once per launch; state/settled/cat-NNN);
+#      In Progress, moves it to Blocked (once per launch; state/settled/<card key>);
 #   4. fills free slots with Ready For Factory cards from Linear, one
 #      unattended Claude session per card in its own worktree.
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
-#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>")
+#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>")
 #   pause:  touch ~/.local/state/claude-factory/paused
 #   status: claude-factory-dispatch status
 #   watch:  systemctl --user list-units 'factory-*'; logs in ~/.local/state/claude-factory/
@@ -38,13 +38,21 @@ CLAUDE=${CLAUDE_BIN:-$(command -v claude)} || { echo "claude not found on PATH (
 MACHINE_LABEL=$(awk '$1 == "label" { print $2; exit }' "$CONF")
 # Two machines can serve the same projects. They tick at the same clock times,
 # so one of them waits this many seconds before picking ("offset <seconds>").
+# It must be under 300, so the pick still lands inside the same 5-minute tick.
 OFFSET=$(awk '$1 == "offset" { print $2; exit }' "$CONF")
-case "${OFFSET:-0}" in ''|*[!0-9]*) OFFSET=0 ;; esac
+case "$OFFSET" in
+  '') OFFSET=0 ;;
+  *[!0-9]*|????*) echo "ignoring 'offset $OFFSET' in $CONF: it must be a whole number of seconds under 300" >&2; OFFSET=0 ;;
+esac
+OFFSET=$((10#$OFFSET))
+if [ "$OFFSET" -ge 300 ]; then echo "ignoring 'offset $OFFSET' in $CONF: it must be under 300" >&2; OFFSET=0; fi
 
 running() { systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' | wc -l; }
 active() { systemctl --user is-active --quiet "$1.service"; }
-# A card key is a Linear identifier (CAT-123, LUM-45), lowercased for unit and file names.
-cardkey() { printf '%s' "$1" | grep -oiE '(^|[^a-z])[a-z]+-[0-9]+' | head -1 | sed 's/^[^a-zA-Z]//' | tr '[:upper:]' '[:lower:]'; }
+# A card key is a Linear identifier (CAT-123, LUM-45), lowercased for unit and
+# file names. In a branch it is read where Linear puts it: at the start of the
+# part after the last slash (kevin/cat-1318-some-title).
+cardkey() { printf '%s' "${1##*/}" | grep -oiE '^[a-z]+-[0-9]+' | tr '[:upper:]' '[:lower:]'; }
 
 # Branches this dispatcher launched. LAUNCHED lines are "<repo folder> <branch> [<card key>]"
 # (older lines have no key; it is read from the branch name).
@@ -68,8 +76,8 @@ waiting() {
 repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
 
 # A finished session's worktree goes once nothing in it would be lost. Each
-# worktree has the name of the unit that uses it: factory-cat-NNN (builder) or
-# factory-review-cat-NNN (reviewer).
+# worktree has the name of the unit that uses it: factory-<card key> (builder)
+# or factory-review-<card key> (reviewer).
 cleanup() {
   local dir=$1 wt name
   for wt in "$dir"/.claude/worktrees/factory-*; do
@@ -113,6 +121,7 @@ launch() {
 
 Card: $id in Linear. It is already In Progress and assigned to the person who runs this machine. Branch: $branch
 
+0. Get the card first. If it is not assigned to me (the Linear user you act as), another machine claimed it at the same moment: change nothing on the card (step 6 does not apply), push nothing, and end.
 1. You start in a fresh git worktree. Put it on the card's branch first: if scripts/session.sh supports --here, run: scripts/session.sh --here $branch
    Otherwise: git fetch origin, then git switch --no-track -c $branch origin/main (or git switch --track -c $branch origin/$branch if that branch is already pushed), and set up .env.local and dependencies the way this repo's CLAUDE.md describes.
 2. Read the card and its comments, then follow this repo's CLAUDE.md for how to build, test, review and open the PR.
@@ -199,7 +208,7 @@ settle() {
       # outage or a missing connector is retried next tick, not recorded.
       out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
         --allowedTools="${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment" \
-        "Get Linear issue $id. If its status is 'In Progress', move it to 'Blocked' and add this comment: 'The factory session on $HOST ended without a PR and without moving this card. Its log is $STATE/$key.log on that machine. A person should check it.' Otherwise change nothing.
+        "Get Linear issue $id. If its status is 'In Progress' and it is assigned to me, move it to 'Blocked' and add this comment: 'The factory session on $HOST ended without a PR and without moving this card. Its log is $STATE/$key.log on that machine. A person should check it.' Otherwise change nothing.
 Then print exactly one final line: SETTLED <the status it ends in>" </dev/null 2>&1) || true)
       printf '%s %s\n%s\n' "$(date -Is)" "$id" "$out" >>"$STATE/settle.log"
       grep -qE '^SETTLED [A-Za-z]' <<<"$out" || continue
@@ -245,13 +254,15 @@ fi
 reviews
 settle
 
-[ "$OFFSET" -gt 0 ] && sleep "$OFFSET"
-
 waiting_now=$(waiting)
 if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
   echo "$waiting_now factory PRs waiting on review (cap $WAITING_CAP); no new pickups"
   exit 0
 fi
+
+# Wait only when a pick could follow. The lock stays held and the oneshot unit
+# stays active meanwhile, so the timer cannot start an overlapping tick.
+if [ "$OFFSET" -gt 0 ] && [ "$(running)" -lt "$CAP" ]; then sleep "$OFFSET"; fi
 
 while read -r dir project; do
   [ "$(running)" -lt "$CAP" ] || break

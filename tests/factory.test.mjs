@@ -173,3 +173,62 @@ esac
   assert.match(r.stdout, /started CAT-3/);
   assert.ok(!existsSync(join(state, "settled", "cat-3")), "relaunch kept the old settled record");
 });
+
+// CAT-1318: card keys from any Linear team, read from an identifier or from
+// where Linear puts it in a branch name.
+test("cardkey reads CAT- and LUM- keys from identifiers and Linear branch names", () => {
+  const fn = read(DISPATCH).split("\n").find((l) => l.startsWith("cardkey()"));
+  const key = (s) => spawnSync("bash", ["-c", `${fn}\ncardkey "$1"`, "_", s], { encoding: "utf8" }).stdout.trim();
+  assert.equal(key("CAT-3"), "cat-3");
+  assert.equal(key("LUM-45"), "lum-45");
+  assert.equal(key("kevin/cat-1318-two-machines-safe-claim"), "cat-1318");
+  assert.equal(key("keith/lum-12-fix-step-2"), "lum-12");
+  assert.equal(key("ops-2/cat-9-x"), "cat-9", "a username with -<digits> is not the key");
+  assert.equal(key("cat-7-no-user"), "cat-7");
+  assert.equal(key("kevin/no-key-here"), "");
+});
+
+// CAT-1318: repos.conf can carry label and offset lines; neither is a repo,
+// a bad or missing offset never breaks the tick, and a LUM- pick launches.
+test("offset and label lines are config, not repos; offset is validated; LUM- picks launch", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-offset-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
+  for (const d of [bin, state, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  const calls = join(t, "calls");
+  writeFileSync(join(bin, "gh"), "#!/bin/sh\necho 0\n", { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), "#!/bin/sh\ncase \"$*\" in *is-active*) exit 3;; esac\nexit 0\n", { mode: 0o755 });
+  writeFileSync(join(bin, "systemd-run"), `#!/bin/sh\necho "systemd-run $*" | head -c 200 >>"${calls}"; echo >>"${calls}"\n`, { mode: 0o755 });
+  writeFileSync(join(bin, "claude"), `#!/usr/bin/env bash
+p=\${!#}
+printf 'pick %s\\n' "$(printf '%s' "$p" | grep -o "project '[^']*'")" >>"${calls}"
+echo "\${PICK:-NONE}"
+`, { mode: 0o755 });
+  const conf = join(home, ".config/claude-factory/repos.conf");
+  const tick = (offset, extra = {}) => {
+    writeFileSync(conf, `label keith-omarchy\n${offset}\n${t} proj\n`);
+    writeFileSync(calls, "");
+    return spawnSync("bash", [DISPATCH], {
+      encoding: "utf8",
+      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), ...extra },
+    });
+  };
+  for (const [offset, warn] of [["", false], ["offset 0", false], ["offset 1", false], ["offset abc", true], ["offset 300", true], ["offset 99999999999999999999", true]]) {
+    const r = tick(offset);
+    assert.equal(r.status, 0, `${offset}: ${r.stderr}`);
+    assert.doesNotMatch(r.stderr, /integer|syntax error/, `${offset}: ${r.stderr}`);
+    assert.equal(/ignoring 'offset/.test(r.stderr), warn, `${offset}: ${r.stderr}`);
+    // Exactly one pick, for the one repo line: label and offset are not repos.
+    assert.equal(read(calls).trim(), "pick project 'proj'", offset);
+  }
+  const r = tick("offset 0", { PICK: "PICK LUM-45 keith/lum-45-some-title" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /started LUM-45 .*unit factory-lum-45/);
+  assert.match(read(calls), /--unit=factory-lum-45 /);
+  assert.match(read(join(state, "launched")), /keith\/lum-45-some-title lum-45$/m);
+});
+
+test("install.sh skips label and offset lines like the dispatcher does", () => {
+  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\)'/;
+  assert.match(read(INSTALL), skip);
+  assert.match(read(DISPATCH), skip);
+});
