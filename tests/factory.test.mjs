@@ -74,12 +74,15 @@ test("only the card reviewer may turn on auto-merge, and only under the stage 2 
   const other = s.slice(s.indexOf("review_pr() {"), s.indexOf("pr_reviews() {"));
   assert.match(build, /do not turn on auto-merge and do not merge/);
   assert.doesNotMatch(build, /--auto/);
+  assert.match(build, /Never change the card's Risk section/);
+  assert.match(card, /never use --admin/);
   // The card reviewer: the merge command appears once, inside the stage 2 rule.
   assert.equal(card.split("--auto --squash").length - 1, 1);
   const rule = card.slice(card.indexOf("Stage 2 rule:"), card.indexOf("\n6. "));
-  assert.match(rule, /gh pr merge \$number --auto --squash only if all of these hold/);
-  assert.match(rule, /exactly 'Factory stage: 2'/);
-  assert.match(rule, /Risk section says Low/);
+  assert.match(rule, /gh pr merge \$number --auto --squash --match-head-commit <the stamped sha> only if all of these hold/);
+  assert.match(rule, /base is the repo's default branch/);
+  assert.match(rule, /never the PR head's\) has a line that is exactly 'Factory stage: 2'/);
+  assert.match(rule, /Risk section says Low and nothing else/);
   assert.match(rule, /gh pr diff \$number --name-only matches a path in the base branch's \.github\/CODEOWNERS/);
   assert.match(rule, /never turn on auto-merge/);
   // A PR without a factory card never auto-merges.

@@ -130,11 +130,16 @@ install.sh prints how to retire any it finds.
    `Reviewed: <40-char head sha> — /review[, /cso]` in the PR body. It never
    merges itself. A hard stop moves the card to Blocked.
    **Stage 2 (CAT-1326).** After stamping, the reviewer runs `gh pr merge <n>
-   --auto --squash` only when the base branch's CLAUDE.md has the exact line
-   `Factory stage: 2`, the card's Risk is Low, no file in the diff matches
-   `.github/CODEOWNERS`, and the stamp is still at the head. GitHub merges once
-   CI is green. Otherwise nobody turns on auto-merge: not the builder, and never
-   the reviewer of a PR without a factory card.
+   --auto --squash --match-head-commit <stamped sha>` only when the PR targets
+   the default branch, whose CLAUDE.md has the exact line `Factory stage: 2`,
+   the card's Risk is Low, no file in the diff matches `.github/CODEOWNERS`, and
+   the stamp is still at the head. GitHub merges once the required checks are
+   green. Otherwise nobody turns on auto-merge: not the builder, and never the
+   reviewer of a PR without a factory card. These rules live in the prompts; the
+   dispatcher does not check them itself. GitHub backs up two of them: a
+   CODEOWNERS path still needs a code-owner approval, and `--match-head-commit`
+   refuses a moved head. A push after auto-merge is on is caught only once the
+   repo's ruleset requires the `review stamp` check.
    The dispatcher starts at most one reviewer per head sha, recorded as
    `~/.local/state/claude-factory/reviewed/cat-NNN-<sha>`. A new push (by a
    person, say) changes the head, so the next tick reviews again. If a reviewer
