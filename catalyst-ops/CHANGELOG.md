@@ -2,8 +2,12 @@
 
 ## 0.7.0 — 2026-10-24 (CAT-1324)
 
-- New `card` skill (`/card`): writes or fixes a Linear card in the factory format — why, 3–8 executable checklist lines, risk class, rollback line, blocked-by relations — and strips the retired pre-factory wording (data-fence paste blocks, bot roles, pstack, Cursor settings).
+- New `card` skill (`/card`): writes or fixes a Linear card in the factory format — why, 3–8 executable checklist lines, risk class, rollback line, blocked-by relations — and strips the retired pre-factory wording (data-fence paste blocks, steps addressed to bots, pstack, Cursor settings). It rewrites an existing card's description only when asked to fix that card; otherwise it posts the draft as a comment.
 - `/next` drafts a missing checklist with `/card` instead of gstack's `/spec`.
+
+## 0.6.3 — 2026-10-24
+
+- `/next` starts no reviewer of its own when the factory dispatcher runs on the machine for the repo: the dispatcher reviews and stamps the PR within a tick, and a second reviewer would race it on the PR body and the branch. (CAT-1320)
 
 ## 0.6.2 — 2026-10-24
 
