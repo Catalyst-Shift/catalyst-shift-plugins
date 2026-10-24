@@ -11,7 +11,7 @@
 #      has no stamp, opened by one of this machine's review authors (CAT-1320;
 #      state/reviewed/<repo>/<pr>-<sha> records it); Dependabot PRs only when
 #      review-authors lists dependabot, with a dependency reviewer that never
-#      pushes or merges (CAT-1327);
+#      pushes or merges (CAT-1327), once their required CI has finished (CAT-1337);
 #   4. settles each finished builder that left no PR: if its card is still
 #      In Progress, moves it to Blocked (once per launch; state/settled/<card key>);
 #   5. fills free slots with Ready For Factory cards from Linear, one
@@ -304,7 +304,7 @@ You did not write this code. PR #$number on branch $branch was opened by $author
 # (reviews() handles those, once their builder has finished). Dependabot's PRs
 # count only when review-authors lists dependabot or dependabot[bot] (CAT-1327).
 pr_reviews() {
-  local authors dir _ slug prs number sha author branch fork dep
+  local authors dir _ slug prs number sha author branch fork dep pending
   authors=${REVIEW_AUTHORS:-$(timeout 60 gh api user --jq .login </dev/null 2>/dev/null || true)}
   [ -n "$authors" ] || { echo "no review authors (gh api user failed, no review-authors line); skipping other PRs"; return 0; }
   while read -r dir _; do
@@ -338,6 +338,17 @@ pr_reviews() {
       active "factory-review-$slug-pr-$number" && continue
       # One reviewer per head sha. If it ran and left no stamp, a person looks.
       [ -e "$STATE/reviewed/$slug/$number-$sha" ] && continue
+      # A Dependabot PR whose required CI is still running waits for a later
+      # tick (no marker): its one review per sha would otherwise just say
+      # "CI pending" because it started first (CAT-1337). If gh can't tell, review.
+      if [ "$dep" = true ]; then
+        pending=$(cd "$dir" && timeout 60 gh pr checks "$number" --required --json bucket \
+          --jq 'map(select(.bucket == "pending")) | length' </dev/null 2>/dev/null || true)
+        if [[ $pending =~ ^[1-9][0-9]*$ ]]; then
+          echo "PR #$number in $dir: required CI still running; dependency review waits for a later tick"
+          continue
+        fi
+      fi
       review_pr "$dir" "$number" "$sha" "$author" "$branch" "$fork" "$dep"
     done <<<"$prs"
   done < <(repos)

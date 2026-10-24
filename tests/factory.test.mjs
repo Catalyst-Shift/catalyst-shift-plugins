@@ -496,10 +496,12 @@ test("a Dependabot PR is reviewed only when review-authors lists dependabot, by 
   ]));
   writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
 [ "$1 $2" = "api user" ] && { echo kkreative; exit 0; }
+src="${fixture}"; [ "$1 $2" = "pr checks" ] && { src="${t}/checks-$3.json"; [ -e "$src" ] || src="${t}/no-checks.json"; }
 shift 2; q=.
 while [ $# -gt 0 ]; do case $1 in --jq) q=$2; shift;; esac; shift; done
-jq -r "$q" "${fixture}"
+jq -r "$q" "$src"
 `, { mode: 0o755 });
+  writeFileSync(join(t, "no-checks.json"), "[]");
   writeFileSync(units, "");
   writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
 for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; esac; done
@@ -587,6 +589,22 @@ exit 0
   r = tick("kkreative dependabot");
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(started(), []);
+
+  // CAT-1337: while a required check is still running, the Dependabot PR waits
+  // (no review, no marker, so a later tick reviews it); once it has finished,
+  // pass or fail, the review starts and the reviewer judges the result.
+  rmSync(join(state, "reviewed/repo", `3-${sha("3")}`));
+  writeFileSync(join(t, "checks-3.json"), JSON.stringify([{ name: "validate", bucket: "pending" }]));
+  r = tick("kkreative dependabot");
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(started(), []);
+  assert.deepEqual(reviewed(), [`1-${sha("1")}`]);
+  assert.match(r.stdout, /PR #3 in .*: required CI still running; dependency review waits for a later tick/);
+  writeFileSync(join(t, "checks-3.json"), JSON.stringify([{ name: "validate", bucket: "fail" }]));
+  r = tick("kkreative dependabot");
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(started(), ["factory-review-repo-pr-3"]);
+  assert.deepEqual(reviewed(), [`1-${sha("1")}`, `3-${sha("3")}`]);
 });
 
 test("the dependency reviewer's prompt forbids pushing, merging and auto-merge, and installs nothing", () => {
