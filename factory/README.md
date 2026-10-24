@@ -16,7 +16,7 @@ git -C ~/Projects/catalyst-shift-plugins pull && ~/Projects/catalyst-shift-plugi
 touch ~/.local/state/claude-factory/paused      # pause: no new sessions or reviews
 rm ~/.local/state/claude-factory/paused         # resume
 
-claude-factory-dispatch status                    # one screen: running, waiting PRs, paused
+claude-factory-dispatch status                    # one screen: running, waiting on you to merge, other open PRs, paused
 systemctl --user list-units 'factory-*'          # what's running
 journalctl --user -u claude-factory -n 50        # what the dispatcher did
 tail -f ~/.local/state/claude-factory/cat-123.log          # one builder
@@ -34,7 +34,7 @@ grouped by status, shows both machines' work on any device.
 
 **Where a card ends up:** every factory card leaves In Progress when its
 session ends. *In Review with a PR*: review and merge, and the merge moves it
-to Done. *In Review with no PR* (an investigation): read the findings and close
+to Done (the dispatcher does this; see "Waiting on you to merge" below). *In Review with no PR* (an investigation): read the findings and close
 it, or approve the proposed follow-up card. *Blocked*: the card says what it
 needs. If a session dies without moving its card, the next dispatcher tick
 moves it to Blocked with a pointer to the log.
@@ -100,10 +100,41 @@ lockfile-only audits, `osv-scanner`), denies `git push`, `gh pr merge` and
 `reviewed/<repo>/<pr>-<sha>` record, and the `review-<repo>-pr-<n>.log` log
 with the other PR reviews.
 
+**Waiting on you to merge (CAT-1336):** when a PR from a branch this machine's
+factory launched is open, stamped at its head (`Reviewed: <head sha>`) and its
+CI is green (every check in `gh pr checks` passed or was skipped; a PR with no
+checks never counts as green), the dispatcher adds the Linear label
+`needs-merge` to its card, once. Filter a Linear view on `needs-merge` to see
+what is waiting on you, and `claude-factory-dispatch status` lists those PRs
+with their URL under "Waiting on you to merge", apart from Running and the
+other open PRs. When the PR merges, the card moves to Done (if it isn't
+already) and loses `needs-merge`. When it is closed without merging, the label
+comes off and the status stays. The label is an existing workspace label, so
+it works in every team; the dispatcher never creates it. Each change is one
+cheap `claude -p --model haiku` call allowed only `get_issue` and `save_issue`,
+recorded in `~/.local/state/claude-factory/merge/<card key>` (`labelled`,
+`done` or `closed`, then the PR number) only once Linear confirms it, so
+nothing repeats and a failed call is retried next tick; each call's output goes
+to `merge.log`. PRs merged or closed more than 7 days ago are left alone. A
+new push after the label went on doesn't take it off; the merge or close
+does. PRs the factory didn't build are never labelled, and nothing happens
+while the factory is paused.
+
 **Caps (per machine):** at most 2 sessions run at once (builders and reviewers
 together), and no new card is picked up while 3 or more PRs from branches this
-machine's factory launched are open. Reviews still run while that cap holds;
-they are how PRs get unstuck.
+machine's factory launched are open (those waiting on you to merge count too).
+Reviews still run while that cap holds; they are how PRs get unstuck. To change
+either cap on one machine, add a drop-in with `systemctl --user edit
+claude-factory.service`:
+
+```ini
+[Service]
+Environment=CLAUDE_FACTORY_WAITING_CAP=5
+```
+
+The next tick picks it up (each tick is a fresh run). `claude-factory-dispatch
+status` run from a shell doesn't read the drop-in, so the cap it prints is the
+default unless you set the same variable there.
 
 ---
 
@@ -185,11 +216,12 @@ install.sh prints how to retire any it finds.
 | `repos.conf.example` | `~/.config/claude-factory/repos.conf` (first install only) |
 
 State and logs live in `~/.local/state/claude-factory/`: `launched` (the branches
-it started), `reviewed/`, `pick-<project>.log`, `cat-NNN.log`, `review-cat-NNN.log`,
-`review-<repo>-pr-<n>.log`.
+it started), `reviewed/`, `settled/`, `merge/`, `pick-<project>.log`, `settle.log`,
+`merge.log`, `cat-NNN.log`, `review-cat-NNN.log`, `review-<repo>-pr-<n>.log`.
 
 The dispatcher finds `claude` with `command -v claude` on the service's PATH
 (`~/.local/share/mise/shims`, `~/.local/bin`, `/usr/local/bin`, `/usr/bin`).
 To use a different binary, set `CLAUDE_BIN` with
-`systemctl --user edit claude-factory.service`. The caps can be changed there too:
-`CLAUDE_FACTORY_CAP` (default 2) and `CLAUDE_FACTORY_WAITING_CAP` (default 3).
+`systemctl --user edit claude-factory.service`. The caps can be changed there too
+(see Caps above): `CLAUDE_FACTORY_CAP` (default 2) and `CLAUDE_FACTORY_WAITING_CAP`
+(default 3).

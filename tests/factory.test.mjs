@@ -51,6 +51,8 @@ test("every claude and systemd-run call in the dispatcher reads stdin from /dev/
   assert.match(s, /"\$CLAUDE" "\$@" <\/dev\/null/);
   // settle(): the haiku call ends its prompt with </dev/null
   assert.match(s, /SETTLED <the status it ends in>" <\/dev\/null/);
+  // linear_issue(): the needs-merge haiku calls (CAT-1336)
+  assert.match(s, /"\$prompt" <\/dev\/null/);
 });
 
 test("the dispatcher finds claude via CLAUDE_BIN or command -v, and uses the shared state dir", () => {
@@ -106,8 +108,8 @@ test("status lists open factory PRs with their stamp state and takes no lock", (
   writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
 while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --jq) q=$2; shift;; esac; shift; done
 case $h in
-  b/cat-1-x) j='[{"number":1,"url":"u1","headRefOid":"${a}","body":"x\\nReviewed: ${a} — /review"}]';;
-  b/cat-2-y) j='[{"number":2,"url":"u2","headRefOid":"${b}","body":"Reviewed: ${a} — /review"}]';;
+  b/cat-1-x) j='[{"number":1,"state":"OPEN","url":"u1","headRefOid":"${a}","body":"x\\nReviewed: ${a} — /review"}]';;
+  b/cat-2-y) j='[{"number":2,"state":"OPEN","url":"u2","headRefOid":"${b}","body":"Reviewed: ${a} — /review"}]';;
   *) j='[]';;
 esac
 printf '%s' "$j" | jq -r "$q"
@@ -612,4 +614,172 @@ test("the dependency reviewer's prompt forbids pushing, merging and auto-merge, 
   assert.match(dep, /Only if the verdict is 'looks routine'/);
   assert.match(dep, /^ {3}Reviewed: \$sha — dependency review \(no pushes\)$/m);
   assert.match(dep, /--permission-mode dontAsk --setting-sources user --strict-mcp-config/);
+});
+
+// CAT-1336: a launched card whose PR is stamped at its head with CI green gets
+// the Linear label needs-merge; a merge moves the card to Done and drops the
+// label; a close without merging drops the label. One haiku call per change,
+// recorded in state/merge/<card key>. gh applies the dispatcher's own --jq to a
+// fixture (needs jq); claude answers like haiku would, or fails for $FAIL.
+function mergeRig() {
+  const t = mkdtempSync(join(tmpdir(), "factory-merge-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
+  for (const d of [bin, state, join(state, "reviewed"), join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  const sha = (n) => String(n).repeat(40);
+  const recent = new Date(Date.now() - 3600e3).toISOString().replace(/\.\d+Z$/, "Z");
+  const old = new Date(Date.now() - 30 * 86400e3).toISOString().replace(/\.\d+Z$/, "Z");
+  const pr = (n, extra = {}) => ({
+    number: n, state: "OPEN", closedAt: null, url: `u${n}`, headRefOid: sha(n), body: `Reviewed: ${sha(n)} — /review`, ...extra,
+  });
+  const data = {
+    prs: {
+      "b/cat-1-x": [pr(1)],                                              // stamped, green
+      "b/cat-2-x": [pr(2)],                                              // stamped, a check failed
+      "b/cat-3-x": [pr(3, { body: `Reviewed: ${sha(9)} — /review` })],   // stamp is stale
+      "b/cat-4-x": [pr(4, { state: "MERGED", closedAt: recent })],       // merged
+      "b/cat-5-x": [pr(5, { state: "MERGED", closedAt: old })],          // merged long ago
+      "b/cat-6-x": [pr(6, { state: "CLOSED", closedAt: recent })],       // closed, never labelled
+    },
+    checks: { 1: [{ bucket: "pass" }, { bucket: "skipping" }], 2: [{ bucket: "pass" }, { bucket: "fail" }], 3: [{ bucket: "pass" }], 7: [{ bucket: "pass" }] },
+  };
+  const fixture = join(t, "fixture.json");
+  const save = () => writeFileSync(fixture, JSON.stringify(data));
+  save();
+  // cat-3's stale stamp would start a reviewer; mark that sha reviewed already.
+  writeFileSync(join(state, "reviewed", `cat-3-${sha(3)}`), "earlier\n");
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+[ "$1 $2" = "api user" ] && { echo kkreative; exit 0; }
+sub="$1 $2"; shift 2; n=; h=; s=all; q=.
+case $sub in "pr view"|"pr checks") n=$1; shift;; esac
+while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --state) s=$2; shift;; --jq) q=$2; shift;; esac; shift; done
+case $sub in
+  "pr checks") jq -r --arg n "$n" ".checks[\\$n] // [] | $q" "${fixture}";;
+  "pr view") jq -r "[.prs[][] | select(.number == $n)][0] | $q" "${fixture}";;
+  *) [ -n "$h" ] || { echo '[]' | jq -r "$q"; exit 0; }
+     jq -r --arg h "$h" --arg s "$s" "[.prs[\\$h][]? | select(\\$s == \\"all\\" or (.state | ascii_downcase) == \\$s)] | $q" "${fixture}";;
+esac
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), "#!/bin/sh\ncase \"$*\" in *is-active*) exit 3;; esac\nexit 0\n", { mode: 0o755 });
+  writeFileSync(join(bin, "systemd-run"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const calls = join(t, "claude-calls");
+  writeFileSync(calls, "");
+  writeFileSync(join(bin, "claude"), `#!/usr/bin/env bash
+[ "$(readlink /proc/$$/fd/0)" = /dev/null ] || echo "stdin was not /dev/null" >>"${calls}"
+for a; do case $a in --allowedTools=*) tools=\${a#--allowedTools=};; esac; done
+p=\${!#}
+case $p in
+  *"Get Linear issue "*) ;;
+  *) echo NONE; exit 0;;
+esac
+id=$(printf '%s' "$p" | grep -oE 'issue [A-Z]+-[0-9]+' | head -1); id=\${id#issue }
+case $p in
+  *"add the existing label"*) kind=label; ok="NEEDS-MERGE on";;
+  *"has merged"*) kind=done; ok="STATUS Done NEEDS-MERGE off";;
+  *"remove that label"*) kind=unlabel; ok="NEEDS-MERGE off";;
+esac
+echo "$kind $id $tools" >>"${calls}"
+if [ "$id" = "$FAIL" ]; then echo "I could not reach Linear."; else printf 'Done.\\n%s\\n' "$ok"; fi
+`, { mode: 0o755 });
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"), `label kevin-omarchy\n${t} proj\n`);
+  const launch = (ns) => writeFileSync(join(state, "launched"), ns.map((n) => `${t} b/cat-${n}-x cat-${n}`).join("\n") + "\n");
+  launch([1, 2, 3, 4, 5, 6]);
+  const run = (args, extra = {}) => spawnSync("bash", [DISPATCH, ...args], {
+    encoding: "utf8",
+    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), ...extra },
+  });
+  const asked = () => { const c = read(calls); writeFileSync(calls, ""); return c.trim().split("\n").filter(Boolean); };
+  const record = (key) => (existsSync(join(state, "merge", key)) ? read(join(state, "merge", key)).trim() : null);
+  return { t, state, data, save, pr, recent, launch, run, asked, record };
+}
+
+test("needs-merge: added once to a stamped green factory PR's card; merge moves it to Done; close drops the label", () => {
+  const { state, data, save, pr, recent, launch, run, asked, record } = mergeRig();
+  const tools = "mcp__claude_ai_Linear__get_issue,mcp__claude_ai_Linear__save_issue";
+
+  // First tick: label CAT-1, close out CAT-4. Not the failing, stale, old or never-labelled ones.
+  let r = run([]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked().sort(), [`done CAT-4 ${tools}`, `label CAT-1 ${tools}`]);
+  assert.equal(record("cat-1"), "labelled 1");
+  assert.equal(record("cat-4"), "done 4");
+  for (const k of ["cat-2", "cat-3", "cat-5", "cat-6"]) assert.equal(record(k), null, k);
+  assert.match(r.stdout, /CAT-1: PR #1 is stamped and green; labelled needs-merge \(u1\)/);
+  assert.match(r.stdout, /CAT-4: PR #4 merged; card Done/);
+
+  // Next tick: nothing repeats.
+  r = run([]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked(), []);
+
+  // Paused: no Linear calls.
+  writeFileSync(join(state, "paused"), "");
+  data.prs["b/cat-1-x"] = [pr(1, { state: "CLOSED", closedAt: recent })];
+  save();
+  r = run([]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked(), []);
+
+  // PR #1 closed without merging: the label comes off, once; the status is left alone.
+  rmSync(join(state, "paused"));
+  r = run([]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked(), [`unlabel CAT-1 ${tools}`]);
+  assert.equal(record("cat-1"), "closed 1");
+  assert.match(r.stdout, /CAT-1: PR #1 closed without merging; needs-merge removed/);
+  r = run([]);
+  assert.deepEqual(asked(), []);
+
+  // PRs the factory didn't build are never touched: only launched branches are read.
+  launch([]);
+  rmSync(join(state, "merge"), { recursive: true });
+  r = run([]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked(), []);
+});
+
+test("needs-merge: a Linear call that isn't confirmed is retried next tick, then recorded", () => {
+  const { data, save, pr, recent, launch, run, asked, record } = mergeRig();
+  data.prs["b/cat-7-x"] = [pr(7)];
+  save();
+  launch([7]);
+
+  let r = run([], { FAIL: "CAT-7" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked().map((c) => c.split(" ").slice(0, 2).join(" ")), ["label CAT-7"]);
+  assert.equal(record("cat-7"), null, "an unconfirmed call was recorded");
+
+  r = run([]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked().map((c) => c.split(" ").slice(0, 2).join(" ")), ["label CAT-7"]);
+  assert.equal(record("cat-7"), "labelled 7");
+
+  // The merge fails once too, then lands.
+  data.prs["b/cat-7-x"] = [pr(7, { state: "MERGED", closedAt: recent })];
+  save();
+  r = run([], { FAIL: "CAT-7" });
+  assert.deepEqual(asked().map((c) => c.split(" ").slice(0, 2).join(" ")), ["done CAT-7"]);
+  assert.equal(record("cat-7"), "labelled 7");
+  r = run([]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked().map((c) => c.split(" ").slice(0, 2).join(" ")), ["done CAT-7"]);
+  assert.equal(record("cat-7"), "done 7");
+  r = run([]);
+  assert.deepEqual(asked(), []);
+});
+
+test("status lists stamped, green, open factory PRs under 'Waiting on you to merge', apart from other open PRs", () => {
+  const { state, run, asked } = mergeRig();
+  const r = run(["status"]);
+  assert.equal(r.status, 0, r.stderr);
+  const out = r.stdout;
+  const waitAt = out.indexOf("Waiting on you to merge"), otherAt = out.indexOf("Other open factory PRs");
+  assert.ok(out.indexOf("Running (cap") < waitAt && waitAt < otherAt && otherAt < out.indexOf("Paused: no"), out);
+  const wait = out.slice(waitAt, otherAt), other = out.slice(otherAt);
+  assert.match(wait, /^ {2}cat-1 {2}#1 u1$/m);
+  assert.doesNotMatch(wait, /cat-[2-6]/);
+  assert.match(other, /^ {2}cat-2 {2}#2 u2 stamped, CI not green$/m);
+  assert.match(other, /^ {2}cat-3 {2}#3 u3 not stamped$/m);
+  assert.doesNotMatch(other, /cat-1|cat-4|cat-5|cat-6/);
+  assert.deepEqual(asked(), [], "status called Linear");
+  assert.ok(!existsSync(join(state, "merge")), "status wrote merge state");
 });
