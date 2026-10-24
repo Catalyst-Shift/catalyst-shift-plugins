@@ -1,8 +1,8 @@
 # Changelog — catalyst-ops
 
-## 0.6.2 — 2026-10-24 (CAT-1319)
+## 0.6.2 — 2026-10-24
 
-- `/next` skips a card whose Linear "blocked by" issues aren't all Done or Canceled, and adds "blocked by" relations when it drafts a card that depends on another.
+- `/next` skips a card whose Linear "blocked by" issues aren't all Done, Canceled or Duplicate, and adds "blocked by" relations when it drafts a card that depends on another. After claiming, it checks the project's other In Progress cards: if one that went In Progress earlier would change the same files or tables, the card goes back to Ready For Factory, blocked by that card. Only the later card waits, so two cards never block each other. (CAT-1319)
 
 ## 0.6.1 — 2026-10-23
 
