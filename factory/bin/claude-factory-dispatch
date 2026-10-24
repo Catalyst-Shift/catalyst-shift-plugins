@@ -93,7 +93,14 @@ cleanup() {
     name=$(basename "$wt")
     active "$name" && continue
     if [ -z "$(git -C "$wt" status --porcelain)" ] && [ -z "$(git -C "$wt" rev-list --max-count=1 HEAD --not --remotes --glob=refs/factory/*)" ]; then
-      git -C "$dir" worktree remove "$wt" && echo "removed finished worktree $wt"
+      # claude -w locks its worktree and the lock outlives the session; the unit is
+      # finished (checked above), so the lock is stale.
+      git -C "$dir" worktree unlock "$wt" 2>/dev/null || true
+      if git -C "$dir" worktree remove "$wt"; then
+        echo "removed finished worktree $wt"
+      else
+        echo "could not remove $wt; leaving it" >&2
+      fi
       case $name in
         factory-review-*-pr-*) git -C "$dir" update-ref -d "refs/factory/pr/${name##*-pr-}" || true ;;
       esac

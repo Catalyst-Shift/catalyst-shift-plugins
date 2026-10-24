@@ -407,3 +407,35 @@ git fetch -q --prune origin`);
   assert.match(out, /removed finished worktree .*factory-review-repo-pr-5/);
   assert.equal(sh(`git -C ${repo} for-each-ref refs/factory`), "");
 });
+
+// CAT-1323: `claude -w` locks its worktree and the lock outlives the session.
+// cleanup unlocks a finished builder's clean worktree and removes it; it leaves
+// one whose unit is still active, and never fails the tick (set -e).
+test("cleanup unlocks and removes a finished builder worktree left locked by claude -w", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-locked-"));
+  const bin = join(t, "bin"), repo = join(t, "repo");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in *is-active*factory-cat-2.service*) exit 0;; esac
+exit 3
+`, { mode: 0o755 });
+  const sh = (cmd) => {
+    const r = spawnSync("bash", ["-c", cmd], {
+      encoding: "utf8",
+      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: t, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
+    });
+    assert.equal(r.status, 0, `${cmd}\n${r.stderr}`);
+    return r.stdout;
+  };
+  sh(`git init -q --bare ${t}/origin.git && git clone -q ${t}/origin.git ${repo} 2>/dev/null
+cd ${repo} && git commit -q --allow-empty -m base && git push -q origin HEAD:main
+for n in 1 2; do git worktree add -q --detach .claude/worktrees/factory-cat-$n origin/main
+  git worktree lock --reason "claude session factory-cat-$n (pid 1)" .claude/worktrees/factory-cat-$n; done`);
+  const s = read(DISPATCH);
+  const fn = (name) => s.slice(s.indexOf(`${name}() {`), s.indexOf("\n}\n", s.indexOf(`${name}() {`)) + 3);
+  const out = sh(`set -euo pipefail\n${s.split("\n").find((l) => l.startsWith("active()"))}\n${fn("cleanup")}\ncleanup ${repo}\necho tick-continues`);
+  assert.match(out, /removed finished worktree .*factory-cat-1/);
+  assert.match(out, /tick-continues/);
+  assert.ok(!existsSync(join(repo, ".claude/worktrees/factory-cat-1")));
+  assert.ok(existsSync(join(repo, ".claude/worktrees/factory-cat-2")), "removed a worktree whose unit is still active");
+});
