@@ -87,16 +87,28 @@ repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-
 # factory-review-<card key> (reviewer) or factory-review-<repo>-pr-<n> (reviewer
 # of another PR, whose head was fetched to refs/factory/pr/<n>).
 cleanup() {
-  local dir=$1 wt name
+  local dir=$1 wt name pid
   for wt in "$dir"/.claude/worktrees/factory-*; do
     [ -d "$wt" ] || continue
     name=$(basename "$wt")
     active "$name" && continue
     if [ -z "$(git -C "$wt" status --porcelain)" ] && [ -z "$(git -C "$wt" rev-list --max-count=1 HEAD --not --remotes --glob=refs/factory/*)" ]; then
-      git -C "$dir" worktree remove "$wt" && echo "removed finished worktree $wt"
-      case $name in
-        factory-review-*-pr-*) git -C "$dir" update-ref -d "refs/factory/pr/${name##*-pr-}" || true ;;
-      esac
+      # claude -w locks its worktree ("claude session <name> (pid N)") and the lock
+      # outlives the session. Unlock only when that pid is gone: a lock with no pid
+      # (put there by hand) or a live pid (a session started by hand, a unit still
+      # starting or stopping) is left alone, and the remove below fails and is logged.
+      pid=$(sed -n 's/.*(pid \([0-9][0-9]*\).*/\1/p' "$(git -C "$wt" rev-parse --absolute-git-dir)/locked" 2>/dev/null || true)
+      if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+        git -C "$dir" worktree unlock "$wt" || true
+      fi
+      if git -C "$dir" worktree remove "$wt"; then
+        echo "removed finished worktree $wt"
+        case $name in
+          factory-review-*-pr-*) git -C "$dir" update-ref -d "refs/factory/pr/${name##*-pr-}" || true ;;
+        esac
+      else
+        echo "could not remove $wt; leaving it" >&2
+      fi
     fi
   done
 }
