@@ -619,7 +619,7 @@ test("the dependency reviewer's prompt forbids pushing, merging and auto-merge, 
 // CAT-1336: a launched card whose PR is stamped at its head with CI green gets
 // the Linear label needs-merge; a merge moves the card to Done and drops the
 // label; a close without merging drops the label. One haiku call per change,
-// recorded in state/merge/<card key>. gh applies the dispatcher's own --jq to a
+// recorded in state/merge/<card key>-<pr number>. gh applies the dispatcher's own --jq to a
 // fixture (needs jq); claude answers like haiku would, or fails for $FAIL.
 function mergeRig() {
   const t = mkdtempSync(join(tmpdir(), "factory-merge-"));
@@ -700,9 +700,9 @@ test("needs-merge: added once to a stamped green factory PR's card; merge moves 
   let r = run([]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(asked().sort(), [`done CAT-4 ${tools}`, `label CAT-1 ${tools}`]);
-  assert.equal(record("cat-1"), "labelled 1");
-  assert.equal(record("cat-4"), "done 4");
-  for (const k of ["cat-2", "cat-3", "cat-5", "cat-6"]) assert.equal(record(k), null, k);
+  assert.equal(record("cat-1-1"), "labelled 1");
+  assert.equal(record("cat-4-4"), "done 4");
+  for (const k of ["cat-2-2", "cat-3-3", "cat-5-5", "cat-6-6"]) assert.equal(record(k), null, k);
   assert.match(r.stdout, /CAT-1: PR #1 is stamped and green; labelled needs-merge \(u1\)/);
   assert.match(r.stdout, /CAT-4: PR #4 merged; card Done/);
 
@@ -724,7 +724,7 @@ test("needs-merge: added once to a stamped green factory PR's card; merge moves 
   r = run([]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(asked(), [`unlabel CAT-1 ${tools}`]);
-  assert.equal(record("cat-1"), "closed 1");
+  assert.equal(record("cat-1-1"), "closed 1");
   assert.match(r.stdout, /CAT-1: PR #1 closed without merging; needs-merge removed/);
   r = run([]);
   assert.deepEqual(asked(), []);
@@ -746,23 +746,23 @@ test("needs-merge: a Linear call that isn't confirmed is retried next tick, then
   let r = run([], { FAIL: "CAT-7" });
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(asked().map((c) => c.split(" ").slice(0, 2).join(" ")), ["label CAT-7"]);
-  assert.equal(record("cat-7"), null, "an unconfirmed call was recorded");
+  assert.equal(record("cat-7-7"), null, "an unconfirmed call was recorded");
 
   r = run([]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(asked().map((c) => c.split(" ").slice(0, 2).join(" ")), ["label CAT-7"]);
-  assert.equal(record("cat-7"), "labelled 7");
+  assert.equal(record("cat-7-7"), "labelled 7");
 
   // The merge fails once too, then lands.
   data.prs["b/cat-7-x"] = [pr(7, { state: "MERGED", closedAt: recent })];
   save();
   r = run([], { FAIL: "CAT-7" });
   assert.deepEqual(asked().map((c) => c.split(" ").slice(0, 2).join(" ")), ["done CAT-7"]);
-  assert.equal(record("cat-7"), "labelled 7");
+  assert.equal(record("cat-7-7"), "labelled 7");
   r = run([]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(asked().map((c) => c.split(" ").slice(0, 2).join(" ")), ["done CAT-7"]);
-  assert.equal(record("cat-7"), "done 7");
+  assert.equal(record("cat-7-7"), "done 7");
   r = run([]);
   assert.deepEqual(asked(), []);
 });
@@ -782,4 +782,23 @@ test("status lists stamped, green, open factory PRs under 'Waiting on you to mer
   assert.doesNotMatch(other, /cat-1|cat-4|cat-5|cat-6/);
   assert.deepEqual(asked(), [], "status called Linear");
   assert.ok(!existsSync(join(state, "merge")), "status wrote merge state");
+});
+
+test("needs-merge: a card relaunched on a new branch doesn't flip between its old merged PR and its new one", () => {
+  const { data, save, pr, recent, run, asked, record, state, t } = mergeRig();
+  data.prs["b/cat-8-old"] = [pr(8, { state: "MERGED", closedAt: recent })];
+  data.prs["b/cat-8-new"] = [pr(7)];
+  save();
+  writeFileSync(join(state, "launched"), `${t} b/cat-8-old cat-8\n${t} b/cat-8-new cat-8\n`);
+
+  let r = run([]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked().map((c) => c.split(" ").slice(0, 2).join(" ")).sort(), ["done CAT-8", "label CAT-8"]);
+  assert.equal(record("cat-8-8"), "done 8");
+  assert.equal(record("cat-8-7"), "labelled 7");
+  for (let i = 0; i < 2; i++) {
+    r = run([]);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(asked(), [], "a change repeated");
+  }
 });

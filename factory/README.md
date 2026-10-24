@@ -112,8 +112,8 @@ already) and loses `needs-merge`. When it is closed without merging, the label
 comes off and the status stays. The label is an existing workspace label, so
 it works in every team; the dispatcher never creates it. Each change is one
 cheap `claude -p --model haiku` call allowed only `get_issue` and `save_issue`,
-recorded in `~/.local/state/claude-factory/merge/<card key>` (`labelled`,
-`done` or `closed`, then the PR number) only once Linear confirms it, so
+recorded in `~/.local/state/claude-factory/merge/<card key>-<pr number>`
+(`labelled`, `done` or `closed`, then the PR number) only once Linear confirms it, so
 nothing repeats and a failed call is retried next tick; each call's output goes
 to `merge.log`. PRs merged or closed more than 7 days ago are left alone. A
 new push after the label went on doesn't take it off; the merge or close

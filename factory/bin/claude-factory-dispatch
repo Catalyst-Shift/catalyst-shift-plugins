@@ -17,7 +17,7 @@
 #   5. keeps each launched card's Linear label in step with its PR (CAT-1336):
 #      stamped at its head with CI green adds `needs-merge`; merged moves the
 #      card to Done and drops the label; closed unmerged drops the label (once
-#      per change; state/merge/<card key>);
+#      per change; state/merge/<card key>-<pr number>);
 #   6. fills free slots with Ready For Factory cards from Linear, one
 #      unattended Claude session per card in its own worktree.
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
@@ -403,13 +403,16 @@ linear_issue() {
 
 # CAT-1336: keep each launched card's `needs-merge` label in step with its PR,
 # so a card waiting on a person to merge says so, and a merged PR closes its
-# card. state/merge/<card key> holds the last change Linear confirmed
-# ("labelled|done|closed <pr number>"): each change is one haiku call, made
-# once, and a call that isn't confirmed is retried next tick. The label is a
+# card. state/merge/<card key>-<pr number> holds the last change Linear
+# confirmed for that PR ("labelled|done|closed <pr number>"): each change is one
+# haiku call, made once, and a call that isn't confirmed is retried next tick.
+# The record is per PR, not per card: a card relaunched on a new branch has two
+# PRs in launched, and one shared record would make them undo each other's
+# change every tick. The label is a
 # workspace label that already exists; nothing creates it. PRs the factory
 # didn't build are never touched here.
 merges() {
-  local dir branch key id pr number state stamped url last
+  local dir branch key id pr number state stamped url last rec
   mkdir -p "$STATE/merge"
   while read -r dir branch key; do
     key=${key:-$(cardkey "$branch")}
@@ -417,24 +420,25 @@ merges() {
     pr=$(factory_pr "$dir" "$branch") || continue
     read -r number state stamped url <<<"$pr"
     [[ $number =~ ^[0-9]+$ ]] || continue
-    last=$(cat "$STATE/merge/$key" 2>/dev/null || true)
+    rec=$STATE/merge/$key-$number
+    last=$(cat "$rec" 2>/dev/null || true)
     id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
     case $state in
       OPEN)
         [ "$stamped" = true ] && [ "$last" != "labelled $number" ] && green "$dir" "$number" || continue
         linear_issue "$id" "NEEDS-MERGE on" "Get Linear issue $id. If it does not have the label 'needs-merge', update it to add the existing label 'needs-merge' and keep all its other labels. Never create a label, and change nothing else (not its status, assignee or description). Then print exactly one final line: NEEDS-MERGE <on or off: whether the issue now has the label needs-merge>" || continue
-        echo "labelled $number" >"$STATE/merge/$key"
+        echo "labelled $number" >"$rec"
         echo "$id: PR #$number is stamped and green; labelled needs-merge ($url)" ;;
       MERGED)
         [ "$last" != "done $number" ] || continue
         linear_issue "$id" "STATUS Done NEEDS-MERGE off" "Get Linear issue $id. Its PR $url has merged. If its status is not 'Done', move it to 'Done'. If it has the label 'needs-merge', remove that label and keep all its other labels. Change nothing else. Then print exactly one final line: STATUS <the status it ends in> NEEDS-MERGE <on or off: whether the issue still has the label needs-merge>" || continue
-        echo "done $number" >"$STATE/merge/$key"
+        echo "done $number" >"$rec"
         echo "$id: PR #$number merged; card Done, needs-merge removed" ;;
       CLOSED)
         # Only a label this dispatcher added is taken off; the status stays.
         [ "$last" = "labelled $number" ] || continue
         linear_issue "$id" "NEEDS-MERGE off" "Get Linear issue $id. If it has the label 'needs-merge', remove that label and keep all its other labels. Change nothing else (not its status). Then print exactly one final line: NEEDS-MERGE <on or off: whether the issue still has the label needs-merge>" || continue
-        echo "closed $number" >"$STATE/merge/$key"
+        echo "closed $number" >"$rec"
         echo "$id: PR #$number closed without merging; needs-merge removed" ;;
     esac
   done < <(launched)
