@@ -16,8 +16,10 @@
 #
 # Open PRs the factory didn't build are reviewed by the machine of whoever
 # opened them: by default the GitHub login gh runs as here. List logins to
-# replace that (never the same login on both machines):
-# review-authors kkreative
+# replace that (never the same login on both machines). Add dependabot (on
+# one machine only) to also check Dependabot's PRs for supply-chain signals;
+# that reviewer comments and never pushes or merges:
+# review-authors kkreative keithcatalyst dependabot
 #
 # ~/Projects/catalyst-shift catalyst-shift-site
 # ~/Projects/lbl-nextjs lbl-nextjs
