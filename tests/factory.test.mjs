@@ -283,6 +283,8 @@ esac
 echo "git $*" >>"${calls}"
 case "$*" in
   *pull/11/head*) exit 1;;
+  # The fixture's head for PR n is its last digit 40 times; PR 12 moved since the list.
+  *"rev-parse refs/factory/pr/"*) n=\${!#}; n=\${n##*/}; [ "$n" = 12 ] && { echo moved; exit 0; }; printf "$((n % 10))%.0s" $(seq 40); echo;;
   *"worktree add"*) mkdir -p "\${@: -2:1}";;
   *"worktree remove"*) rm -rf "\${!#}";;
 esac
@@ -340,6 +342,7 @@ exit 0
     pr(9, "KKreative", { isCrossRepository: true }),
     pr(10, "kkreative", { headRefName: "b/x;y" }),
     pr(11, "kkreative"),
+    pr(12, "kkreative"),                 // pushed again between the list and the fetch
   ]));
   writeFileSync(units, "");
   writeFileSync(calls, "");
@@ -354,6 +357,8 @@ exit 0
   assert.match(r.stdout, /PR #11 .*could not check out/);
   assert.match(read(calls), /update-ref -d refs\/factory\/pr\/11/);
   assert.ok(!existsSync(join(state, "reviewed/my-repo", `11-${sha("1")}`)), "failed checkout left a marker");
+  assert.match(r.stdout, /PR #12 .*could not check out/);
+  assert.ok(!existsSync(join(state, "reviewed/my-repo", `12-${sha("2")}`)), "moved head left a marker");
 
   // gh can't say who it runs as and no review-authors line: nothing is reviewed.
   writeFileSync(units, "");

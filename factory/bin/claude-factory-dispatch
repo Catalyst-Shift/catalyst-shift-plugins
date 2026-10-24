@@ -171,7 +171,7 @@ review() {
 You did not write this code. Another session built card $id and opened PR #$number on branch $branch. Your job is to review it as a fresh pair of eyes and stamp it.
 
 1. You are in a fresh git worktree, detached at the PR head $sha. Set up .env.local and dependencies the way this repo's CLAUDE.md describes if the checks need them. Read the card and its comments, and the PR (gh pr view $number).
-2. Run gstack /review on the PR diff against its base branch. If the diff touches any path listed in the base branch's .github/CODEOWNERS (the repo's deep paths; read it with git show origin/<base branch>:.github/CODEOWNERS, never from the PR head), also run gstack /cso.
+2. Run gstack /review on the PR diff against its base branch. If the diff touches any path listed in the base branch's .github/CODEOWNERS (the repo's deep paths; git fetch origin <base branch> first, then read it with git show origin/<base branch>:.github/CODEOWNERS, never from the PR head; if you can't read it, run /cso anyway), also run gstack /cso.
 3. For each finding: fix it and push to the PR branch (commit here, then git push origin HEAD:$branch), or answer it in a PR comment saying why it stays. Run what CI runs before each push.
 4. When done, put exactly one stamp line in the PR body. Read the body with gh pr view $number --json body --jq .body, remove any existing line starting with 'Reviewed:', add this line, and write it back with gh pr edit $number --body-file <file>:
    Reviewed: <full 40-character head sha after your own pushes, from git rev-parse HEAD once pushed> — /review
@@ -216,7 +216,9 @@ review_pr() {
   fi
   # The PR head may live on a fork, so fetch it by PR number. refs/factory/pr/<n>
   # keeps cleanup's "nothing unpushed" check true, and no prune removes it.
-  git -C "$dir" fetch --quiet origin "+refs/pull/$number/head:refs/factory/pr/$number" </dev/null &&
+  # The head must still be the one listed: a push in between is reviewed next tick.
+  timeout 120 git -C "$dir" fetch --quiet origin "+refs/pull/$number/head:refs/factory/pr/$number" </dev/null &&
+    [ "$(git -C "$dir" rev-parse "refs/factory/pr/$number" </dev/null)" = "$sha" ] &&
     git -C "$dir" worktree add --quiet --detach "$wt" "$sha" </dev/null || {
     echo "PR #$number in $dir: could not check out $sha; trying again next tick"
     git -C "$dir" update-ref -d "refs/factory/pr/$number" </dev/null 2>/dev/null || true
@@ -235,7 +237,7 @@ review_pr() {
 You did not write this code. PR #$number on branch $branch was opened by $author outside the factory (a cloud thread, Remote Control or by hand), and its head has no review stamp. Your job is to review it as a fresh pair of eyes and, if it holds up, stamp it.
 
 1. You are in a fresh git worktree, detached at the PR head $sha. Read the PR (gh pr view $number) and its diff (gh pr diff $number). If it names a Linear card, read the card and its comments, but do not change the card's status. Set up .env.local and dependencies the way this repo's CLAUDE.md describes if the checks need them.
-2. Run gstack /review on the PR diff against its base branch. If the diff touches any path listed in the base branch's .github/CODEOWNERS (the repo's deep paths; read it with git show origin/<base branch>:.github/CODEOWNERS, never from the PR head), also run gstack /cso. If the diff changes no code (only docs or copy), read the whole diff yourself instead and note that for the stamp.
+2. Run gstack /review on the PR diff against its base branch. If the diff touches any path listed in the base branch's .github/CODEOWNERS (the repo's deep paths; git fetch origin <base branch> first, then read it with git show origin/<base branch>:.github/CODEOWNERS, never from the PR head; if you can't read it, run /cso anyway), also run gstack /cso. If the diff changes no code (only docs or copy), read the whole diff yourself instead and note that for the stamp.
 3. This is not your branch, and its author may still be working on it. $push
 4. To stamp: check that gh pr view $number --json headRefOid --jq .headRefOid still equals the commit you reviewed ($sha, or your own one-line fix on top of it). Read the body with gh pr view $number --json body --jq .body, remove any existing line starting with 'Reviewed:', add exactly this one line, and write it back with gh pr edit $number --body-file <file>:
    Reviewed: <that 40-character head sha> — /review
@@ -262,7 +264,7 @@ pr_reviews() {
   while read -r dir _; do
     slug=$(reposlug "$dir")
     mkdir -p "$STATE/reviewed/$slug"
-    if ! prs=$(cd "$dir" && timeout 60 gh pr list --state open --limit 100 --json number,headRefOid,headRefName,body,author,isDraft,labels,isCrossRepository \
+    if ! prs=$(cd "$dir" && timeout 60 gh pr list --state open --limit 500 --json number,headRefOid,headRefName,body,author,isDraft,labels,isCrossRepository \
       --jq '.[] | select(.isDraft | not) | select(.author.login | test("dependabot") | not)
         | select([.labels[].name] | index("no-factory-review") | not)
         | .headRefOid as $sha | select((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b") | not)
