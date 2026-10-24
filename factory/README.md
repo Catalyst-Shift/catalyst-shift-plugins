@@ -31,6 +31,13 @@ Linear labels `factory` and this machine's label (set `label kevin-omarchy` or
 `label keith-omarchy` in repos.conf). A saved Linear view filtered on `factory`,
 grouped by status, shows both machines' work on any device.
 
+**Where a card ends up:** every factory card leaves In Progress when its
+session ends. *In Review with a PR*: review and merge, and the merge moves it
+to Done. *In Review with no PR* (an investigation): read the findings and close
+it, or approve the proposed follow-up card. *Blocked*: the card says what it
+needs. If a session dies without moving its card, the next dispatcher tick
+moves it to Blocked with a pointer to the log.
+
 **Caps:** at most 2 sessions run at once (builders and reviewers together), and
 no new card is picked up while 3 or more PRs from branches the factory launched
 are open. Reviews still run while that cap holds; they are how PRs get unstuck.

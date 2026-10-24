@@ -7,7 +7,9 @@
 #   2. starts a fresh reviewer session for each finished builder whose open PR
 #      has no `Reviewed: <head sha>` line yet (one reviewer per head sha;
 #      ~/.local/state/claude-factory/reviewed/cat-NNN-<sha> records it);
-#   3. fills free slots with Ready For Factory cards from Linear, one
+#   3. settles each finished builder that left no PR: if its card is still
+#      In Progress, moves it to Blocked (once per launch; state/settled/cat-NNN);
+#   4. fills free slots with Ready For Factory cards from Linear, one
 #      unattended Claude session per card in its own worktree.
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
@@ -112,8 +114,14 @@ Card: $id in Linear. It is already In Progress and assigned to the person who ru
 3. Rollout stage 1: people merge everything. Open the PR, but do not turn on auto-merge and do not merge, whatever CLAUDE.md says about auto-merge.
 4. A separate reviewer session, started by the dispatcher after you finish, reviews the PR and stamps it. Do not write a 'Reviewed:' line in the PR body yourself.
 5. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). Do none of these. Also stop if the card is too unclear to build without guessing at a product decision. In either case comment on the card saying exactly what you need, move it to Blocked, and end. Smaller forks: pick a recommendation and record it under Decisions made in the PR body.
-6. Finish with a comment on the card: the PR link, what you ran, and anything a reviewer should look at first."
+6. Leave the card in a clear end state before you stop, and say which in a final comment on the card:
+   - PR opened: move the card to In Review and comment with the PR link, what you ran, and anything a reviewer should look at first. Merging the PR moves the card to Done.
+   - No PR by design (an investigation, or a card whose output is a write-up): put the findings and any proposed follow-up card on the card, then move it to In Review so a person reads it and closes it.
+   - Blocked (step 5): Blocked, with what you need.
+   Never leave it In Progress."
   echo "$dir $branch $key" >>"$LAUNCHED"
+  # A card can come back (Blocked, then Ready For Factory again): settle it again.
+  rm -f "$STATE/settled/$key"
   echo "started $id in $dir (unit factory-$key, log $STATE/$key.log)"
 }
 
@@ -167,6 +175,34 @@ reviews() {
   done < <(launched)
 }
 
+# A finished builder must leave its card In Review, Blocked or Done. If the
+# card is still In Progress with no PR (the session crashed, timed out or
+# forgot), move it to Blocked with a pointer to the log, once per launch.
+settle() {
+  local dir branch key id pr out
+  mkdir -p "$STATE/settled"
+  while read -r dir branch key; do
+    key=${key:-$(cardkey "$branch")}
+    [ -n "$key" ] || continue
+    [ -e "$STATE/settled/$key" ] && continue
+    active "factory-$key" && continue
+    active "factory-review-$key" && continue
+    pr=$(cd "$dir" && gh pr list --head "$branch" --state all --json number --jq length </dev/null 2>/dev/null) || continue
+    id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
+    if [ "$pr" = "0" ]; then
+      # Recorded only when haiku confirms the status it read or set: a Linear
+      # outage or a missing connector is retried next tick, not recorded.
+      out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
+        --allowedTools="${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment" \
+        "Get Linear issue $id. If its status is 'In Progress', move it to 'Blocked' and add this comment: 'The factory session on $HOST ended without a PR and without moving this card. Its log is $STATE/$key.log on that machine. A person should check it.' Otherwise change nothing.
+Then print exactly one final line: SETTLED <the status it ends in>" </dev/null 2>&1) || true)
+      printf '%s %s\n%s\n' "$(date -Is)" "$id" "$out" >>"$STATE/settle.log"
+      grep -qE '^SETTLED [A-Za-z]' <<<"$out" || continue
+    fi
+    date -Is >"$STATE/settled/$key"
+  done < <(launched)
+}
+
 # One screen: what's running, what's waiting on review, and whether it's paused.
 status() {
   local unit since dir branch key pr
@@ -202,6 +238,7 @@ if [ -e "$STATE/paused" ]; then
 fi
 
 reviews
+settle
 
 waiting_now=$(waiting)
 if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
