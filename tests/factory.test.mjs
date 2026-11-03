@@ -843,10 +843,10 @@ test("install.sh needs Chrome stable, installs environment.d, and keeps the sand
       `#!/bin/bash\ncase "$2" in show-environment) cat "${sysenv}" ;; set-environment) echo "$3" >> "${setlog}" ;; esac\nexit 0\n`,
       { mode: 0o755 });
 
-    const run = (envLines, dropIn) => {
+    const run = (envLines, dropIn, dropInDir = "claude-factory.service.d") => {
       const home = mkdtempSync(join(tmp, "home-"));
       if (dropIn) {
-        const d = join(home, ".config", "systemd", "user", "claude-factory.service.d");
+        const d = join(home, ".config", "systemd", "user", dropInDir);
         mkdirSync(d, { recursive: true });
         writeFileSync(join(d, "override.conf"), `[Service]\n${dropIn}\n`);
       }
@@ -888,6 +888,16 @@ test("install.sh needs Chrome stable, installs environment.d, and keeps the sand
     r = run(["PATH=/usr/bin"], "Environment=CI=true");
     assert.equal(r.status, 1, r.stdout);
     assert.match(r.stdout, /Refusing to finish[\s\S]*Environment=CI=true/);
+    // One Environment= line with several assignments, in drop-ins that reach the
+    // transient factory-* units (prefix and all-services drop-in directories).
+    for (const dir of ["factory-.service.d", "service.d"]) {
+      r = run(["PATH=/usr/bin"], 'Environment=FOO=1 "CONTAINER=1"', dir);
+      assert.equal(r.status, 1, `${dir}: ${r.stdout}`);
+      assert.match(r.stdout, /Refusing to finish[\s\S]*CONTAINER=1/);
+    }
+    // A variable that merely ends in CI (DISCI=1) is not CI.
+    r = run(["PATH=/usr/bin"], "Environment=DISCI=1", "service.d");
+    assert.equal(r.status, 0, r.stdout);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

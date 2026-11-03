@@ -84,10 +84,13 @@ else
   miss "a systemd user session (systemctl --user does not answer)"
 fi
 # The sandbox stays on: nothing in the user manager, environment.d or the
-# factory units (or their drop-ins) may set a variable that turns it off.
+# factory units (or their drop-ins, including service.d/ and factory-.service.d/,
+# which reach the transient factory-* units) may set a variable that turns it off.
+# An Environment= line can hold several assignments, so any of them counts.
 sandbox_off=$( { systemctl --user show-environment 2>/dev/null || true
-  cat "$ENVD"/*.conf "$UNITS"/claude-factory.service "$UNITS"/claude-rc@.service "$UNITS"/claude-*.d/*.conf 2>/dev/null || true
-} | grep -E "^[[:space:]]*(Environment=)?\"?($NO_SANDBOX_VARS)=" || true)
+  cat "$ENVD"/*.conf "$UNITS"/claude-factory.service "$UNITS"/claude-rc@.service \
+    "$UNITS"/claude-*.d/*.conf "$UNITS"/factory-*.d/*.conf "$UNITS"/service.d/*.conf 2>/dev/null || true
+} | grep -E "^[[:space:]]*(Environment=([^#;]*[[:space:]])?)?\"?($NO_SANDBOX_VARS)=" || true)
 if [ -n "$sandbox_off" ]; then
   echo "== Refusing to finish: this would turn Chromium's sandbox off:"
   echo "$sandbox_off" | sed 's/^/  /'
