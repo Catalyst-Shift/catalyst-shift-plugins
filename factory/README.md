@@ -16,7 +16,7 @@ git -C ~/Projects/catalyst-shift-plugins pull && ~/Projects/catalyst-shift-plugi
 touch ~/.local/state/claude-factory/paused      # pause: no new sessions or reviews
 rm ~/.local/state/claude-factory/paused         # resume
 
-claude-factory-dispatch status                    # one screen: running, waiting PRs, paused
+claude-factory-dispatch status                    # one screen: running, waiting on you to merge, other open PRs, paused
 systemctl --user list-units 'factory-*'          # what's running
 journalctl --user -u claude-factory -n 50        # what the dispatcher did
 tail -f ~/.local/state/claude-factory/cat-123.log          # one builder
@@ -34,7 +34,7 @@ grouped by status, shows both machines' work on any device.
 
 **Where a card ends up:** every factory card leaves In Progress when its
 session ends. *In Review with a PR*: review and merge, and the merge moves it
-to Done. *In Review with no PR* (an investigation): read the findings and close
+to Done (the dispatcher does this; see "Waiting on you to merge" below). *In Review with no PR* (an investigation): read the findings and close
 it, or approve the proposed follow-up card. *Blocked*: the card says what it
 needs. If a session dies without moving its card, the next dispatcher tick
 moves it to Blocked with a pointer to the log.
@@ -100,16 +100,48 @@ lockfile-only audits, `osv-scanner`), denies `git push`, `gh pr merge` and
 `reviewed/<repo>/<pr>-<sha>` record, and the `review-<repo>-pr-<n>.log` log
 with the other PR reviews.
 
+**Waiting on you to merge (CAT-1336):** when a PR from a branch this machine's
+factory launched is open, stamped at its head (`Reviewed: <head sha>`) and its
+CI is green (every check in `gh pr checks` passed or was skipped; a PR with no
+checks never counts as green), the dispatcher adds the Linear label
+`needs-merge` to its card, once. Filter a Linear view on `needs-merge` to see
+what is waiting on you, and `claude-factory-dispatch status` lists those PRs
+with their URL under "Waiting on you to merge", apart from Running and the
+other open PRs. When the PR merges, the card moves to Done (if it isn't
+already) and loses `needs-merge`. When it is closed without merging, the label
+comes off and the status stays. The label is an existing workspace label, so
+it works in every team; the dispatcher never creates it. Each change is one
+cheap `claude -p --model haiku` call allowed only `get_issue` and `save_issue`,
+recorded in `~/.local/state/claude-factory/merge/<card key>-<pr number>`
+(`labelled`, `done` or `closed`, then the PR number) only once Linear confirms it, so
+nothing repeats and a failed call is retried next tick; each call's output goes
+to `merge.log`. PRs merged or closed more than 7 days ago are left alone. A
+new push after the label went on doesn't take it off; the merge or close
+does. PRs the factory didn't build are never labelled, and nothing happens
+while the factory is paused.
+
 **Caps (per machine):** at most 2 sessions run at once (builders and reviewers
 together), and no new card is picked up while 3 or more PRs from branches this
-machine's factory launched are open. Reviews still run while that cap holds;
-they are how PRs get unstuck.
+machine's factory launched are open (those waiting on you to merge count too).
+Reviews still run while that cap holds; they are how PRs get unstuck. To change
+either cap on one machine, add a drop-in with `systemctl --user edit
+claude-factory.service`:
+
+```ini
+[Service]
+Environment=CLAUDE_FACTORY_WAITING_CAP=5
+```
+
+The next tick picks it up (each tick is a fresh run). `claude-factory-dispatch
+status` run from a shell doesn't read the drop-in, so the cap it prints is the
+default unless you set the same variable there.
 
 ---
 
 ## First install
 
-1. Prerequisites (install.sh checks each and prints what's missing): `git`;
+1. Prerequisites (install.sh checks each and prints what's missing): Chrome
+   stable (`yay -S google-chrome`; install.sh stops without it, see Browser); `git`;
    `gh auth login`; Claude Code, signed in with the claude.ai subscription
    (`claude auth login`; the factory never uses an API key); the Linear
    connector connected at claude.ai, so `claude mcp list` shows
@@ -134,6 +166,42 @@ they are how PRs get unstuck.
 `~/Projects/<folder>`, so you can start and steer sessions from Claude desktop or
 mobile. It replaces the older per-repo `claude-rc-<folder>.service` files;
 install.sh prints how to retire any it finds.
+
+## Browser
+
+gstack's `/browse` and `/qa` drive a real browser from unattended sessions on a
+machine that holds repo, Linear and Vercel credentials. By default gstack uses
+Playwright's bundled Chromium, which lags Chrome stable and its security fixes.
+So factory machines point gstack at Chrome stable with the sandbox on (CAT-1416):
+
+- install.sh refuses to run until `/usr/bin/google-chrome-stable` exists
+  (`yay -S google-chrome`).
+- It installs `environment.d/60-gstack-chrome.conf` to `~/.config/environment.d/`
+  (`GSTACK_CHROMIUM_PATH=/usr/bin/google-chrome-stable`) and sets it in the
+  running user manager, so every user unit gets it: the dispatcher,
+  `claude-rc@`, the `factory-*` sessions and the desktop session. It applies to
+  every project on the machine; a repo's `.env` can't override it.
+- It refuses to finish if the user manager, environment.d or the factory units
+  set `GSTACK_CHROMIUM_NO_SANDBOX`, `CI` or `CONTAINER`: any of them makes gstack
+  launch Chromium with `--no-sandbox`.
+
+Chrome stays patched with the system: `yay -Syu` (which includes `pacman -Syu`).
+
+Check it:
+
+```bash
+systemctl --user show-environment | grep GSTACK_CHROMIUM_PATH   # /usr/bin/google-chrome-stable
+# while a session is running /browse:
+ps -o args= -C chrome | head -1     # /opt/google/chrome/chrome ..., no --no-sandbox
+google-chrome-stable --version      # chrome://version in that browser shows the same
+```
+
+Real Chrome blocks `--load-extension`; headless `/browse` and `/qa` don't need it.
+Units started before the first install pick the path up on their next start
+(`systemctl --user restart claude-rc@<folder>.service`; `factory-*` units are
+new for every card). Rollback: delete `~/.config/environment.d/60-gstack-chrome.conf`,
+run `systemctl --user unset-environment GSTACK_CHROMIUM_PATH` and restart the
+units; gstack goes back to its bundled Chromium.
 
 ## How a card flows
 
@@ -182,14 +250,16 @@ install.sh prints how to retire any it finds.
 | `bin/claude-factory-dispatch` | `~/.local/bin/` |
 | `systemd/claude-factory.service`, `.timer` | `~/.config/systemd/user/` |
 | `systemd/claude-rc@.service` | `~/.config/systemd/user/` |
+| `environment.d/60-gstack-chrome.conf` | `~/.config/environment.d/` |
 | `repos.conf.example` | `~/.config/claude-factory/repos.conf` (first install only) |
 
 State and logs live in `~/.local/state/claude-factory/`: `launched` (the branches
-it started), `reviewed/`, `pick-<project>.log`, `cat-NNN.log`, `review-cat-NNN.log`,
-`review-<repo>-pr-<n>.log`.
+it started), `reviewed/`, `settled/`, `merge/`, `pick-<project>.log`, `settle.log`,
+`merge.log`, `cat-NNN.log`, `review-cat-NNN.log`, `review-<repo>-pr-<n>.log`.
 
 The dispatcher finds `claude` with `command -v claude` on the service's PATH
 (`~/.local/share/mise/shims`, `~/.local/bin`, `/usr/local/bin`, `/usr/bin`).
 To use a different binary, set `CLAUDE_BIN` with
-`systemctl --user edit claude-factory.service`. The caps can be changed there too:
-`CLAUDE_FACTORY_CAP` (default 2) and `CLAUDE_FACTORY_WAITING_CAP` (default 3).
+`systemctl --user edit claude-factory.service`. The caps can be changed there too
+(see Caps above): `CLAUDE_FACTORY_CAP` (default 2) and `CLAUDE_FACTORY_WAITING_CAP`
+(default 3).

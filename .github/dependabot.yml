@@ -1,0 +1,24 @@
+# Version updates: monthly, at most 5 open PRs per ecosystem, and a release must
+# be 7 days old before Dependabot proposes it (cooldown). Each ecosystem has one
+# group for minor and patch updates, so routine bumps arrive as one PR. Majors
+# are never grouped: each major upgrade arrives as its own PR, one per dependency
+# (CAT-1337). Security updates are not affected: they ignore the schedule and
+# cooldown and stay ungrouped, one PR per vulnerable dependency.
+# Nothing auto-merges; a person merges every Dependabot PR.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
