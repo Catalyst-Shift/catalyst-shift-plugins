@@ -802,3 +802,93 @@ test("needs-merge: a card relaunched on a new branch doesn't flip between its ol
     assert.deepEqual(asked(), [], "a change repeated");
   }
 });
+
+// CAT-1416: gstack's browser is Chrome stable with the sandbox on. install.sh
+// refuses to install without Chrome, writes GSTACK_CHROMIUM_PATH for every user
+// unit, and refuses to finish if anything would turn the sandbox off.
+const NO_SANDBOX = /^\s*(Environment=|--setenv=|--property=Environment=)?"?(GSTACK_CHROMIUM_NO_SANDBOX|CI|CONTAINER)=/m;
+
+test("environment.d sets GSTACK_CHROMIUM_PATH to Chrome stable and nothing turns the sandbox off", () => {
+  const envd = join(FACTORY, "environment.d", "60-gstack-chrome.conf");
+  const vars = read(envd).split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
+  assert.deepEqual(vars, ["GSTACK_CHROMIUM_PATH=/usr/bin/google-chrome-stable"]);
+  const files = [
+    ...SCRIPTS,
+    envd,
+    ...readdirSync(join(FACTORY, "systemd")).map((f) => join(FACTORY, "systemd", f)),
+  ];
+  for (const f of files) assert.doesNotMatch(read(f), NO_SANDBOX, f);
+  assert.doesNotMatch(read(DISPATCH), /--setenv=(GSTACK_CHROMIUM_NO_SANDBOX|CI|CONTAINER)\b/);
+});
+
+test("install.sh needs Chrome stable, installs environment.d, and keeps the sandbox on", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "factory-install-"));
+  try {
+    // A copy of factory/ whose Chrome path points at a stub we control.
+    const src = join(tmp, "factory");
+    for (const d of ["bin", "systemd", "environment.d"]) {
+      mkdirSync(join(src, d), { recursive: true });
+      for (const f of readdirSync(join(FACTORY, d))) writeFileSync(join(src, d, f), read(join(FACTORY, d, f)));
+    }
+    writeFileSync(join(src, "repos.conf.example"), read(join(FACTORY, "repos.conf.example")));
+    const chrome = join(tmp, "google-chrome-stable");
+    assert.match(read(INSTALL), /^CHROME=\/usr\/bin\/google-chrome-stable$/m);
+    writeFileSync(join(src, "install.sh"), read(INSTALL).replace(/^CHROME=.*$/m, `CHROME=${chrome}`));
+
+    const bin = join(tmp, "bin");
+    mkdirSync(bin);
+    const sysenv = join(tmp, "sysenv");
+    const setlog = join(tmp, "set-environment");
+    writeFileSync(join(bin, "systemctl"),
+      `#!/bin/bash\ncase "$2" in show-environment) cat "${sysenv}" ;; set-environment) echo "$3" >> "${setlog}" ;; esac\nexit 0\n`,
+      { mode: 0o755 });
+
+    const run = (envLines, dropIn) => {
+      const home = mkdtempSync(join(tmp, "home-"));
+      if (dropIn) {
+        const d = join(home, ".config", "systemd", "user", "claude-factory.service.d");
+        mkdirSync(d, { recursive: true });
+        writeFileSync(join(d, "override.conf"), `[Service]\n${dropIn}\n`);
+      }
+      writeFileSync(sysenv, envLines.join("\n") + "\n");
+      rmSync(setlog, { force: true });
+      const r = spawnSync("bash", [join(src, "install.sh")], {
+        encoding: "utf8",
+        env: { HOME: home, USER: "factory", PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: "/bin/false" },
+      });
+      return { ...r, home };
+    };
+
+    // No Chrome: refuses before installing anything.
+    let r = run(["PATH=/usr/bin"]);
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stdout, /yay -S google-chrome/);
+    assert.equal(existsSync(join(r.home, ".local", "bin", "claude-factory-dispatch")), false);
+    assert.equal(existsSync(join(r.home, ".config", "environment.d")), false);
+
+    writeFileSync(chrome, "#!/bin/sh\necho 'Google Chrome 156.0.8078.80'\n", { mode: 0o755 });
+
+    // Chrome present, clean environment: installs and sets the path live.
+    r = run(["PATH=/usr/bin", `GSTACK_CHROMIUM_PATH=${chrome}`]);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(
+      read(join(r.home, ".config", "environment.d", "60-gstack-chrome.conf")),
+      read(join(FACTORY, "environment.d", "60-gstack-chrome.conf")),
+    );
+    assert.equal(read(setlog).trim(), `GSTACK_CHROMIUM_PATH=${chrome}`);
+    assert.match(r.stdout, /sandbox stays on/);
+
+    // Anything that would turn the sandbox off: refuses to finish.
+    for (const bad of ["CI=true", "CONTAINER=1", "GSTACK_CHROMIUM_NO_SANDBOX=1"]) {
+      r = run(["PATH=/usr/bin", bad]);
+      assert.equal(r.status, 1, `${bad}: ${r.stdout}`);
+      assert.match(r.stdout, new RegExp(`Refusing to finish[\\s\\S]*${bad}`));
+    }
+    // Or a drop-in from systemctl --user edit claude-factory.service.
+    r = run(["PATH=/usr/bin"], "Environment=CI=true");
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stdout, /Refusing to finish[\s\S]*Environment=CI=true/);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});

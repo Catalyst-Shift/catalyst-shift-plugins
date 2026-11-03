@@ -140,7 +140,8 @@ default unless you set the same variable there.
 
 ## First install
 
-1. Prerequisites (install.sh checks each and prints what's missing): `git`;
+1. Prerequisites (install.sh checks each and prints what's missing): Chrome
+   stable (`yay -S google-chrome`; install.sh stops without it, see Browser); `git`;
    `gh auth login`; Claude Code, signed in with the claude.ai subscription
    (`claude auth login`; the factory never uses an API key); the Linear
    connector connected at claude.ai, so `claude mcp list` shows
@@ -165,6 +166,42 @@ default unless you set the same variable there.
 `~/Projects/<folder>`, so you can start and steer sessions from Claude desktop or
 mobile. It replaces the older per-repo `claude-rc-<folder>.service` files;
 install.sh prints how to retire any it finds.
+
+## Browser
+
+gstack's `/browse` and `/qa` drive a real browser from unattended sessions on a
+machine that holds repo, Linear and Vercel credentials. By default gstack uses
+Playwright's bundled Chromium, which lags Chrome stable and its security fixes.
+So factory machines point gstack at Chrome stable with the sandbox on (CAT-1416):
+
+- install.sh refuses to run until `/usr/bin/google-chrome-stable` exists
+  (`yay -S google-chrome`).
+- It installs `environment.d/60-gstack-chrome.conf` to `~/.config/environment.d/`
+  (`GSTACK_CHROMIUM_PATH=/usr/bin/google-chrome-stable`) and sets it in the
+  running user manager, so every user unit gets it: the dispatcher,
+  `claude-rc@`, the `factory-*` sessions and the desktop session. It applies to
+  every project on the machine; a repo's `.env` can't override it.
+- It refuses to finish if the user manager, environment.d or the factory units
+  set `GSTACK_CHROMIUM_NO_SANDBOX`, `CI` or `CONTAINER`: any of them makes gstack
+  launch Chromium with `--no-sandbox`.
+
+Chrome stays patched with the system: `yay -Syu` (which includes `pacman -Syu`).
+
+Check it:
+
+```bash
+systemctl --user show-environment | grep GSTACK_CHROMIUM_PATH   # /usr/bin/google-chrome-stable
+# while a session is running /browse:
+ps -o args= -C chrome | head -1     # /opt/google/chrome/chrome ..., no --no-sandbox
+google-chrome-stable --version      # chrome://version in that browser shows the same
+```
+
+Real Chrome blocks `--load-extension`; headless `/browse` and `/qa` don't need it.
+Units started before the first install pick the path up on their next start
+(`systemctl --user restart claude-rc@<folder>.service`; `factory-*` units are
+new for every card). Rollback: delete `~/.config/environment.d/60-gstack-chrome.conf`,
+run `systemctl --user unset-environment GSTACK_CHROMIUM_PATH` and restart the
+units; gstack goes back to its bundled Chromium.
 
 ## How a card flows
 
@@ -213,6 +250,7 @@ install.sh prints how to retire any it finds.
 | `bin/claude-factory-dispatch` | `~/.local/bin/` |
 | `systemd/claude-factory.service`, `.timer` | `~/.config/systemd/user/` |
 | `systemd/claude-rc@.service` | `~/.config/systemd/user/` |
+| `environment.d/60-gstack-chrome.conf` | `~/.config/environment.d/` |
 | `repos.conf.example` | `~/.config/claude-factory/repos.conf` (first install only) |
 
 State and logs live in `~/.local/state/claude-factory/`: `launched` (the branches
