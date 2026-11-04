@@ -1,15 +1,15 @@
 <!doctype html>
 <!--
-  Catalyst Shift — Discovery Report Template (site-fidelity, dark, screen-first)
+  Catalyst Shift — Discovery Report Template (paper, editorial; prints as is)
   ============================================================
   USAGE FOR CLAUDE:
     1. The discovery report is delivered AFTER the discovery call, BEFORE the proposal.
        Its purpose: prove we listened, name the real problem, and frame the recommendation.
     2. Replace every {{PLACEHOLDER}}. Quote the client in their own words where called for.
-    3. Section structure: § 01 Context · § 02 What we heard · § 03 Symptoms vs. root cause ·
-       § 04 Diagnostic · § 05 Recommendation preview · § 06 Next step.
+    3. Section structure: 01 Context · 02 What we heard · 03 Symptoms vs. root cause ·
+       04 Diagnostic · 05 Recommendation preview · 06 Next step.
     4. The recommendation here is a PREVIEW, not a commitment. The proposal is the commitment.
-    5. Print via Cmd/Ctrl+P — print rules in doc-shell.css invert the canvas.
+    5. Print via Cmd/Ctrl+P — the page is already paper; print drops the nav and footer.
   ============================================================
 -->
 <html lang="en">
@@ -17,15 +17,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Discovery Report — {{CLIENT_NAME}} — Catalyst Shift</title>
-<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <link rel="stylesheet" href="../assets/colors_and_type.css">
 <link rel="stylesheet" href="../assets/doc-shell.css">
 <style>
   /* discovery-only overrides */
   .quote {
     margin: 16px 0 24px; padding: 20px 24px;
-    border: 1px solid var(--border); border-left: 2px solid var(--accent);
-    border-radius: var(--r-3); background: var(--surface);
+    border: 1px solid var(--border); border-left: 3px solid var(--signal);
+    border-radius: var(--r-4); background: var(--surface);
     font-family: var(--font-display); font-weight: 500;
     font-size: 18px; line-height: 1.45; color: var(--text);
     max-width: 680px;
@@ -44,21 +44,20 @@
     border: 1px solid var(--border); border-radius: var(--r-3);
     background: var(--surface); padding: 20px 22px;
   }
-  .vs .col.symptoms { border-color: rgba(255,111,77,0.35); }
-  .vs .col.cause { border-color: var(--signal-soft); background: linear-gradient(180deg, rgba(52,226,194,0.05), var(--surface)); }
+  .vs .col.cause { border-top: 3px solid var(--signal); }
   .vs h4 {
     font-family: var(--font-mono); font-weight: 500;
-    font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
     margin: 0 0 12px;
   }
-  .vs .symptoms h4 { color: var(--warm); }
-  .vs .cause h4 { color: var(--signal); }
+  .vs .symptoms h4 { color: var(--text-mute); }
+  .vs .cause h4 { color: var(--link); }
   .vs ul { margin: 0; padding: 0; list-style: none; }
   .vs li {
     position: relative; padding-left: 20px; margin-bottom: 8px;
     font-size: 14.5px; line-height: 1.5; color: var(--text-dim);
   }
-  .vs .symptoms li::before { content: "·"; position: absolute; left: 6px; color: var(--warm); }
+  .vs .symptoms li::before { content: "·"; position: absolute; left: 6px; color: var(--text-mute); }
   .vs .cause li::before { content: "·"; position: absolute; left: 6px; color: var(--signal); }
   .vs .arrow-cell {
     display: flex; align-items: center; justify-content: center;
@@ -66,50 +65,26 @@
     text-transform: uppercase; color: var(--text-mute);
   }
 </style>
-<style>
-/* v3 site — per-use-case module ID colors (showcase rail) */
-.module-rail .row .id.m01 { color: var(--m01); }
-.module-rail .row .id.m02 { color: var(--m02); }
-.module-rail .row .id.m03 { color: var(--m03); }
-.module-rail .row .id.m04 { color: var(--m04); }
-.module-rail .row .id.m05 { color: var(--m05); }
-@media print {
-  .module-rail .row .id.m01 { color: #1A9E7A !important; }
-  .module-rail .row .id.m02 { color: #C2456F !important; }
-  .module-rail .row .id.m03 { color: #5E4FD1 !important; }
-  .module-rail .row .id.m04 { color: #B5851F !important; }
-  .module-rail .row .id.m05 { color: #2E6FBF !important; }
-}
-</style>
 </head>
 <body>
 
 <header class="nav">
   <div class="nav-inner">
-    <a class="lockup" href="#">
-      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        
-        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
-        <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
-        <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
-      </svg>
-      <span class="wordmark">Catalyst<span class="sh">Shift</span></span>
-    </a>
+    <a class="lockup" href="https://catalystshift.ai"><span class="wordmark">Catalyst <span class="sh">Shift</span></span></a>
     <div class="nav-meta">
       <span>Discovery · {{DOC_NUMBER}}</span>
       <span>{{ISSUE_DATE}}</span>
-      <span class="live">Synthesis</span>
+      <span class="live">Findings</span>
     </div>
   </div>
 </header>
 
 <section class="hero">
-  <div class="hero-glow"></div>
   <div class="hero-inner">
     <div class="pill"><span class="badge">Discovery</span></div>
     <div class="doc-kicker">Discovery report</div>
     <h1 class="doc">
-      What's actually getting in the way.<br>
+      Where {{CLIENT_SHORT}} runs slower than it should.
       <span class="subline">{{ONE_LINE_REFRAME_OF_THE_PROBLEM}}</span>
     </h1>
     <p class="lede">{{2_SENTENCE_PROMISE_THAT_THIS_DOCUMENT_NAMES_THE_REAL_PROBLEM_NOT_THE_SYMPTOMS_AND_PROPOSES_A_PATH}}</p>
@@ -117,13 +92,13 @@
     <div class="cover-strip">
       <div class="cell"><div class="label">Issued</div><div class="value">{{ISSUE_DATE}}<small>Doc · {{DOC_NUMBER}}</small></div></div>
       <div class="cell"><div class="label">For</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
-      <div class="cell"><div class="label">Inputs</div><div class="value">{{N_STAKEHOLDERS}} stakeholders<small>{{N_HOURS}}h · {{N_DOCS}} docs reviewed</small></div></div>
-      <div class="cell"><div class="label">Recommends</div><div class="value">{{OFFER_NAME}}<small>Start: {{FIRST_SPINE_STOP}}</small></div></div>
+      <div class="cell"><div class="label">Inputs</div><div class="value">{{N_PEOPLE}} people<small>{{N_SESSIONS}} sessions · {{N_DOCS}} documents read</small></div></div>
+      <div class="cell"><div class="label">Recommends</div><div class="value">{{ENGAGEMENT_NAME}}<small>Starts with Read</small></div></div>
     </div>
   </div>
 </section>
 
-<!-- § 01 — CONTEXT -->
+<!-- 01 — CONTEXT -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -132,13 +107,13 @@
     </aside>
     <div class="s-body">
       <h2 class="s-title">Where {{CLIENT_NAME}} stands today.</h2>
-      <p>{{2-3_SENTENCES_DESCRIBING_THE_BUSINESS_STAGE_TEAM_SIZE_REVENUE_BAND_AND_THE_INFLECTION_POINT_THEYRE_AT}}</p>
+      <p>{{2-3_SENTENCES_DESCRIBING_THE_BUSINESS_STAGE_SIZE_LEADERSHIP_AND_THE_INFLECTION_POINT_THEYRE_AT}}</p>
       <p>{{1-2_SENTENCES_ON_WHY_NOW_WHAT_TRIGGERED_THE_CONVERSATION}}</p>
     </div>
   </div>
 </section>
 
-<!-- § 02 — WHAT WE HEARD -->
+<!-- 02 — WHAT WE HEARD -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -147,7 +122,7 @@
     </aside>
     <div class="s-body">
       <h2 class="s-title">In their own words.</h2>
-      <p>Across {{N_STAKEHOLDERS}} stakeholders, three themes surfaced repeatedly. We've kept the language verbatim where we can.</p>
+      <p>Across {{N_PEOPLE}} conversations, three themes surfaced repeatedly. We've kept the language verbatim where we can.</p>
 
       <h3>Theme 1 — {{THEME_1_LABEL}}</h3>
       <div class="quote">
@@ -170,7 +145,7 @@
   </div>
 </section>
 
-<!-- § 03 — SYMPTOMS VS ROOT CAUSE -->
+<!-- 03 — SYMPTOMS VS ROOT CAUSE -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -206,7 +181,7 @@
   </div>
 </section>
 
-<!-- § 04 — DIAGNOSTIC SNAPSHOT -->
+<!-- 04 — DIAGNOSTIC SNAPSHOT -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -214,70 +189,62 @@
       <div class="s-eyebrow">Diagnostic</div>
     </aside>
     <div class="s-body">
-      <h2 class="s-title">Where the leaks are.</h2>
-      <p>A snapshot of how {{CLIENT_NAME}} runs today, scored against the dimensions that matter for this engagement.</p>
+      <h2 class="s-title">Where it runs slower than it should.</h2>
+      <p>A snapshot of how {{CLIENT_NAME}} runs today, area by area, from what we read and what your people told us.</p>
 
       <div class="module-frame" style="margin-top: 16px;">
-        <div class="chrome">
-          <span class="dots"><span></span><span></span><span></span></span>
-          <span class="crumb">catalyst&nbsp;os · {{CLIENT_SHORT}} · diagnostic</span>
-          <span class="right">M.DX — SCAN</span>
-        </div>
         <div class="data-toolbar">
-          <span class="module-id">M.DX — DIAGNOSTIC</span>
-          <span class="title">Operating-layer scan</span>
-          <span class="meta">{{N_DIMENSIONS}} dimensions</span>
+          <span class="title">How the company runs today</span>
+          <span class="meta">{{N_AREAS}} areas</span>
         </div>
         <table class="outcomes">
-          <thead><tr><th>Dimension</th><th>Status</th><th>Observation</th></tr></thead>
+          <thead><tr><th>Area</th><th>Status</th><th>Observation</th></tr></thead>
           <tbody>
-            <tr><td class="outcome">Lead generation</td><td><span class="dot {{LEADGEN_TONE}}">{{LEADGEN_STATUS}}</span></td><td>{{LEADGEN_OBSERVATION}}</td></tr>
-            <tr><td class="outcome">Sales motion</td><td><span class="dot {{SALES_TONE}}">{{SALES_STATUS}}</span></td><td>{{SALES_OBSERVATION}}</td></tr>
-            <tr><td class="outcome">Conversion / close</td><td><span class="dot {{CLOSE_TONE}}">{{CLOSE_STATUS}}</span></td><td>{{CLOSE_OBSERVATION}}</td></tr>
-            <tr><td class="outcome">Onboarding / handoff</td><td><span class="dot {{ONBOARD_TONE}}">{{ONBOARD_STATUS}}</span></td><td>{{ONBOARD_OBSERVATION}}</td></tr>
-            <tr><td class="outcome">Visibility / reporting</td><td><span class="dot {{REPORT_TONE}}">{{REPORT_STATUS}}</span></td><td>{{REPORT_OBSERVATION}}</td></tr>
+            <tr><td class="outcome">{{AREA_1_E_G_HOW_WORK_MOVES_BETWEEN_TEAMS}}</td><td><span class="dot {{AREA_1_TONE}}">{{AREA_1_STATUS}}</span></td><td>{{AREA_1_OBSERVATION}}</td></tr>
+            <tr><td class="outcome">{{AREA_2_E_G_WHERE_THE_COMPANY_KNOWLEDGE_LIVES}}</td><td><span class="dot {{AREA_2_TONE}}">{{AREA_2_STATUS}}</span></td><td>{{AREA_2_OBSERVATION}}</td></tr>
+            <tr><td class="outcome">{{AREA_3_E_G_SALES_AND_MARKETING}}</td><td><span class="dot {{AREA_3_TONE}}">{{AREA_3_STATUS}}</span></td><td>{{AREA_3_OBSERVATION}}</td></tr>
+            <tr><td class="outcome">{{AREA_4_E_G_OPERATIONS}}</td><td><span class="dot {{AREA_4_TONE}}">{{AREA_4_STATUS}}</span></td><td>{{AREA_4_OBSERVATION}}</td></tr>
+            <tr><td class="outcome">{{AREA_5_E_G_HOW_PEOPLE_USE_THE_AI_THEY_HAVE}}</td><td><span class="dot {{AREA_5_TONE}}">{{AREA_5_STATUS}}</span></td><td>{{AREA_5_OBSERVATION}}</td></tr>
           </tbody>
         </table>
       </div>
 
-      <p style="margin-top: 28px;">{{1-2_SENTENCES_ON_WHICH_DIMENSION_TO_FIX_FIRST_AND_WHY}}</p>
+      <p style="margin-top: 28px;">{{1-2_SENTENCES_ON_WHICH_AREA_TO_FIX_FIRST_AND_WHY}}</p>
     </div>
   </div>
 </section>
 
-<!-- § 05 — RECOMMENDATION PREVIEW -->
+<!-- 05 — RECOMMENDATION PREVIEW -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
       <div class="s-num">05</div>
       <div class="s-eyebrow">Path forward</div>
-      <div class="module-rail">
-        <!-- The spine (BRAND.md). Mark the stops this engagement covers with class="row active".
-             MSP-audience doc only: swap these five rows for M.01 The Operator Brief · M.02 Churn Early Warning ·
-             M.03 Proposal Generation · M.04 Pipeline Visibility · M.05 Authority Engine (see BRAND.md). -->
-        <div class="row active"><span class="id">CS</span><span>{{OFFER_NAME}}</span></div>
-        <div class="row"><span class="id m01">01</span><span>Connect</span></div>
-        <div class="row"><span class="id m02">02</span><span>Normalize</span></div>
-        <div class="row"><span class="id m03">03</span><span>Synthesize</span></div>
-        <div class="row"><span class="id m04">04</span><span>Act</span></div>
-        <div class="row"><span class="id m05">05</span><span>Keep</span></div>
-      </div>
+      <!-- The six services (BRAND.md), in the site's order. class="row on" = this engagement uses it. -->
+      <ul class="service-rail" aria-label="The six services">
+        <li class="row">Build software and AI applications</li>
+        <li class="row">Connect your company brain</li>
+        <li class="row">Set up Copilot and other AI platforms</li>
+        <li class="row">Get your people using AI</li>
+        <li class="row">Automate sales and marketing</li>
+        <li class="row">Automate operations</li>
+      </ul>
     </aside>
     <div class="s-body">
       <h2 class="s-title">What we'd recommend.</h2>
-      <p>Based on the diagnosis above, the right starting move is <strong>{{OFFER_NAME}}</strong>: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}.</p>
+      <p>Based on the diagnosis above, the right starting move is <strong>{{ENGAGEMENT_NAME}}</strong>: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}.</p>
 
       <p class="pull">
-        <span class="a">Your systems already hold the answer.</span>
-        <span class="b">We connect them, make sense of them, and act on it.</span>
+        <span class="a">We find where a company runs slower than it should.</span>
+        <span class="b">Then we build what fixes it, and stay until your people are using it.</span>
       </p>
 
-      <p>The full proposal — scope, deliverables, the fixed price for that scope and the monthly care contract, outcomes, and the deliverables we commit to in writing — follows this report under separate cover.</p>
+      <p>The full proposal (scope, the fixed price for that scope and the monthly Stay, and the deliverables and outcomes we commit to in writing) follows this report under separate cover.</p>
     </div>
   </div>
 </section>
 
-<!-- § 06 — NEXT STEP -->
+<!-- 06 — NEXT STEP -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -288,7 +255,7 @@
       <h2 class="s-title">From here.</h2>
       <ol>
         <li><strong>Review this report</strong> internally with your team and surface anything we missed.</li>
-        <li><strong>Working session</strong> — 60 minutes, scheduled within 5 business days, to walk through the diagnosis live.</li>
+        <li><strong>Working session</strong>: 60 minutes, scheduled within 5 business days, to walk through the diagnosis live.</li>
         <li><strong>Proposal issued</strong> within 2 business days of that session, mirroring the recommendation above with fees, timeline and outcomes.</li>
       </ol>
 
@@ -308,7 +275,7 @@
 
 <footer class="colophon">
   <div class="inner">
-    <span>Catalyst Shift · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
+    <span><span class="wordmark">Catalyst <span class="sh">Shift</span></span> · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
     <span>Discovery · {{DOC_NUMBER}} · {{ISSUE_DATE}}</span>
   </div>
 </footer>

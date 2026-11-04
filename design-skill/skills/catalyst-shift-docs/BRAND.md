@@ -2,28 +2,54 @@
 
 How Catalyst Shift sounds and looks in a document, and the limits that protect clients. Read this before writing any copy.
 
-This file is not the strategy. What we sell, to whom, at what price, how an engagement is shaped and who is on the team all come from the current canon in `Catalyst-Shift/catalyst-brain` `strategy/` (see **Read canon first** in `SKILL.md`). Where this file and canon disagree on any of those, canon wins.
+Documents speak the way the live site (catalystshift.ai) does. This file carries the public side of that: the positioning line, the six services, how we work, the voice and the limits. It is not the strategy. Engagement shape for a given deal, pricing logic and the team come from the current canon in `Catalyst-Shift/catalyst-brain` `strategy/` (see **Read canon first** in `SKILL.md`). Where this file and canon disagree, canon wins.
 
 ## Who Catalyst Shift is (public)
 
-A **services firm with its own platform.** Catalyst OS is our own tooling: how we deliver, not what we sell.
-
 **Positioning line (verbatim — use it when introducing the firm):**
-> We sell outcomes to small businesses. We deliver them with our own tooling at a cost nobody can match, and we're accountable for the result. The software is how we do it, not what we sell.
+> AI integrators, management consultants and engineers.
 
-For anything more — the problem we lead with, the offers, the markets, the team — read canon.
+The sentence that follows it, when there is room:
+> A small senior team of builders and former operators. We find where a company runs slower than it should, build the AI that fixes it, and stay until the people are using it and the way the company works has changed.
 
-## The spine
+**The promise (verbatim):**
+> An outcome, not saved hours: a company that is effective, efficient and optimized in everything it does, and a culture built around that.
 
-The templates show every engagement as a stop on one five-step spine. Say which stops an engagement covers.
+We are not coming in to cut payroll. The technology is the how; it is never the headline.
 
-| Step | What it means for the client |
+**Who we write to:** the C-suite of established, mid-market companies. Lead with no vertical and no single platform unless the teammate's deal is about one.
+
+## The six services
+
+Exactly six, in this order. Use the names verbatim. The templates list all six and mark the ones an engagement uses; never add a seventh.
+
+| Service | Note |
 |---|---|
-| **Connect** | We pull from the systems they already run |
-| **Normalize** | One picture out of systems that disagree |
-| **Synthesize** | What it means — per client, job, or contract |
-| **Act** | The play gets run |
-| **Keep** | It keeps running, and we keep watching it |
+| **Build software and AI applications** | |
+| **Connect your company brain** | |
+| **Set up Copilot and other AI platforms** | Platform-neutral, and we say so in writing |
+| **Get your people using AI** | Adoption is the deliverable |
+| **Automate sales and marketing** | Includes owning growth with a client for a season; that is not a seventh service |
+| **Automate operations** | |
+
+How a service is described for a given client comes from the site and the teammate, not from memory.
+
+## How we work: Read → Build → Land → Stay
+
+| Phase | Usually | What happens |
+|---|---|---|
+| **Read** | 1–2 weeks | We learn how the company runs and where it runs slower than it should |
+| **Build** | 2–6 weeks | We build what fixes it |
+| **Land** | 2–4 weeks | We stay with the people until they are using it |
+| **Stay** | Monthly | We keep it working and keep it in use |
+
+Every engagement ends in Stay, so every engagement leaves a monthly behind. The weeks for a given deal come from the teammate.
+
+## The two doors
+
+Every client-facing piece that ends with a call to action ends on the site's two doors, and only those: **book a discovery session**, or **take the readiness check**. Both end in a conversation with a founder.
+
+MSP-audience documents follow the site's `/msp` page and the platform connector table.
 
 ## Client-copy limits
 
@@ -32,74 +58,52 @@ These protect the client and hold in every document, whatever the teammate asks:
 - **No public price.** Only the price the teammate supplies for this client appears in a document. Never a band, a range, a rate card, or hours (see `PRICING.md`).
 - **No CMMC-compliance claim.** We never claim or imply that we make anyone CMMC compliant; assessment is C3PAO work. We can describe the evidence, documentation and monitoring work itself.
 - **No CUI custody.** We never say or imply that we take custody of CUI; we work inside the client's boundary.
-- **No "keep working at no cost."** The guarantee is defined deliverables and measured outcomes in writing, agreed before a dollar changes hands.
-- **No fabricated proof.** No invented testimonials, case studies, logos, metrics, named clients or capabilities. No client or partner named without their written approval. No claim that Catalyst OS is finished, and never frame customer money as "funding development."
+- **No "keep working at no cost."** We commit to defined deliverables and measured outcomes in writing, agreed before a dollar changes hands.
+- **No invented proof.** Never invent a number, client, logo, quote or case. Never name a client or quote a call without their written consent.
 - **Never name ScalePad.**
 
-Name a specific security control (for example encryption, audit logging, or access control) only when the teammate confirms it applies to this engagement, and never as a certification. Write a partner tier or designation only when canon or the teammate confirms we hold it.
+Name a specific security control (for example encryption, audit logging, or access control) only when the teammate confirms it applies to this engagement, and never as a certification.
 
-## MSP-audience material
+## Voice rules
 
-Use this only when the teammate is writing for an MSP audience. The line for that audience:
+- **Editorial, written for the C-suite.** Plain sentences, sentence case, nothing that reads "nerdy": no system-speak, no terminal flavour, no code-style labels in client copy.
+- **Outcomes, not hours.** Name what changes in the company. Never "hours back", "time back" or "free up time".
+- **The technology is the how.** We say we are AI integrators, and AI may appear in a headline as the work we do, never as hype and never as the product.
+- **Specific beats abstract.** Named deliverables, dates, the measures we'll use. If we say "results", we say which.
+- **Empathetic, never diagnostic.** A letter to a capable leader, not a diagnosis of a struggling company.
+- **Mono is for captions.** Durations, column titles, labels. Never a kicker over a headline.
+- **No exclamation marks. No emoji** unless the teammate explicitly asks.
 
-> Catalyst OS is the business-layer operating system for an MSP — the layer the major MSP vendors have no incentive to build.
-
-Catalyst OS is one platform; **a module is a use case** — never sold à la carte. The use cases: **M.01 The Operator Brief**, **M.02 Churn Early Warning**, **M.03 Proposal Generation**, **M.04 Pipeline Visibility**, **M.05 Authority Engine**. The cross-module client surface is **Client 360**. The Halo write-back unit is a per-client **business-layer runbook** — never "marketplace," "Blueprint," or "bots."
-
-Outside an MSP-audience doc, do not use the M.01–M.05 IDs, "the operating layer for MSPs," or "Palantir, for the MSP business layer."
-
-## Positioning rules
-
-- **Outcomes first, accountability in writing.** Lead with the result the client gets and our accountability for it. Specificity (numbers, timelines, named outputs) beats capability claims.
-- **AI is how we build, never the headline.** No "AI-powered," no "AI" in a customer-facing headline. No "general AI services" positioning — the thesis is always specific.
-- **Actioned, not actionable.** "Actionable intelligence is just a report. We deliver *actioned* intelligence — the work, done."
-- **Guarantee in writing = defined deliverables, not a refund.**
-- **The team, understated.** We sell outcomes, not the founders. Names and roles come from canon at run time; never headline the founders' names.
-
-## Locked glossary phrases
+## Locked phrases
 
 Use these verbatim. Do not paraphrase.
 
 | Phrase | Where it goes |
 |---|---|
-| **We sell outcomes to small businesses. We deliver them with our own tooling at a cost nobody can match, and we're accountable for the result. The software is how we do it, not what we sell.** | The positioning line. |
-| **Services firm with its own platform** | What we are. |
-| **Workplace Readiness** | The offer name, when canon and the teammate say it's the offer. |
-| **Connect · Normalize · Synthesize · Act · Keep** | The spine every engagement sits on. |
-| **Accountable for the result** / **in writing** | The promise; "in writing" pairs with "guarantee," meaning defined deliverables. |
-| **Actioned intelligence** (vs. "actionable" — a report) | The category line. |
-| **Install the infrastructure** | The verb+noun pair for what we deliver. |
-| **Most engagements continue** | Expansion framing. |
-| **Whether you're paying attention or not** | The ideal-state phrase. |
-| **Client 360** · **The Operator Brief** · the MSP-audience line | MSP-audience docs only. |
+| **AI integrators, management consultants and engineers** | The positioning line |
+| **An outcome, not saved hours: a company that is effective, efficient and optimized in everything it does, and a culture built around that** | The promise |
+| **We find where a company runs slower than it should, build the AI that fixes it, and stay until the people are using it** | What we do, in one sentence |
+| The six service names | As listed above, in that order |
+| **Read · Build · Land · Stay** | How every engagement runs |
+| **In writing** | The commitment: defined deliverables and measured outcomes |
+| **Book a discovery session** · **Take the readiness check** | The two doors |
 
-## Voice rules
+## What we don't do
 
-- **Lead with outcomes, not technology.** "The tenant ready for Copilot, the audit evidence in one place, the proposal sent" beats "AI-powered platform."
-- **AI lives in methodology.** Mention AI only when describing *how* we build, never as the value prop or headline.
-- **Monospace is texture, not voice.** Mono is for data, metrics, labels, system-style language. Bracket it with plain English.
-- **Every sentence earns its place.** Cut filler: "transformative," "world-class," "synergize." If we say "results," we say *which* results.
-- **Specificity beats abstraction.** Numbers, timelines, named outputs > vague promises.
-- **Empathetic, never diagnostic.** A letter to a capable operator, not a diagnosis of a struggling one. We never imply the business is broken.
-- **No exclamation marks. No emoji** unless the teammate explicitly asks.
-
-## Things we explicitly do NOT do in a document
-
-- No claim to make anyone **CMMC compliant**; no custody of **CUI**.
-- No naming **ScalePad**.
-- No "AI-powered," no "AI" in customer-facing headlines, no "general AI services" positioning.
-- No public price, band, range, rate card or hours; only the teammate's price for this client.
-- No **"keep working at no cost"** guarantee — defined deliverables in writing.
-- No fabricated testimonials, case studies, logos, metrics, or capabilities.
-- No positioning, offers, markets, pricing, team or engagement shape written from memory — read canon, or ask.
-- No selling the Catalyst OS use cases **à la carte**; no "marketplace," "Blueprint," or "bots" for the Halo write-back unit.
-- No introducing the team with founder names as the headline.
-- No describing Catalyst Shift as a product company, a "growth firm," or a "vertical-first product-led firm." No "QBR Automation" (the use case is **M.01 The Operator Brief**).
-- No dated public roadmap; no claim that Catalyst OS is finished.
-- No emoji, no exclamation marks, no filler ("transformative," "world-class," "synergize").
-- No purple/violet gradients on the logo mark — solid teal only. Violet (`--accent #8B7CF6`) is the AI/automation register and secondary CTAs — never the lockup.
-- No bouncy springs, parallax, or scroll-pinned chrome.
+- Never write **"Microsoft partner"**, or any partner tier or designation.
+- Never claim to make anyone **CMMC compliant**, or take custody of **CUI**.
+- No **"hours back"**, **"time back"** or **"free up time"** framing.
+- No **"AI-powered"**, and none of the banned vocabulary: leverage, unlock, seamless, cutting-edge, empower, transformative, transformation, revolutionize, supercharge, synergy, holistic, best-in-class, journey, stakeholder.
+- Never invent a number, client, logo, quote or case. Never name a client or quote a call without written consent.
+- No public price.
+- No finished-product claim and no dated roadmap for Catalyst OS.
+- Never name **ScalePad**.
+- No cold or purchased lists.
+- No **"keep working at no cost"** guarantee: we commit to deliverables and measured outcomes in writing.
+- No advisory-only engagements: every engagement builds something and ends in Stay.
+- No headlining the founders' names; no emoji, no exclamation marks, no `§` numbering.
+- No orange, no hex mark, no gradient on the wordmark, no grid floors or film grain.
 
 ## Visual system (one-paragraph version)
 
-Dark-first, editorial. Display type **General Sans** for headlines. Body **DM Sans**. Mono **IBM Plex Mono** with `tabular-nums` and `snake_case` for system-style content. Palette: **`--signal #34E2C2`** (teal — primary accent, status, key glows, the logo mark), **`--accent #8B7CF6`** (violet — the AI/automation register, secondary CTAs), **`--warm #FF6F4D`** (coral — closing CTAs, human moments). Surfaces are graphite (`--bg #08080B`, `--surface #101019`). Borders separate, not shadows. Section numbers render as plain `01 / Title` — no glyph prefix. The section rail colors its five rows with tokens `--m01`…`--m05` (teal `#34E2C2`, pink `#FF5D8F`, violet `#8B7CF6`, amber `#F2B43C`, blue `#4DA3FF`): by default they mark the five spine steps; in an MSP-audience doc they mark M.01–M.05. The logo mark stays solid teal. All tokens live in `assets/colors_and_type.css`; shared layout chrome in `assets/doc-shell.css`.
+Paper pages with Ink passages, editorial. Light is the default surface: **Paper `#F5F2EB`**, type in **Ink `#15171B`**, body copy in **Graphite `#3A3D44`**, muted text in **Slate `#60656E`**, hairlines in Ink at 14%. The accent is teal **`#34E2C2`**: bars, rules, filled buttons with Ink text, "Shift" on Ink. On paper, teal text is **deep teal `#0B7C6E`** (teal itself is 1.6:1 there, so never text). Indigo **`#8B7CF6`** is ambient depth only, the faint glow behind an Ink passage; never a button, text or rule. There is no orange. Type is **Switzer** (display and body, headlines 600–700, tracking -0.03 to -0.035em, sentence case) and **IBM Plex Mono** for captions (12px, 500, uppercase, 0.08em). The wordmark is plain "Catalyst Shift" on one line with "Shift" in the accent; no symbol, no mark. At icon size it is a "CS" monogram on Ink with the S in teal (`assets/favicon.svg`). All tokens live in `assets/colors_and_type.css`; shared layout chrome in `assets/doc-shell.css`. The source is the site repo's `DESIGN.md` and `app/globals.css`; when they change, mirror them here.

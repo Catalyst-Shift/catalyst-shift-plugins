@@ -31,14 +31,14 @@ except ImportError as e:
     sys.exit(1)
 
 
-# Catalyst Shift tokens
-GOLD = RGBColor(0xC8, 0xA9, 0x6E)
-TEAL = RGBColor(0x2D, 0xD4, 0xA8)
-TEXT_PRIMARY = RGBColor(0x1A, 0x1A, 0x1F)
-TEXT_SECONDARY = RGBColor(0x5C, 0x58, 0x50)
-TEXT_MUTED = RGBColor(0x8C, 0x87, 0x80)
+# Catalyst Shift tokens (Rev 05: paper, ink, deep teal for text on paper)
+GOLD = RGBColor(0x0B, 0x7C, 0x6E)   # labels and kickers: deep teal (name kept so the code below is unchanged)
+TEAL = RGBColor(0x0B, 0x7C, 0x6E)   # mono and code: deep teal; bright teal #34E2C2 is never text on paper
+TEXT_PRIMARY = RGBColor(0x15, 0x17, 0x1B)    # Ink
+TEXT_SECONDARY = RGBColor(0x3A, 0x3D, 0x44)  # Graphite
+TEXT_MUTED = RGBColor(0x60, 0x65, 0x6E)      # Slate
 
-DISPLAY_FONT = "Calibri"   # General Sans not always installed; Calibri reads cleanest
+DISPLAY_FONT = "Calibri"   # Switzer is not always installed; Calibri reads cleanest
 BODY_FONT = "Calibri"
 MONO_FONT = "Consolas"
 
