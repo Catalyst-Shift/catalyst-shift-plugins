@@ -16,11 +16,23 @@ spec, not a design doc.
 ## Why
 One or two sentences: the problem and who it hurts.
 
+## Design
+(Screen cards only: a card that builds or changes a screen. Leave it out otherwise.)
+Source: <the design source path in the repo and the frame, e.g. catalyst_os `docs/design/factory/README.md`, frame 2>
+Regions, in order:
+1. <region> — "<exact copy>"
+2. <region> — "<exact copy>", <live: what the data fills in>
+(Exact copy is the frame's fixed words: labels, headings, buttons, placeholders. Mark a
+value that comes from data, such as a count, a card title or a name, as <live: …>.)
+
 ## Checklist
 1. <a command and its expected output, e.g. `npm test -- menu` passes>
 2. <a URL and its expected state on the preview, e.g. /menu loads with no console error>
 3. <a DB/API assertion, e.g. GET /api/orders/123 returns 404 for another tenant>
-(3–8 lines. Each one is checkable from the PR's evidence. No "works well", no "looks good".)
+(3–8 lines. Each one is checkable from the PR's evidence. No "works well", no "looks good".
+A screen card has at least one line checkable from the screenshot the PR links: which
+regions, in which order, with which words, e.g. `/factory shows the brief, six tiles, the floor, Running
+now and Needs you in that order`.)
 
 ## Risk
 Low | Medium | High: <one line why>. High = migrations, auth, RLS, payments,
@@ -42,19 +54,29 @@ Optional: what's out of scope, the test target (a non-production database only),
    If you have to guess at a product decision, ask. If nobody is there to
    answer, write the question under Notes and leave the card out of Ready For
    Factory.
-3. **Dependencies.** If this card can only land after another, set that as a
+3. **Screen cards get a Design section.** If the card builds or changes a
+   screen, fill `## Design` from the repo's design source (for catalyst_os,
+   `docs/design/factory/README.md` and the frame number): the source path,
+   the regions in order, and the exact copy. Copy the fixed words, don't
+   paraphrase them, and mark data-driven values `<live: …>`. Add at least
+   one checklist line a reviewer can tick from the screenshot the PR links.
+   Anything the builder changes from the frame goes under *Decisions made*
+   in the PR. If the repo has no design source for
+   the screen, say so under Notes instead of inventing one. A card with no
+   screen leaves `## Design` out.
+4. **Dependencies.** If this card can only land after another, set that as a
    Linear "blocked by" relation, not a sentence. The dispatcher won't pick a
    card while anything it's blocked by is unfinished.
-4. **Risk is set by what the change will touch**: the High list above and the
+5. **Risk is set by what the change will touch**: the High list above and the
    repo's CODEOWNERS deep paths, not how big it feels.
-5. **Show the card**, then save it. A new card gets the format as its
+6. **Show the card**, then save it. A new card gets the format as its
    description. On an existing card, the description changes only when the
    person running `/card` asked for that card to be fixed: then rewrite it
    into the format, keep their why, intent and links, and drop only the
    wording under Never write. Otherwise post the draft as a comment headed
    `Checklist drafted by Claude — edit if wrong` and leave the description
    alone.
-6. **Ready For Factory is Kevin's or Keith's call.** Move the card there only if
+7. **Ready For Factory is Kevin's or Keith's call.** Move the card there only if
    one of them says so. Assign it to steer it to one machine; leave it
    unassigned for whichever machine is free.
 
