@@ -115,13 +115,17 @@ conflicted, how each was resolved and which checks passed. The new head has no
 stamp, so the next review sweep reviews it. When both sides changed the same
 logic and picking one loses behaviour, it doesn't guess: it comments both
 versions on the PR, adds the label `needs-conflict-call`, and pushes nothing;
-a person resolves it or removes the label to let the factory try again. A
-failed check also pushes nothing and gets one PR comment with the output. It
-never merges the PR, edits its body or touches a card. Skipped: Dependabot
-PRs, PRs from forks, PRs labelled `no-factory-review` (that opt-out covers
-conflict sessions too) or `needs-conflict-call`, PRs with a builder or reviewer
-running on them, and PRs that are neither from a branch this machine launched
-nor by one of its review authors. Conflict sessions share the cap and show in
+a person resolves it, or removes the label to let the next tick try again. A
+failed check also pushes nothing, gets one PR comment with the output and the
+same label, so a red check isn't retried on every push to main. It never
+merges the PR, edits its body or touches a card; force-push, rebase,
+`gh pr merge` and `gh api` are denied to it outright (`--disallowedTools`).
+Skipped: Dependabot PRs, PRs from forks, PRs labelled `no-factory-review`
+(that opt-out covers conflict sessions too) or `needs-conflict-call`, PRs whose
+head is the default branch or another open PR's base (a push there would land
+on a shared branch), PRs with a builder or reviewer running on them, and PRs
+that are neither from a branch this machine launched nor by one of its review
+authors. Conflict sessions share the cap and show in
 `claude-factory-dispatch status`; no reviewer starts on a PR while its conflict
 session runs. Each PR is tried once per (head sha, base sha), recorded in
 `~/.local/state/claude-factory/conflicts/<repo>/<pr>-<head>-<base>`, and logs

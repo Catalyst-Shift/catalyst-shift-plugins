@@ -958,10 +958,11 @@ test("install.sh needs Chrome stable, installs environment.d, and keeps the sand
 
 // CAT-1468: each tick, an open PR that GitHub lists as CONFLICTING gets one
 // conflict session (real git here): detached at the PR head, told to merge the
-// base tip it saw and push only a merge commit to the PR's own branch. Once per
-// (head sha, base sha); a new base tip tries again. No reviewer starts on that
-// PR while its conflict session runs.
-test("conflicts: one session per conflicting PR and (head, base) pair, within the cap, never a fork, draft or opted-out PR", () => {
+// base tip GitHub listed and push only a merge commit to the PR's own branch.
+// Once per (head sha, base sha); a new base tip tries again, and so does
+// removing needs-conflict-call. No reviewer starts on that PR while its
+// conflict session runs.
+test("conflicts: one session per conflicting PR and (head, base) pair, within the cap, never a fork, draft, opted-out or shared-branch PR", () => {
   const t = mkdtempSync(join(tmpdir(), "factory-conflicts-"));
   const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
   const repo = join(t, "My_Repo"), units = join(t, "units");
@@ -972,20 +973,27 @@ test("conflicts: one session per conflicting PR and (head, base) pair, within th
     assert.equal(r.status, 0, `${cmd}\n${r.stderr}`);
     return r.stdout.trim();
   };
+  // PR heads live on origin; refs/pull/21/head too, so a reviewer for #21
+  // would really start if the conflict guard in pr_reviews were missing.
   sh(`git init -q --bare ${t}/origin.git && git clone -q ${t}/origin.git ${repo} 2>/dev/null
 cd ${repo} && echo base >doc.md && git add doc.md && git commit -q -m base && git push -q origin HEAD:main
-git checkout -q -b b/21 && echo pr >doc.md && git commit -q -am pr && git push -q origin b/21 && git push -q origin b/21:refs/heads/b/cat-8-x
-git checkout -q main 2>/dev/null || git checkout -q -b main origin/main
-git checkout -q main && echo main >doc.md && git commit -q -am main && git push -q origin HEAD:main`);
+git checkout -q -b b/21 && echo pr >doc.md && git commit -q -am pr
+for r in refs/heads/b/21 refs/heads/b/cat-8-x refs/heads/b/31 refs/heads/release refs/pull/21/head; do git push -q origin "HEAD:$r"; done
+git checkout -q --detach HEAD~1 && echo main >doc.md && git commit -q -am main && git push -q origin HEAD:main`);
   const head = sh(`git -C ${repo} rev-parse b/21`);
   let main = sh(`git -C ${repo} rev-parse HEAD`);
   const fake = (c) => c.repeat(40);
   const pr = (number, login, extra = {}) => ({
-    number, headRefOid: fake(String(number % 10)), headRefName: `b/${number}`, baseRefName: "main", mergeable: "CONFLICTING",
-    body: "", author: { login }, isDraft: false, labels: [], isCrossRepository: false, ...extra,
+    number, headRefOid: fake(String(number % 10)), baseRefOid: main, headRefName: `b/${number}`, baseRefName: "main",
+    mergeable: "CONFLICTING", body: "", author: { login }, isDraft: false, labels: [], isCrossRepository: false, ...extra,
   });
   const fixture = join(t, "prs.json");
-  writeFileSync(fixture, JSON.stringify([
+  const label21 = (labels) => {
+    const prs = JSON.parse(read(fixture));
+    prs.find((p) => p.number === 21).labels = labels;
+    writeFileSync(fixture, JSON.stringify(prs));
+  };
+  const listed = () => [
     pr(21, "kkreative", { headRefOid: head }),                          // resolved
     pr(22, "kkreative", { isDraft: true }),                             // draft
     pr(23, "kkreative", { isCrossRepository: true }),                   // fork
@@ -996,7 +1004,11 @@ git checkout -q main && echo main >doc.md && git commit -q -am main && git push 
     pr(28, "keithcatalyst", { headRefName: "b/cat-8-x", headRefOid: head }), // launched here, builder still running
     pr(29, "kkreative", { labels: [{ name: "no-factory-review" }] }),   // opted out
     pr(30, "kkreative", { headRefName: "b/x;y" }),                      // not a plain branch name
-  ]));
+    pr(31, "kkreative", { headRefOid: fake("9"), body: `Reviewed: ${fake("9")} — /review` }), // pushed again since the list
+    pr(32, "kkreative", { headRefName: "release", headRefOid: head }),  // its head is another PR's base
+    pr(33, "kkreative", { mergeable: "MERGEABLE", baseRefName: "release", body: `Reviewed: ${fake("3")} — /review` }),
+  ];
+  writeFileSync(fixture, JSON.stringify(listed()));
   writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
 [ "$1 $2" = "api user" ] && { echo kkreative; exit 0; }
 sub="$1 $2"; shift 2; n=; h=; q=.
@@ -1008,7 +1020,7 @@ else jq -r "$q" "${fixture}"; fi
 `, { mode: 0o755 });
   writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
 for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; --working-directory=*) w=\${a#--working-directory=};; esac; done
-printf '%s' "\${!#}" >"${units}.$u"; printf '%s' "$w" >"${units}.$u.wd"
+printf '%s' "\${!#}" >"${units}.$u"; printf '%s' "$w" >"${units}.$u.wd"; printf '%s\\n' "$@" >"${units}.$u.args"
 `, { mode: 0o755 });
   writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
 case "$*" in
@@ -1024,6 +1036,7 @@ esac
     env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap), ...gitEnv },
   });
   const started = () => read(units).trim().split("\n").filter(Boolean).map((u) => u.replace(/\.service$/, ""));
+  const conflictUnits = () => started().filter((u) => u.startsWith("factory-conflict-"));
   const tried = () => readdirSync(join(state, "conflicts", "my-repo")).sort();
   const name = "factory-conflict-my-repo-pr-21";
   const wt = join(repo, ".claude/worktrees", name);
@@ -1031,14 +1044,15 @@ esac
   try {
     // cat-8's builder is still running: its PR is left alone.
     writeFileSync(units, "factory-cat-8.service\n");
-    let r = tick(5);
+    let r = tick(9);
     assert.equal(r.status, 0, r.stderr);
-    assert.ok(started().includes(name), r.stdout);
-    assert.deepEqual(started().filter((u) => u.startsWith("factory-conflict-")), [name]);
+    assert.deepEqual(conflictUnits(), [name], r.stdout);
     // No reviewer races the conflict session on PR #21.
     assert.ok(!started().includes("factory-review-my-repo-pr-21"), started().join(" "));
     assert.deepEqual(tried(), [`21-${head}-${main}`]);
     assert.match(r.stdout, /PR #30 .*not plain/);
+    assert.match(r.stdout, /PR #31 .*could not fetch/);
+    assert.match(r.stdout, /PR #32 .*another PR's base/);
     assert.doesNotMatch(r.stdout, /PR #28 /);
     // The worktree is detached at the PR head.
     assert.equal(read(`${units}.${name}.wd`), wt);
@@ -1050,31 +1064,52 @@ esac
     assert.match(prompt, /Never rebase, never force-push/);
     assert.match(prompt, /Never merge the PR, never turn on auto-merge, never edit the PR body/);
     assert.match(prompt, /--add-label needs-conflict-call/);
+    assert.match(prompt, /If any check still fails, push nothing: .*label the PR/);
     assert.match(prompt, /npm run verify:map/);
     assert.match(prompt, /post exactly one PR comment: which files conflicted/);
     assert.ok(prompt.includes(`git reset --hard ${head}`));
     assert.doesNotMatch(prompt, /--auto|--admin/);
+    // The push rules are enforced, not only asked for.
+    const args = read(`${units}.${name}.args`);
+    for (const d of ["Bash(git push --force*)", "Bash(git push -f*)", "Bash(git rebase*)", "Bash(gh pr merge*)", "Bash(gh api*)"]) {
+      assert.ok(args.includes(d), `missing ${d} in --disallowedTools`);
+    }
 
     // Still running: nothing new.
-    r = tick(5);
+    r = tick(9);
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(started().filter((u) => u === name).length, 1);
+    assert.deepEqual(conflictUnits(), [name]);
 
     // Finished without pushing: cleanup removes its clean worktree, and the same
     // (head, base) pair is not tried again. cat-8's builder finished too, so its
     // PR gets a conflict session now, and its card reviewer waits for that.
     writeFileSync(units, "");
-    r = tick(5);
+    r = tick(9);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /removed finished worktree .*factory-conflict-my-repo-pr-21/);
-    assert.ok(!started().includes(name), started().join(" "));
-    assert.ok(started().includes("factory-conflict-my-repo-pr-28"), r.stdout);
+    assert.deepEqual(conflictUnits(), ["factory-conflict-my-repo-pr-28"]);
     assert.ok(!started().includes("factory-review-cat-8"), started().join(" "));
     assert.deepEqual(tried(), [`21-${head}-${main}`, `28-${head}-${main}`]);
 
-    // main moves: a new pair, so PR #21 is tried again, but only within the cap.
+    // The session labelled #21 needs-conflict-call: it waits, and its try is
+    // forgotten. Taking the label off tries the same pair again.
+    writeFileSync(units, "");
+    label21([{ name: "needs-conflict-call" }]);
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(conflictUnits(), []);
+    assert.deepEqual(tried(), [`28-${head}-${main}`]);
+    // (Meanwhile #21's head got a reviewer; let it finish.)
+    writeFileSync(units, "");
+    label21([]);
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(conflictUnits(), [name]);
+
+    // main moves: a new pair, so #21 is tried again, but only within the cap.
     sh(`cd ${repo} && echo main2 >doc.md && git commit -q -am main2 && git push -q origin HEAD:main`);
     main = sh(`git -C ${repo} rev-parse HEAD`);
+    writeFileSync(fixture, JSON.stringify(listed()));
     writeFileSync(units, "factory-other.service\n");
     r = tick(1);
     assert.equal(r.status, 0, r.stderr);
