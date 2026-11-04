@@ -60,8 +60,10 @@ test("every claude and systemd-run call in the dispatcher reads stdin from /dev/
   const s = read(DISPATCH);
   // pick(): the claude -p call ends its prompt with </dev/null
   assert.match(s, /PICK <identifier> <gitBranchName>" <\/dev\/null/);
-  // run_unit(): every builder and reviewer start goes through it
-  assert.match(s, /"\$CLAUDE" "\$@" <\/dev\/null/);
+  // run_unit(): every builder and reviewer start goes through it (claude, or
+  // claude under claude-factory-stream, CAT-1442)
+  assert.match(s, /local -a cmd=\("\$CLAUDE" "\$@"\)/);
+  assert.match(s, /"\$\{cmd\[@\]\}" <\/dev\/null/);
   // settle(): the haiku call ends its prompt with </dev/null
   assert.match(s, /SETTLED <the status it ends in>" <\/dev\/null/);
   // linear_issue(): the needs-merge haiku calls (CAT-1336)

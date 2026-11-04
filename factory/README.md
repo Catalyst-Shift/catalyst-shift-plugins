@@ -140,6 +140,86 @@ The next tick picks it up (each tick is a fresh run). `claude-factory-dispatch
 status` run from a shell doesn't read the drop-in, so the cap it prints is the
 default unless you set the same variable there.
 
+## Streaming to the board
+
+With `FACTORY_INGEST_TOKEN` set (CAT-1442), each card's console on the Factory
+Board (`os.catalystshift.ai/factory`) shows the session live, and the board shows
+the machine's state. Without it, nothing is sent and sessions run as before.
+
+**Turn it on:** the board issues one token per machine (catalyst_os
+`scripts/factory-ingest-token.ts`). Put it in the factory user environment, in
+a file only you can read, then restart the user units that need it:
+
+```bash
+install -m600 /dev/null ~/.config/environment.d/70-factory-ingest.conf
+$EDITOR ~/.config/environment.d/70-factory-ingest.conf   # one line, no quotes: FACTORY_INGEST_TOKEN=<this machine's token>
+# now, without logging out (the value goes through the environment, never a command line):
+(set -a; . ~/.config/environment.d/70-factory-ingest.conf; systemctl --user import-environment FACTORY_INGEST_TOKEN)
+systemctl --user enable --now claude-factory-heartbeat.service
+systemctl --user restart claude-factory-heartbeat.service   # it reads the token when it starts
+```
+
+The machine name sent is repos.conf's `label` (`kevin-omarchy`), which must be
+the name the token was made for. **Turn it off (rollback):** delete that file,
+`systemctl --user unset-environment FACTORY_INGEST_TOKEN`, then
+`systemctl --user restart claude-factory-heartbeat.service`. The next session
+runs without streaming and the heartbeat sends nothing. **Rotate:** put the new
+token in the file and run the import and restart lines again. (A heartbeat whose
+token the board refuses restarts itself after a minute, so it also picks up a new
+token on its own.)
+
+**Who can read the token:** sessions are started without it in their
+environment, and its value is masked in anything sent. A session still runs as
+the same Linux user, so a determined one could read the file or the user
+manager's environment; the token only lets a caller post events as this
+machine, and the board can rotate it. Keeping it from same-user processes would
+need the streamer to run as a separate user.
+
+**What runs:** the dispatcher starts every session under
+`claude-factory-stream run`, which runs claude with `--output-format stream-json`
+(the unit's log keeps the raw lines) and posts the events to
+`POST /api/ingest/events` in batches of up to 50 every 2 seconds, with the token
+as `Authorization: Bearer`. Before sending, each event is cleaned: file
+contents (a Read, a `cat`/`head`/`tail`/`sed -n` of a file, a Grep in content
+mode) are never sent, only their size; nor is the output of a call that touches
+`.env` files, `env`/`printenv`/`set`/`export`, `process.env`, keys or
+credentials; every other tool result and every string is cut to 4 KB; secrets
+in text (`*_TOKEN=`, `password:`, `ghp_…`, `sk-…`, URL passwords, this
+machine's secret env values) are masked. The session's environment never
+carries the token. Each session also sends
+`status` events: `start` (or `review` for a reviewer), each stage change
+(`investigate`, `build`, `qa`, `ship`, `review`, from the skills it runs, its
+edits and `gh pr create`) and `end`.
+
+**Board down:** every batch is written to
+`~/.local/state/claude-factory/spool/<sessionId>.jsonl` before it is sent and
+taken out once the board stores it, so nothing is lost (a batch sent twice is
+ignored by the board). A session retries with backoff and never waits on the
+network; what is left when it ends is sent by the next dispatcher tick, oldest
+session first. A batch that is too large is split and resent; one the board
+can never take (400, or 413 for a single event) is kept in
+`spool/<sessionId>.rejected.jsonl`. The spool and state files are readable
+only by you. Each send is logged in the session's log with its time on the
+session's side (`prep … ms`) and the post's. If streaming fails in any way
+(disk full, a bug), it stops with one log line and the session carries on.
+
+The session's log (`cat-NNN.log`) now holds the raw stream-json lines, not just
+the final answer. To read the answer:
+`jq -rR 'fromjson? | select(.type == "result") | .result' ~/.local/state/claude-factory/cat-123.log`. It stays
+on the machine and is never sent as is.
+
+```bash
+claude-factory-dispatch status --json   # per running card: last seq the board stored, events still in the spool
+```
+
+**Heartbeat:** `claude-factory-heartbeat.service` posts
+`{machine, dispatcher, lastPassAt, lastPassResult, runningCap, running[], reviewWaiting, reviewCap, control}`
+every 60 seconds and within 5 seconds of a change. The dispatcher writes the
+pass fields to `state/pass.json` at the end of every tick. The heartbeat starts
+and stops with `claude-factory.timer`, so a stopped dispatcher goes silent and
+the board flags the machine after 15 minutes. `control` is `local` (the paused
+file) until the board's control endpoint is read (CAT-1441).
+
 ---
 
 ## First install
@@ -252,14 +332,18 @@ units; gstack goes back to its bundled Chromium.
 | In the repo | Installed to |
 |---|---|
 | `bin/claude-factory-dispatch` | `~/.local/bin/` |
+| `bin/claude-factory-stream` (node 18+) | `~/.local/bin/` |
 | `systemd/claude-factory.service`, `.timer` | `~/.config/systemd/user/` |
+| `systemd/claude-factory-heartbeat.service` | `~/.config/systemd/user/` |
 | `systemd/claude-rc@.service` | `~/.config/systemd/user/` |
 | `environment.d/60-gstack-chrome.conf` | `~/.config/environment.d/` |
 | `repos.conf.example` | `~/.config/claude-factory/repos.conf` (first install only) |
 
 State and logs live in `~/.local/state/claude-factory/`: `launched` (the branches
 it started), `reviewed/`, `settled/`, `merge/`, `pick-<project>.log`, `settle.log`,
-`merge.log`, `cat-NNN.log`, `review-cat-NNN.log`, `review-<repo>-pr-<n>.log`.
+`merge.log`, `cat-NNN.log`, `review-cat-NNN.log`, `review-<repo>-pr-<n>.log`,
+`pass.json` (how the last tick ended), and with streaming on, `spool/` and
+`stream/<unit>.json`.
 
 The dispatcher finds `claude` with `command -v claude` on the service's PATH
 (`~/.local/share/mise/shims`, `~/.local/bin`, `/usr/local/bin`, `/usr/bin`).
