@@ -242,7 +242,7 @@ review_authors() { printf '%s\n' "${REVIEW_AUTHORS:-$(timeout 60 gh api user --j
 # the PR needs-conflict-call and pushes nothing. Tried once per (head sha, base
 # sha): the head as GitHub listed it, the base tip as fetched.
 resolve() {
-  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 basesha slug name wt rec
+  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 basesha slug name wt rec busy
   slug=$(reposlug "$dir")
   name=factory-conflict-$slug-pr-$number
   wt=$dir/.claude/worktrees/$name
@@ -258,9 +258,20 @@ resolve() {
     return 0
   }
   rec=$STATE/conflicts/$slug/$number-$sha-$basesha
-  [ -e "$rec" ] && return 0
+  if [ -e "$rec" ]; then
+    echo "PR #$number in $dir conflicts; already tried at head ${sha:0:12} and base ${basesha:0:12}, so it waits for a push to either"
+    return 0
+  fi
   if [ -e "$wt" ]; then
     echo "PR #$number in $dir conflicts, but $wt is left over with unpushed work; not starting one"
+    return 0
+  fi
+  # Checked last, so the cap is named only when a free slot is all the PR waits
+  # for. A full cap stops new sessions, not the sweep: later PRs' labels still
+  # clear their tries.
+  busy=$(running)
+  if [ "$busy" -ge "$CAP" ]; then
+    echo "PR #$number in $dir conflicts; waiting for a free slot ($busy/$CAP)"
     return 0
   fi
   git -C "$dir" worktree add --quiet --detach "$wt" "$sha" </dev/null || {
@@ -303,9 +314,11 @@ To label the PR for a person (steps 3 and 4): gh pr edit $number --add-label nee
 # branch this machine launched nor by one of its review authors (so two
 # machines never both try). A PR labelled needs-conflict-call waits for a
 # person, and its tries are forgotten meanwhile, so removing the label lets the
-# next tick try again.
+# next tick try again. Each CONFLICTING PR it passes over gets one line saying
+# why (CAT-1478), and PRs whose mergeability GitHub hasn't computed yet (UNKNOWN
+# until someone opens them) are listed, never resolved. No such PR, no output.
 conflicts() {
-  local authors dir _ slug prs number sha basesha branch base called shared author key def
+  local authors dir _ slug prs unknown mergeable number sha branch base called shared author key def
   authors=$(review_authors)
   while read -r dir _; do
     slug=$(reposlug "$dir")
@@ -313,37 +326,46 @@ conflicts() {
     def=$(git -C "$dir" symbolic-ref --short refs/remotes/origin/HEAD </dev/null 2>/dev/null || true)
     def=${def#origin/}
     if ! prs=$(cd "$dir" && timeout 60 gh pr list --state open --limit 500 --json number,headRefOid,headRefName,baseRefName,mergeable,isDraft,author,labels,isCrossRepository \
-      --jq '[.[].baseRefName] as $bases | .[] | select(.mergeable == "CONFLICTING") | select(.isDraft | not) | select(.isCrossRepository | not)
+      --jq '[.[].baseRefName] as $bases | .[] | select(.mergeable == "CONFLICTING" or .mergeable == "UNKNOWN") | select(.isDraft | not) | select(.isCrossRepository | not)
         | select([.labels[].name] | index("no-factory-review") | not)
-        | "\(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \([.labels[].name] | index("needs-conflict-call") != null) \(.headRefName as $h | $bases | index($h) != null) \(.author.login)"' </dev/null 2>"$STATE/gh-pr-list.err"); then
+        | "\(.mergeable) \(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \([.labels[].name] | index("needs-conflict-call") != null) \(.headRefName as $h | $bases | index($h) != null) \(.author.login)"' </dev/null 2>"$STATE/gh-pr-list.err"); then
       echo "gh pr list failed in $dir; no conflict sessions there this tick: $(tail -1 "$STATE/gh-pr-list.err")"
       continue
     fi
-    while read -r number sha branch base called shared author; do
-      [[ $number =~ ^[0-9]+$ && $sha =~ ^[0-9a-f]{40}$ ]] || continue
+    unknown=$(awk '$1 == "UNKNOWN" && $2 ~ /^[0-9]+$/ { l = l (n++ ? ", #" : "#") $2 } END { if (n) print n " PR" (n > 1 ? "s" : "") " (" l ")" }' <<<"$prs")
+    [ -z "$unknown" ] || echo "$unknown in $dir: mergeability not computed yet; no conflict session until GitHub says"
+    while read -r mergeable number sha branch base called shared author; do
+      [ "$mergeable" = CONFLICTING ] || continue
+      [[ $number =~ ^[0-9]+$ && $sha =~ ^[0-9a-f]{40}$ ]] || { echo "PR #$number in $dir conflicts, but gh listed no plain number and head sha for it; not resolving it"; continue; }
       if [ "$called" = true ]; then
         rm -f "$STATE/conflicts/$slug/$number-"*
+        echo "PR #$number in $dir conflicts; labelled needs-conflict-call, so it waits for a person"
         continue
       fi
-      # A full cap stops new sessions, not the loop: later PRs' labels still clear their tries.
-      [ "$(running)" -lt "$CAP" ] || continue
-      grep -qixE '(app/)?dependabot(\[bot\])?' <<<"$author" && continue
+      if grep -qixE '(app/)?dependabot(\[bot\])?' <<<"$author"; then
+        echo "PR #$number in $dir conflicts; it is a Dependabot PR, so not resolving it"
+        continue
+      fi
       # Both names reach shell commands in the session's prompt.
-      [[ $branch =~ ^[A-Za-z0-9._/-]+$ && $base =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "PR #$number in $dir: branch name '$branch' or '$base' is not plain; not resolving it"; continue; }
+      [[ $branch =~ ^[A-Za-z0-9._/-]+$ && $base =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "PR #$number in $dir conflicts; branch name '$branch' or '$base' is not plain, so not resolving it"; continue; }
       if [ "$shared" = true ] || [ "$branch" = "${def:-main}" ] || [ "$branch" = main ] || [ "$branch" = master ]; then
-        echo "PR #$number in $dir: its head $branch is the default branch or another PR's base; not resolving it"
+        echo "PR #$number in $dir conflicts; its head $branch is a shared branch (the default branch or another PR's base), so not resolving it"
         continue
       fi
       key=$(launched | awk -v d="$dir" -v b="$branch" '$1 == d && $2 == b && !k { k = ($3 != "" ? $3 : "?") } END { print k }')
       if [ -n "$key" ]; then
         [ "$key" = "?" ] && key=$(cardkey "$branch" || true)
-        active "factory-$key" && continue
-        active "factory-review-$key" && continue
-      else
-        [ -n "$authors" ] && grep -qixF -- "$author" <<<"$authors" || continue
+        if active "factory-$key"; then echo "PR #$number in $dir conflicts; its builder factory-$key is still running"; continue; fi
+        if active "factory-review-$key"; then echo "PR #$number in $dir conflicts; its reviewer factory-review-$key is running"; continue; fi
+      elif [ -z "$authors" ]; then
+        echo "PR #$number in $dir conflicts; this machine has no review authors (no review-authors line, and gh api user failed), so not resolving it"
+        continue
+      elif ! grep -qixF -- "$author" <<<"$authors"; then
+        echo "PR #$number in $dir conflicts; its author $author is not one of this machine's review authors, so not resolving it"
+        continue
       fi
-      active "factory-review-$slug-pr-$number" && continue
-      active "factory-conflict-$slug-pr-$number" && continue
+      if active "factory-review-$slug-pr-$number"; then echo "PR #$number in $dir conflicts; its reviewer factory-review-$slug-pr-$number is running"; continue; fi
+      if active "factory-conflict-$slug-pr-$number"; then echo "PR #$number in $dir conflicts; its conflict session factory-conflict-$slug-pr-$number is already running"; continue; fi
       resolve "$dir" "$number" "$sha" "$branch" "$base"
     done <<<"$prs"
   done < <(repos)
