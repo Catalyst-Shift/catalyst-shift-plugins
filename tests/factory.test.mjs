@@ -14,9 +14,15 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FACTORY = join(ROOT, "factory");
 const DISPATCH = join(FACTORY, "bin", "claude-factory-dispatch");
 const INSTALL = join(FACTORY, "install.sh");
+const MARK_DONE = join(FACTORY, "bin", "claude-factory-mark-done");
 const BOOTCHECK = join(FACTORY, "bin", "claude-factory-bootcheck");
-const SCRIPTS = [DISPATCH, INSTALL, BOOTCHECK];
+const SCRIPTS = [DISPATCH, INSTALL, MARK_DONE, BOOTCHECK];
 const read = (f) => readFileSync(f, "utf8");
+// CAT-1481: a line for systemd-run stubs. It runs the unit's ExecStopPost at
+// once, as systemd would when the session exits ($SESSION_EXIT, default 0), so
+// a session the stub "starts" has its marker rewritten to done unless a test
+// says it was cut off. NO_STOP_POST=1 skips it (a crash: no hook ran at all).
+const STOP_POST = `[ -n "$NO_STOP_POST" ] || for a; do case $a in --property=ExecStopPost=*) EXIT_CODE=exited EXIT_STATUS=\${SESSION_EXIT:-0} bash -c "\${a#--property=ExecStopPost=}";; esac; done`;
 
 for (const f of SCRIPTS) {
   test(`${f.slice(ROOT.length + 1)} passes bash -n`, () => {
@@ -293,6 +299,7 @@ elif [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "${
 else jq -r "$q" "${fixture}"; fi
 `, { mode: 0o755 });
   writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+${STOP_POST}
 for a; do case $a in --unit=*) u=\${a#--unit=};; --description=*) d=\${a#--description=};; esac; done
 echo "$u.service" >>"${units}"; printf '%s' "$d" >"${units}.$u.desc"; printf '%s\\n' "$@" >"${units}.$u.args"
 `, { mode: 0o755 });
@@ -496,7 +503,7 @@ test("status ends with the boot check's one line and enables nothing", () => {
 
 test("install.sh ends with the boot check and its last word depends on it", () => {
   const s = read(INSTALL);
-  assert.match(s, /claude-factory-dispatch claude-factory-stream claude-factory-bootcheck; do/);
+  assert.match(s, /claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do/);
   const at = s.indexOf('"$SRC/bin/claude-factory-bootcheck" || boot=1');
   assert.ok(at > s.indexOf("== Prerequisites") && at > s.indexOf("claude-rc-*.service"), "boot check runs after everything else");
   assert.match(s.slice(at), /^"\$SRC\/bin\/claude-factory-bootcheck" \|\| boot=1\n\nif \[ "\$missing" = 1 \][^\n]*\nelif \[ "\$boot" = 1 \][^\n]*\nelse echo "== Done"; fi\n$/);
@@ -539,6 +546,7 @@ else jq -r "$q" "${fixture}"; fi
 `, { mode: 0o755 });
   writeFileSync(units, "");
   writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+${STOP_POST}
 for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; esac; done
 printf '%s' "\${!#}" >"${units}.$u"
 `, { mode: 0o755 });
@@ -750,6 +758,7 @@ jq -r "$q" "$src"
   writeFileSync(join(t, "no-checks.json"), "[]");
   writeFileSync(units, "");
   writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+${STOP_POST}
 for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; esac; done
 printf '%s' "\${!#}" >"${units}.$u"
 printf '%s\\n' "\${@:1:$#-1}" >"${units}.$u.args"
@@ -1253,6 +1262,7 @@ elif [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "${
 else jq -r "$q" "${fixture}"; fi
 `, { mode: 0o755 });
   writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+${STOP_POST}
 for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; --working-directory=*) w=\${a#--working-directory=};; esac; done
 printf '%s' "\${!#}" >"${units}.$u"; printf '%s' "$w" >"${units}.$u.wd"; printf '%s\\n' "$@" >"${units}.$u.args"
 `, { mode: 0o755 });
@@ -1464,6 +1474,7 @@ elif [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "${
 else jq -r "$q" "${fixture}"; fi
 `, { mode: 0o755 });
   writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+${STOP_POST}
 for a; do case $a in --unit=*) echo "\${a#--unit=}.service" >>"${units}";; esac; done
 `, { mode: 0o755 });
   writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
@@ -1592,6 +1603,7 @@ elif [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "${
 else jq -r "$q" "${fixture}"; fi
 `, { mode: 0o755 });
   writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+${STOP_POST}
 for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; --working-directory=*) w=\${a#--working-directory=};; esac; done
 printf '%s' "\${!#}" >"${units}.$u"; printf '%s' "$w" >"${units}.$u.wd"; printf '%s\\n' "$@" >"${units}.$u.args"
 `, { mode: 0o755 });
@@ -1851,6 +1863,373 @@ esac
     assert.deepEqual(ciUnits(), [], r.stdout);
     assert.ok(r.stdout.includes(`at head ${head.slice(0, 12)}, after 3 factory tries on this branch; labelled needs-ci-call`), r.stdout);
     assert.equal(labels(), labelled + 1);
+  } finally {
+    rmSync(t, { recursive: true, force: true });
+  }
+});
+
+// CAT-1481: a rig for interrupted sessions (real git; gh applies the
+// dispatcher's own --jq to a fixture, needs jq). Four PRs at one head: #21 a
+// card review, #22 another PR's review, #23 a conflict, #24 red CI.
+function retryRig() {
+  const t = mkdtempSync(join(tmpdir(), "factory-retry-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
+  const repo = join(t, "My_Repo"), work = join(t, "work"), units = join(t, "units"), ghlog = join(t, "gh.log");
+  for (const d of [bin, state, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+  const sh = (cmd) => {
+    const r = spawnSync("bash", ["-c", cmd], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: t, ...gitEnv } });
+    assert.equal(r.status, 0, `${cmd}\n${r.stderr}`);
+    return r.stdout.trim();
+  };
+  sh(`git init -q --bare ${t}/origin.git && git clone -q ${t}/origin.git ${repo} 2>/dev/null
+cd ${repo} && echo base >doc.md && git add doc.md && git commit -q -m base && git push -q origin HEAD:main
+echo pr >doc.md && git commit -q -am pr
+for r in refs/heads/b/cat-8-x refs/heads/b/22 refs/heads/b/23 refs/heads/b/cat-9-x refs/pull/22/head; do git push -q origin "HEAD:$r"; done
+git checkout -q --detach main
+git clone -q ${t}/origin.git ${work} 2>/dev/null && cd ${work} && git checkout -q b/cat-9-x`);
+  const head = sh(`git -C ${repo} rev-parse origin/b/cat-8-x`);
+  const main = sh(`git -C ${repo} rev-parse origin/main`);
+  const red = [{ name: "test", bucket: "fail", link: "https://ci/test" }];
+  const pr = (number, branch, extra = {}) => ({
+    number, headRefOid: head, headRefName: branch, baseRefName: "main", body: `Reviewed: ${head} — /review`,
+    author: { login: "kkreative" }, isDraft: false, labels: [], isCrossRepository: false, mergeable: "MERGEABLE", checks: [], ...extra,
+  });
+  const fixture = join(t, "prs.json");
+  const save = (prs) => writeFileSync(fixture, JSON.stringify(prs));
+  const edit = (n, f) => { const prs = JSON.parse(read(fixture)); f(prs.find((p) => p.number === n)); save(prs); };
+  save([
+    pr(21, "b/cat-8-x", { body: "" }),
+    pr(22, "b/22", { body: "" }),
+    pr(23, "b/23", { mergeable: "CONFLICTING" }),
+    pr(24, "b/cat-9-x", { checks: red }),
+  ]);
+  writeFileSync(ghlog, "");
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+echo "$*" >>"${ghlog}"
+[ "$1 $2" = "api user" ] && { echo kkreative; exit 0; }
+case "$1 $2" in "label create"|"pr edit") exit 0;; "pr comment") [ -n "$GH_COMMENT_FAILS" ] && exit 1; exit 0;; esac
+sub="$1 $2"; shift 2; n=; h=; q=.
+case $sub in "pr view"|"pr checks") n=$1; shift;; esac
+while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --jq) q=$2; shift;; esac; shift; done
+if [ "$sub" = "pr checks" ]; then jq -r ".[] | select(.number == $n) | .checks | $q" "${fixture}"
+elif [ -n "$n" ]; then jq -r ".[] | select(.number == $n) | $q" "${fixture}"
+elif [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "${fixture}"
+else jq -r "$q" "${fixture}"; fi
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+${STOP_POST}
+for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; esac; done
+printf '%s\\n' "$@" >"${units}.$u.args"
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in
+  *show-environment*) [ -n "$BUS_DOWN" ] && exit 1; exit 0;;
+  *"-p Result"*) echo "\${UNIT_RESULT:-}";;
+  *"-p ActiveState"*) echo "\${UNIT_STATE:-}";;
+  *list-units*) cat "${units}";;
+  *is-active*) grep -qxF "\${!#}" "${units}";;
+esac
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "claude"), "#!/bin/sh\necho \"${PICK:-NONE}\"\n", { mode: 0o755 });
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"), `label kevin-omarchy\n${repo} proj\n`);
+  writeFileSync(join(state, "launched"), `${repo} b/cat-8-x cat-8\n${repo} b/cat-9-x cat-9\n`);
+  writeFileSync(units, "");
+  const tick = (extra = {}) => {
+    const r = spawnSync("bash", [DISPATCH], {
+      encoding: "utf8",
+      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "9", ...gitEnv, ...extra },
+    });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    return r;
+  };
+  const started = () => read(units).trim().split("\n").filter(Boolean).map((u) => u.replace(/\.service$/, "")).sort();
+  const ciMarkers = () => {
+    const d = join(state, "ci", "my-repo");
+    return existsSync(d) ? readdirSync(d).sort().map((f) => join(d, f)) : [];
+  };
+  const markers = () => {
+    const ci = ciMarkers().filter((f) => f.includes(`/24-${head}-`));
+    assert.equal(ci.length, 1, ci.join(" "));
+    return {
+      21: join(state, "reviewed", `cat-8-${head}`),
+      22: join(state, "reviewed", "my-repo", `22-${head}`),
+      23: join(state, "conflicts", "my-repo", `23-${head}-${main}`),
+      24: ci[0],
+    };
+  };
+  return { t, repo, work, units, ghlog, bin, state, head, sh, edit, tick, started, markers, ciMarkers };
+}
+
+const BOOT = existsSync("/proc/sys/kernel/random/boot_id") ? read("/proc/sys/kernel/random/boot_id").trim() : "unknown";
+const DATE = "\\d{4}-\\d\\d-\\d\\dT[0-9:+-]+";
+const ALL_KINDS = ["factory-ci-my-repo-pr-24", "factory-conflict-my-repo-pr-23", "factory-review-cat-8", "factory-review-my-repo-pr-22"];
+const KIND = { 21: "review", 22: "review", 23: "conflict", 24: "CI" };
+const UNIT = { 21: "factory-review-cat-8", 22: "factory-review-my-repo-pr-22", 23: "factory-conflict-my-repo-pr-23", 24: "factory-ci-my-repo-pr-24" };
+
+// Checklist 1, 2 and 3: the marker says started (date, boot id) at launch and
+// done when the session exits 0; each kind cut off once is retried, saying why;
+// cut off twice, it comments once and is left to a person.
+test("interrupted sessions: each kind is retried once; a second cut-off comments once and starts nothing", () => {
+  const g = retryRig();
+  const { repo, head, tick, started, markers, units, ghlog } = g;
+  const comments = () => (read(ghlog).match(/^pr comment \d+ --body The factory's .* was cut off twice/gm) || []).length;
+  try {
+    // Every session dies on start (exit 1, as the conflict session did on 2026-11-04).
+    let r = tick({ SESSION_EXIT: "1" });
+    assert.deepEqual(started(), ALL_KINDS, r.stdout);
+    for (const [n, f] of Object.entries(markers())) {
+      assert.match(read(f), new RegExp(`^started ${DATE} ${BOOT}\\n$`), `#${n}`);
+      // The unit carries the hook that marks it done.
+      const args = read(`${units}.${UNIT[n]}.args`);
+      const hook = args.split("\n").find((a) => a.startsWith("--property=ExecStopPost="));
+      assert.ok(hook?.endsWith(`bash" "${MARK_DONE}" "${f}"`), args);
+    }
+
+    // Still running: no retry, no line about it. A builder picked now gets no hook: it has no marker.
+    r = tick({ PICK: "PICK CAT-50 b/cat-50-x Low" });
+    assert.deepEqual(started(), [...ALL_KINDS, "factory-cat-50"].sort());
+    assert.doesNotMatch(r.stdout, /interrupted/);
+    assert.doesNotMatch(read(`${units}.factory-cat-50.args`), /ExecStopPost/);
+    writeFileSync(units, ALL_KINDS.map((u) => `${u}.service\n`).join(""));
+
+    // A unit that is stopping (its ExecStopPost may still be writing) is not cut off.
+    writeFileSync(units, "");
+    r = tick({ UNIT_STATE: "deactivating" });
+    assert.deepEqual(started(), [], r.stdout);
+    assert.doesNotMatch(r.stdout, /interrupted/);
+    writeFileSync(units, ALL_KINDS.map((u) => `${u}.service\n`).join(""));
+
+    // The units are gone and the markers still say started. #23's is from another boot.
+    const m = markers();
+    writeFileSync(m[23], read(m[23]).replace(BOOT, "00000000-0000-0000-0000-000000000000"));
+    writeFileSync(units, "");
+    r = tick({ SESSION_EXIT: "1" });
+    assert.deepEqual(started(), ALL_KINDS, r.stdout);
+    for (const n of [21, 22, 24]) {
+      assert.ok(r.stdout.includes(`PR #${n} in ${repo}: ${KIND[n]} session was interrupted (it ended without finishing); retrying once`), r.stdout);
+    }
+    assert.ok(r.stdout.includes(`PR #23 in ${repo}: conflict session was interrupted (the machine restarted); retrying once`), r.stdout);
+    assert.match(r.stdout, /started second review of CAT-8 PR #21/);
+    assert.match(r.stdout, /started second review of PR #22/);
+    assert.match(r.stdout, /started second conflict session for PR #23/);
+    assert.match(r.stdout, /started second CI session for PR #24/);
+    for (const f of Object.values(markers())) assert.match(read(f), new RegExp(`^started ${DATE} ${BOOT} retry\\n$`));
+
+    // Cut off again. A failed comment is tried again next tick, and nothing starts.
+    writeFileSync(units, "");
+    writeFileSync(ghlog, "");
+    r = tick({ GH_COMMENT_FAILS: "1" });
+    assert.deepEqual(started(), [], r.stdout);
+    assert.ok(r.stdout.includes(`PR #23 in ${repo}: conflict session was interrupted again (it ended without finishing) at ${head.slice(0, 12)}; commenting on the PR failed, trying the comment again next tick`), r.stdout);
+    writeFileSync(ghlog, "");
+    r = tick();
+    assert.deepEqual(started(), [], r.stdout);
+    assert.equal(comments(), 4, read(ghlog));
+    for (const n of [21, 22, 23, 24]) {
+      assert.ok(r.stdout.includes(`PR #${n} in ${repo}: ${KIND[n]} session was interrupted again (it ended without finishing) at ${head.slice(0, 12)}; not retrying, a person should look`), r.stdout);
+      assert.match(read(ghlog), new RegExp(`^pr comment ${n} --body The factory's ${KIND[n]} session for this PR at ${head.slice(0, 12)} was cut off twice .*A person should look`, "m"));
+    }
+    for (const f of Object.values(markers())) assert.match(read(f), new RegExp(`^interrupted ${DATE} retry it ended without finishing\\n$`));
+    // Said once: the next tick neither comments nor starts anything.
+    r = tick();
+    assert.deepEqual(started(), []);
+    assert.equal(comments(), 4);
+    assert.doesNotMatch(r.stdout, /interrupted/);
+    assert.ok(r.stdout.includes(`PR #23 in ${repo} conflicts; already tried at head`), r.stdout);
+  } finally {
+    rmSync(g.t, { recursive: true, force: true });
+  }
+});
+
+// Checklist 1 and 5: a session that exits 0 is done, and markers from before
+// this change (a bare date) still mean tried; neither starts anything. A crash
+// (no hook ran) is retried once; a retry that fails to start keeps its marker;
+// a user bus that doesn't answer retries nothing.
+test("interrupted sessions: done and pre-upgrade markers start nothing; failed starts and a silent bus keep the marker", () => {
+  const g = retryRig();
+  const { repo, tick, started, markers, units, bin } = g;
+  try {
+    let r = tick();
+    assert.deepEqual(started(), ALL_KINDS, r.stdout);
+    for (const f of Object.values(markers())) assert.match(read(f), new RegExp(`^done ${DATE}\\n$`));
+    writeFileSync(units, "");
+    r = tick();
+    assert.deepEqual(started(), [], r.stdout);
+    assert.doesNotMatch(r.stdout, /interrupted/);
+
+    // The upgrade: every marker written before this change holds a bare date.
+    for (const f of Object.values(markers())) writeFileSync(f, "2026-11-01T12:00:00-05:00\n");
+    r = tick();
+    assert.deepEqual(started(), [], r.stdout);
+    assert.doesNotMatch(r.stdout, /interrupted/);
+
+    // A crash: no hook ran, so the marker still says started. Retried once.
+    rmSync(markers()[22]);
+    r = tick({ NO_STOP_POST: "1" });
+    assert.deepEqual(started(), [UNIT[22]], r.stdout);
+    writeFileSync(units, "");
+    r = tick();
+    assert.ok(r.stdout.includes(`PR #22 in ${repo}: review session was interrupted (it ended without finishing); retrying once`), r.stdout);
+    assert.match(read(markers()[22]), new RegExp(`^done ${DATE} retry\\n$`));
+    writeFileSync(units, "");
+
+    // A retry whose unit fails to start puts the first attempt's marker back.
+    const first = `started 2026-11-04T18:00:03+00:00 ${BOOT}\n`;
+    writeFileSync(markers()[22], first);
+    const goodRun = read(join(bin, "systemd-run"));
+    writeFileSync(join(bin, "systemd-run"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    r = tick();
+    assert.match(r.stdout, /PR #22 in \S+: could not start unit factory-review-my-repo-pr-22/);
+    assert.doesNotMatch(r.stdout, /retrying once/);
+    assert.equal(read(markers()[22]), first);
+    writeFileSync(join(bin, "systemd-run"), goodRun, { mode: 0o755 });
+    r = tick();
+    assert.deepEqual(started(), [UNIT[22]], r.stdout);
+    writeFileSync(units, "");
+
+    // The user bus doesn't answer: a running session can't be told from an ended one, so nothing is retried.
+    writeFileSync(markers()[22], first);
+    r = tick({ BUS_DOWN: "1" });
+    assert.deepEqual(started(), [], r.stdout);
+    assert.equal(read(markers()[22]), first);
+
+    // systemd still has the unit and its result: that is the reason given.
+    r = tick({ UNIT_RESULT: "exit-code" });
+    assert.ok(r.stdout.includes(`PR #22 in ${repo}: review session was interrupted (unit result exit-code); retrying once`), r.stdout);
+    writeFileSync(units, "");
+
+    // A person stopped it (systemctl --user stop): in the same boot it stays stopped.
+    writeFileSync(markers()[22], `stopped 2026-11-04T18:00:03+00:00 ${BOOT}\n`);
+    r = tick();
+    assert.deepEqual(started(), [], r.stdout);
+    assert.doesNotMatch(r.stdout, /interrupted/);
+    // Stopped by a shutdown: the boot id has changed since, so it was cut off.
+    writeFileSync(markers()[22], "stopped 2026-11-04T18:00:03+00:00 00000000-0000-0000-0000-000000000000\n");
+    r = tick();
+    assert.deepEqual(started(), [UNIT[22]], r.stdout);
+    assert.ok(r.stdout.includes(`PR #22 in ${repo}: review session was interrupted (the machine restarted); retrying once`), r.stdout);
+    writeFileSync(units, "");
+
+    // A cut-off conflict session waiting for a free slot says nothing about a retry until it starts.
+    writeFileSync(markers()[23], first);
+    writeFileSync(units, "factory-a.service\nfactory-b.service\n");
+    r = tick({ CLAUDE_FACTORY_CAP: "2" });
+    assert.doesNotMatch(r.stdout, /retrying once/);
+    assert.match(r.stdout, /PR #23 in \S+ conflicts; waiting for a free slot \(2\/2\)/);
+    assert.equal(read(markers()[23]), first);
+  } finally {
+    rmSync(g.t, { recursive: true, force: true });
+  }
+});
+
+// Checklist 4: a retry is a CI try. Earlier heads of the branch were tried
+// twice, once with a retry: the next red head is labelled needs-ci-call
+// (3 tries), where counting heads alone would start a fourth session. And a
+// head whose first try was cut off after two earlier tries is labelled rather
+// than retried.
+test("interrupted sessions: a CI retry counts toward CI_TRIES", () => {
+  const g = retryRig();
+  const { repo, sh, work, edit, tick, started, ciMarkers, state, units, ghlog } = g;
+  const push = (msg) => {
+    sh(`cd ${work} && echo x >>doc.md && git commit -q -am "${msg}" && git push -q origin HEAD:b/cat-9-x`);
+    const h = sh(`git -C ${work} rev-parse HEAD`);
+    edit(24, (p) => { p.headRefOid = h; p.body = `Reviewed: ${h} — /review`; });
+    return h;
+  };
+  const only24 = () => started().filter((u) => u === UNIT[24]);
+  const fset = "x".repeat(12);
+  const d = join(state, "ci", "my-repo");
+  try {
+    mkdirSync(d, { recursive: true });
+    const h1 = g.head;
+    const h2 = push("second");
+    writeFileSync(join(d, `24-${h1}-${fset}`), "done 2026-11-04T10:00:00-05:00 retry\n");
+    writeFileSync(join(d, `24-${h2}-${fset}`), "done 2026-11-04T11:00:00-05:00\n");
+    const h3 = push("third");
+    let r = tick();
+    assert.deepEqual(only24(), [], r.stdout);
+    assert.ok(r.stdout.includes(`PR #24 in ${repo} fails CI (test) again at head ${h3.slice(0, 12)}, after 3 factory tries on this branch; labelled needs-ci-call`), r.stdout);
+    assert.match(read(ghlog), /^pr edit 24 --add-label needs-ci-call$/m);
+    assert.deepEqual(ciMarkers(), []);
+
+    // Without the retry at h1 it is two tries, so h3 gets a session.
+    writeFileSync(units, "");
+    writeFileSync(join(d, `24-${h1}-${fset}`), "done 2026-11-04T10:00:00-05:00\n");
+    writeFileSync(join(d, `24-${h2}-${fset}`), "done 2026-11-04T11:00:00-05:00\n");
+    r = tick();
+    assert.deepEqual(only24(), [UNIT[24]], r.stdout);
+
+    // h3's session was cut off: retrying it would be a third try (h1, h2, h3's first), so it is labelled instead.
+    writeFileSync(units, "");
+    const rec = ciMarkers().find((f) => f.includes(`/24-${h3}-`));
+    writeFileSync(rec, `started 2026-11-04T18:00:03+00:00 ${BOOT}\n`);
+    r = tick();
+    assert.deepEqual(only24(), [], r.stdout);
+    // It says "retrying once" only where a retry really starts.
+    assert.doesNotMatch(r.stdout, /PR #24 .*retrying once/);
+    assert.ok(r.stdout.includes(`after 3 factory tries on this branch; labelled needs-ci-call`), r.stdout);
+  } finally {
+    rmSync(g.t, { recursive: true, force: true });
+  }
+});
+
+// The hook is passed only for a path systemd would read as written.
+test("run_unit adds the done hook only when the marker path needs no systemd escaping", () => {
+  const cls = '[\\"\\\\\\$%[:cntrl:]]';
+  assert.ok(read(DISPATCH).includes(`[[ ! "$BASH$MARK_DONE$marker" =~ ${cls} ]]`), "the check below is the dispatcher's");
+  const re = `[[ ! "$1" =~ ${cls} ]]`;
+  for (const [p, ok] of [["/home/u/.local/state/claude-factory/ci/r/1-abc", true], ["/home/a b/x", true], ["/h/$x", false], ["/h/100%", false], ['/h/"q', false], ["/h/b\\s", false], ["/h/n\nl", false]]) {
+    const r = spawnSync("bash", ["-c", `${re}`, "_", p]);
+    assert.equal(r.status === 0, ok, JSON.stringify(p));
+  }
+});
+
+// claude-factory-mark-done, the ExecStopPost: exit 0 is done, SIGTERM (a
+// systemctl stop, or exit 143 from the streamer) is stopped with the start's
+// boot id, anything else leaves the record started. Only "started" records
+// under STATE are touched, and it never runs a dispatcher tick (a rollback
+// leaves it in place, and it doesn't call the dispatcher).
+test("mark-done: done on exit 0, stopped on SIGTERM, untouched otherwise, only started records under STATE", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-markdone-"));
+  try {
+    const state = join(t, ".local/state/claude-factory");
+    mkdirSync(join(state, "ci/r"), { recursive: true });
+    const m = join(state, "ci/r/1-abc");
+    const run = (f, code, status) => spawnSync("bash", [MARK_DONE, f], {
+      encoding: "utf8", env: { HOME: t, PATH: "/usr/bin:/bin", EXIT_CODE: code, EXIT_STATUS: status },
+    });
+    const cases = [
+      ["started d1 boot1\n", "exited", "0", new RegExp(`^done ${DATE}\\n$`)],
+      ["started d1 boot1 retry\n", "exited", "0", new RegExp(`^done ${DATE} retry\\n$`)],
+      ["started d1 boot1\n", "killed", "TERM", new RegExp(`^stopped ${DATE} boot1\\n$`)],
+      ["started d1 boot1 retry\n", "exited", "143", new RegExp(`^stopped ${DATE} boot1 retry\\n$`)],
+      ["started d1 boot1\n", "exited", "1", /^started d1 boot1\n$/],
+      ["started d1 boot1\n", "killed", "KILL", /^started d1 boot1\n$/],
+      ["started d1 boot1\n", "dumped", "SEGV", /^started d1 boot1\n$/],
+      ["interrupted d1 retry it ended without finishing\n", "exited", "0", /^interrupted /],
+      ["2026-11-01T12:00:00-05:00\n", "exited", "0", /^2026-11-01T12:00:00-05:00\n$/],
+    ];
+    for (const [before, code, status, after] of cases) {
+      writeFileSync(m, before);
+      const r = run(m, code, status);
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(read(m), after, `${before.trim()} + ${code}/${status}`);
+      assert.ok(!existsSync(`${m}.tmp`));
+    }
+    // Outside STATE, or climbing out of it: untouched.
+    const out = join(t, "elsewhere");
+    for (const f of [out, join(state, "ci/../../../elsewhere")]) {
+      writeFileSync(out, "started d1 boot1\n");
+      run(f, "exited", "0");
+      assert.equal(read(out), "started d1 boot1\n", f);
+    }
+    // A missing record: nothing happens, and it exits 0 (a failed ExecStopPost would mark the unit failed).
+    assert.equal(run(join(state, "ci/r/missing"), "exited", "0").status, 0);
+    assert.ok(!existsSync(join(state, "ci/r/missing")));
+    // It never calls the dispatcher.
+    assert.doesNotMatch(read(MARK_DONE), /claude-factory-dispatch|\$CLAUDE/);
+    assert.match(read(INSTALL), /for f in claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do/);
   } finally {
     rmSync(t, { recursive: true, force: true });
   }

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# ExecStopPost of a factory reviewer, conflict or CI unit (CAT-1481). systemd
+# sets EXIT_CODE and EXIT_STATUS. The dispatcher wrote the session's attempt
+# record as "started <date> <boot id>[ retry]" just before the unit started:
+#   - the session exited 0: it becomes "done <date>[ retry]";
+#   - it was stopped (SIGTERM: a person's systemctl stop, or a shutdown; the
+#     streamer reports its child's SIGTERM as exit 143): "stopped <date> <boot
+#     id>[ retry]". The dispatcher retries that only when the boot id has
+#     changed since, so a shutdown is retried and a person's stop sticks;
+#   - anything else (a crash, a non-zero exit) leaves it "started", and the
+#     next tick treats the session as cut off.
+# A separate script, not a dispatcher subcommand: after a rollback, units
+# started by this version still call this, never a full dispatcher tick.
+set -u
+f=${1:-}
+STATE=$HOME/.local/state/claude-factory
+case $f in "$STATE"/*/*) ;; *) exit 0 ;; esac
+case $f in */../*|*/./*) exit 0 ;; esac
+w= b= a=
+read -r w _ b a <"$f" 2>/dev/null || [ -n "$w" ] || exit 0
+[ "$w" = started ] || exit 0
+case "${EXIT_CODE:-}.${EXIT_STATUS:-}" in
+  exited.0) line="done $(date -Is)${a:+ $a}" ;;
+  killed.TERM|exited.143) line="stopped $(date -Is) $b${a:+ $a}" ;;
+  *) exit 0 ;;
+esac
+printf '%s\n' "$line" >"$f.tmp" && mv "$f.tmp" "$f"
+exit 0

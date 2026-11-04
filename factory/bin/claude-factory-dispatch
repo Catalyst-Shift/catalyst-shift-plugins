@@ -42,6 +42,12 @@
 #      `claude-factory-dispatch retro --since 7d` prints the counts per repo;
 #   9. fills free slots with Ready For Factory cards from Linear, one
 #      unattended Claude session per card in its own worktree.
+# The once-per-head records of steps 2 to 5 say "started <date> <boot id>" at
+# launch and "done" once the session exits 0 (its unit's ExecStopPost runs
+# claude-factory-mark-done). A session cut off before that (a reboot, a crash,
+# a death on start) is started once more at the same head; cut off again, the
+# PR gets one comment and waits for a person (CAT-1481). A session a person
+# stopped with systemctl stays stopped.
 # With FACTORY_INGEST_TOKEN set (CAT-1442), every session runs under
 # claude-factory-stream, which sends its stream-json events to the board; each
 # tick first sends what ended sessions left in the spool, and ends by writing
@@ -66,6 +72,11 @@ WAITING_CAP=${CLAUDE_FACTORY_WAITING_CAP:-3}
 STATE=$HOME/.local/state/claude-factory
 LINEAR=mcp__claude_ai_Linear
 HOST=${HOSTNAME:-$(uname -n)}
+# CAT-1481: the ExecStopPost each reviewer, conflict and CI unit runs (it
+# marks the attempt record done or stopped), and this boot's id, so a record
+# can tell a reboot from a crash.
+MARK_DONE=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/claude-factory-mark-done
+BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)
 
 # Subscription only: never let an API key in the environment turn this into paid usage.
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
@@ -220,6 +231,78 @@ cleanup() {
 # A repo folder as it appears in unit and file names: my_Repo.x -> my-repo-x.
 reposlug() { basename "$1" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9\n' '-'; }
 
+# CAT-1481: the attempt marker of a reviewer, conflict or CI session
+# (state/reviewed/..., state/conflicts/..., state/ci/...). It is written just
+# before the unit starts: "started <date> <boot id>", with " retry" on the
+# second attempt. The unit's ExecStopPost (claude-factory-mark-done) rewrites it
+# to "done <date>" when the session exits 0, or "stopped <date> <boot id>" when
+# it was stopped (a person's systemctl stop, or a shutdown: only a changed boot
+# id makes that one a cut-off). "interrupted <date> retry <reason>" is a second
+# attempt that was cut off too. Anything else means tried, including the bare
+# date older markers hold, so an upgrade starts nothing new.
+# Written whole (temp file, then rename), so a record is never half written.
+put_marker() { printf '%s\n' "$2" >"$1.tmp" && mv "$1.tmp" "$1"; }
+mark_started() { put_marker "$1" "started $(date -Is) ${BOOT_ID:-unknown}${2:+ retry}"; }
+# A unit that failed to start: no marker, or the first attempt's marker back,
+# so the next tick tries the same start again.
+unmark() { if [ -n "$2" ]; then put_marker "$1" "$2"; else rm -f "$1"; fi; }
+# The retry that is about to start, said where it really starts (CAT-1481).
+say_retry() { echo "PR #$1 in $2: $3 session was interrupted ($RETRY_REASON); retrying once"; }
+# Running includes starting and stopping (its ExecStopPost may still be writing).
+unit_running() {
+  case $(systemctl --user show -p ActiveState --value "$1.service" </dev/null 2>/dev/null || true) in
+    active|activating|deactivating|reloading|refreshing) return 0 ;;
+  esac
+  active "$1"
+}
+
+# For a sweep that found its marker at this head: 0 when the session there was
+# cut off on its first attempt (RETRY_REASON says why; the caller starts it
+# again with the retry flag and, only then, says "retrying once"), 1 otherwise.
+# A second cut-off at the same head is not retried: one PR comment, a log line
+# that a person should look, and the marker becomes "interrupted", so it is
+# said once. Every sweep keys its marker on the PR's current head, so a push
+# gets a fresh try; the review sweeps also skip a head already stamped.
+RETRY_REASON=
+retry_once() {
+  local rec=$1 unit=$2 kind=$3 dir=$4 number=$5 sha=$6 word= boot= attempt= reason result
+  # The user bus must answer: a failed systemctl is not "the session ended".
+  # The unit is checked before the record is read, so a session whose
+  # ExecStopPost has just written "done" is never taken for a cut-off one.
+  systemctl --user show-environment >/dev/null 2>&1 </dev/null || return 1
+  unit_running "$unit" && return 1
+  read -r word _ boot attempt <"$rec" 2>/dev/null || true
+  case $word in
+    started) ;;
+    # Stopped in this boot is a person's stop: it stays tried.
+    stopped) [ -n "$BOOT_ID" ] && [ "$boot" != unknown ] && [ "$boot" != "$BOOT_ID" ] || return 1 ;;
+    *) return 1 ;;
+  esac
+  if [ -n "$BOOT_ID" ] && [ "$boot" != unknown ] && [ "$boot" != "$BOOT_ID" ]; then
+    reason="the machine restarted"
+  else
+    # --collect unloads a finished unit, and an unloaded one reads "success":
+    # then the missing "done" is what says it was cut off.
+    result=$(systemctl --user show -p Result --value "$unit.service" </dev/null 2>/dev/null || true)
+    if [ -n "$result" ] && [ "$result" != success ]; then
+      reason="unit result $result"
+    else
+      reason="it ended without finishing"
+    fi
+  fi
+  if [ "$attempt" = retry ]; then
+    if (cd "$dir" && timeout 60 gh pr comment "$number" --body "The factory's $kind session for this PR at ${sha:0:12} was cut off twice ($reason), so the factory won't start it again at this head. A person should look at its log on the factory machine. A new push gets a fresh try." </dev/null >/dev/null 2>&1); then
+      put_marker "$rec" "interrupted $(date -Is) retry $reason"
+      echo "PR #$number in $dir: $kind session was interrupted again ($reason) at ${sha:0:12}; not retrying, a person should look"
+    else
+      echo "PR #$number in $dir: $kind session was interrupted again ($reason) at ${sha:0:12}; commenting on the PR failed, trying the comment again next tick"
+    fi
+    return 1
+  fi
+  RETRY_REASON=$reason
+  return 0
+}
+
 pick() {
   local project=$1
   (cd "$STATE" && timeout 300 "$CLAUDE" -p --model "$MODEL_HOUSEKEEPING" --output-format text \
@@ -234,10 +317,17 @@ Then get the issue once more. If its assignee is not me (another machine claimed
 # streaming on, claude-factory-stream runs it (stream-json output, events to the
 # board) and is the only process that gets the token; it removes the token
 # from the session's environment. Without, the unit drops the token itself.
+# With a marker (6th argument; "" for builders), the unit's ExecStopPost runs
+# claude-factory-mark-done on it when the session ends (CAT-1481).
 run_unit() {
-  local unit=$1 dir=$2 log=$3 card=$4 repo=$5 unset_env="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN" a prev= model=default
-  shift 5
-  local -a cmd=("$CLAUDE" "$@")
+  local unit=$1 dir=$2 log=$3 card=$4 repo=$5 marker=$6 unset_env="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN" a prev= model=default
+  shift 6
+  local -a cmd=("$CLAUDE" "$@") hook=()
+  # Quoted for systemd; a path systemd would rewrite ($, %, quotes) gets no
+  # hook, so that session can only look interrupted (one extra try at most).
+  if [ -n "$marker" ] && [[ ! "$BASH$MARK_DONE$marker" =~ [\"\\\$%[:cntrl:]] ]]; then
+    hook=(--property=ExecStopPost="\"$BASH\" \"$MARK_DONE\" \"$marker\"")
+  fi
   # The session's --model goes in the unit's description, for status.
   for a in "$@"; do [ "$prev" = --model ] && model=$a; prev=$a; done
   if streaming; then
@@ -250,14 +340,14 @@ run_unit() {
     --setenv=PATH="$PATH" \
     --property=UnsetEnvironment="$unset_env" \
     --property=StandardOutput="append:$log" --property=StandardError="append:$log" \
-    "${cmd[@]}" </dev/null
+    "${hook[@]}" "${cmd[@]}" </dev/null
 }
 
 launch() {
   local dir=$1 id=$2 branch=$3 risk=${4:-Unknown} key model
   key=$(cardkey "$id")
   model=$(builder_model "$risk")
-  run_unit "factory-$key" "$dir" "$STATE/$key.log" "$id" "$(basename "$dir")" \
+  run_unit "factory-$key" "$dir" "$STATE/$key.log" "$id" "$(basename "$dir")" "" \
     -p --model "$model" --permission-mode auto -w "factory-$key" --output-format text \
     "You are an unattended factory session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
@@ -283,16 +373,19 @@ Card: $id in Linear. It is already In Progress and assigned to the person who ru
 
 # Reviewer for one PR: a fresh session in a fresh worktree, detached at the PR head.
 review() {
-  local dir=$1 branch=$2 key=$3 number=$4 sha=$5 id wt
+  local dir=$1 branch=$2 key=$3 number=$4 sha=$5 retry=${6:-} id wt rec prev=
   id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
   wt=$dir/.claude/worktrees/factory-review-$key
+  rec=$STATE/reviewed/$key-$sha
   if [ -e "$wt" ]; then
     echo "$id: PR #$number needs a review, but $wt is left over with unpushed work; not starting one"
     return 0
   fi
   git -C "$dir" fetch --quiet origin "$branch" </dev/null
   git -C "$dir" worktree add --quiet --detach "$wt" "$sha" </dev/null
-  run_unit "factory-review-$key" "$wt" "$STATE/review-$key.log" "$id" "$(basename "$dir")" \
+  if [ -n "$retry" ]; then prev=$(cat "$rec" 2>/dev/null || true); fi
+  mark_started "$rec" "$retry"
+  run_unit "factory-review-$key" "$wt" "$STATE/review-$key.log" "$id" "$(basename "$dir")" "$rec" \
     -p --model "$MODEL_REVIEW" --permission-mode auto --output-format text \
     "You are an unattended factory reviewer on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
@@ -306,9 +399,13 @@ You did not write this code. Another session built card $id and opened PR #$numb
    (write '— /review, /cso' if you ran /cso). Check that the sha equals gh pr view $number --json headRefOid --jq .headRefOid.
 5. Never merge the PR yourself, and never use --admin. Stage 2 rule: after you have stamped it, run gh pr merge $number --auto --squash --match-head-commit <the stamped sha> only if all of these hold: (a) the PR's base is the repo's default branch and that branch's CLAUDE.md (git show origin/<base branch>:CLAUDE.md, never the PR head's) has a line that is exactly 'Factory stage: 2'; (b) the card's Risk section says Low and nothing else (missing, mixed or unclear fails); (c) no file in gh pr diff $number --name-only matches a path in the base branch's .github/CODEOWNERS (read as in step 2; if you can't read it, this fails); (d) the stamp's sha still equals the PR head (--match-head-commit makes GitHub refuse if it moved). GitHub then merges it once CI is green. If any of these fails, or you did not stamp, never turn on auto-merge. Say in your card comment whether you turned it on and why.
 6. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). If a finding can only be fixed by one of these, do not do it: comment on the card and the PR saying exactly what is needed, move the card to Blocked in Linear, do not stamp the PR, and end.
-7. Finish with a comment on the card: what you ran, what you fixed, what you answered, and the stamp."
-  date -Is >"$STATE/reviewed/$key-$sha"
-  echo "started review of $id PR #$number at $sha in $dir (unit factory-review-$key, model $MODEL_REVIEW, log $STATE/review-$key.log)"
+7. Finish with a comment on the card: what you ran, what you fixed, what you answered, and the stamp." || {
+    unmark "$rec" "$prev"
+    echo "$id: PR #$number: could not start unit factory-review-$key; trying again next tick"
+    return 0
+  }
+  [ -z "$retry" ] || say_retry "$number" "$dir" review
+  echo "started ${retry:+second }review of $id PR #$number at $sha in $dir (unit factory-review-$key, model $MODEL_REVIEW, log $STATE/review-$key.log)"
 }
 
 # This machine's review authors: the review-authors line, else the login gh runs as.
@@ -321,7 +418,7 @@ review_authors() { printf '%s\n' "${REVIEW_AUTHORS:-$(timeout 60 gh api user --j
 # the PR needs-conflict-call and pushes nothing. Tried once per (head sha, base
 # sha): the head as GitHub listed it, the base tip as fetched.
 resolve() {
-  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 basesha slug name wt rec busy
+  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 basesha slug name wt rec busy retry= prev=
   slug=$(reposlug "$dir")
   name=factory-conflict-$slug-pr-$number
   wt=$dir/.claude/worktrees/$name
@@ -338,8 +435,12 @@ resolve() {
   }
   rec=$STATE/conflicts/$slug/$number-$sha-$basesha
   if [ -e "$rec" ]; then
-    echo "PR #$number in $dir conflicts; already tried at head ${sha:0:12} and base ${basesha:0:12}, so it waits for a push to either"
-    return 0
+    if retry_once "$rec" "$name" conflict "$dir" "$number" "$sha"; then
+      retry=1
+    else
+      echo "PR #$number in $dir conflicts; already tried at head ${sha:0:12} and base ${basesha:0:12}, so it waits for a push to either"
+      return 0
+    fi
   fi
   if [ -e "$wt" ]; then
     echo "PR #$number in $dir conflicts, but $wt is left over with unpushed work; not starting one"
@@ -362,9 +463,12 @@ resolve() {
   }
   # The push rules, enforced where a pattern can: conflicted hunks, the PR and
   # its card are text other people wrote, so the prompt alone isn't relied on.
-  # A unit that fails to start leaves the worktree for cleanup and no marker, so it is retried.
-  # No card ("") and the repo folder: run_unit shifts both off before the claude args.
-  run_unit "$name" "$wt" "$STATE/conflict-$slug-pr-$number.log" "" "$(basename "$dir")" \
+  # A unit that fails to start leaves the worktree for cleanup and no marker (or
+  # the first attempt's, on a retry), so it is retried.
+  # No card (""), the repo folder and the marker: run_unit shifts them off before the claude args.
+  if [ -n "$retry" ]; then prev=$(cat "$rec" 2>/dev/null || true); fi
+  mark_started "$rec" "$retry"
+  run_unit "$name" "$wt" "$STATE/conflict-$slug-pr-$number.log" "" "$(basename "$dir")" "$rec" \
     -p --permission-mode auto --output-format text \
     --disallowedTools="Bash(git push -f*),Bash(git push --force*),Bash(git push *--force*),Bash(git push * -f*),Bash(git push *+*),Bash(git push *--delete*),Bash(git push * :*),Bash(git push *--mirror*),Bash(git push *--all*),Bash(git push *:$base),Bash(git push *:$base'),Bash(git push *:refs/heads/$base*),Bash(git -* push*),Bash(git pull*),Bash(git rebase*),Bash(git -* rebase*),Bash(gh pr merge*),Bash(gh -* pr merge*),Bash(gh api*)" \
     "You are an unattended factory conflict session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
@@ -382,11 +486,12 @@ To label the PR for a person (steps 3 and 4): gh pr edit $number --add-label nee
 5. Every check passed: confirm that gh pr view $number --json headRefOid --jq .headRefOid still equals $sha (if it moved, push nothing, say so in one PR comment, and go to step 6). Then git push origin 'HEAD:$branch'. After the push, post exactly one PR comment: which files conflicted, how you resolved each one, and the checks that passed.
 6. If you end without pushing, leave nothing unpushed in this worktree: git merge --abort if a merge is still in progress, then git reset --hard $sha.
 7. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). If resolving a conflict would take one of these, treat it as a conflict a person must call (step 3)." || {
+    unmark "$rec" "$prev"
     echo "PR #$number in $dir: could not start unit $name; trying again next tick"
     return 0
   }
-  date -Is >"$rec"
-  echo "started conflict session for PR #$number ($branch onto $base at ${basesha:0:12}) in $dir (unit $name, log $STATE/conflict-$slug-pr-$number.log)"
+  [ -z "$retry" ] || say_retry "$number" "$dir" conflict
+  echo "started ${retry:+second }conflict session for PR #$number ($branch onto $base at ${basesha:0:12}) in $dir (unit $name, log $STATE/conflict-$slug-pr-$number.log)"
 }
 
 # Start a conflict session for each open, non-draft PR in the configured repos
@@ -464,7 +569,7 @@ conflicts() {
 # head that carries its own fix (the 'Factory-CI-Fix: PR #<n>' trailer it is
 # told to write) labels the PR needs-ci-call instead of starting another one.
 fix_ci() {
-  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 key=$6 fails=$7 links=$8 slug name wt basewt fset rec list f tried msgs heads='' own='' note='' busy id
+  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 key=$6 fails=$7 links=$8 slug name wt basewt fset rec list f tried msgs heads='' own='' note='' busy id retry= retries=0 tries prev=
   slug=$(reposlug "$dir")
   name=factory-ci-$slug-pr-$number
   wt=$dir/.claude/worktrees/$name
@@ -476,8 +581,12 @@ fix_ci() {
   fset=$(sha1sum <<<"$fails" | cut -c1-12)
   rec=$STATE/ci/$slug/$number-$sha-$fset
   if [ -e "$rec" ]; then
-    echo "PR #$number in $dir fails CI ($list); already tried at head ${sha:0:12} for these checks, so it waits for a push"
-    return 0
+    if retry_once "$rec" "$name" CI "$dir" "$number" "$sha"; then
+      retry=1
+    else
+      echo "PR #$number in $dir fails CI ($list); already tried at head ${sha:0:12} for these checks, so it waits for a push"
+      return 0
+    fi
   fi
   if [ -e "$wt" ]; then
     echo "PR #$number in $dir fails CI ($list), but $wt is left over with unpushed work; not starting one"
@@ -495,22 +604,28 @@ fix_ci() {
   # top of that fix, by a person, a reviewer or a conflict merge, is a new try.
   # And whatever the trailer says, a branch the factory already tried at
   # $CI_TRIES earlier heads goes to a person: the trailer is only asked for, so
-  # this caps the sessions one PR can start.
+  # this caps the sessions one PR can start. A retry of a session that was cut
+  # off (CAT-1481) is a try too: one at an earlier head or this one counts, and
+  # so does the retry about to start.
   msgs=$(git -C "$dir" log -1 --format=%B "$sha" </dev/null 2>/dev/null) || msgs=
   for f in "$STATE/ci/$slug/$number-"*; do
     [ -e "$f" ] || continue
     tried=${f##*/}
     tried=${tried#"$number"-}
     tried=${tried%%-*}
-    [[ $tried =~ ^[0-9a-f]{40}$ && $tried != "$sha" && " $heads " != *" $tried "* ]] || continue
-    git -C "$dir" merge-base --is-ancestor "$tried" "$sha" </dev/null 2>/dev/null || continue
-    heads+=" $tried"
+    [[ $tried =~ ^[0-9a-f]{40}$ ]] || continue
+    if [ "$tried" != "$sha" ]; then
+      git -C "$dir" merge-base --is-ancestor "$tried" "$sha" </dev/null 2>/dev/null || continue
+      if [[ " $heads " != *" $tried "* ]]; then heads+=" $tried"; fi
+    fi
+    if grep -qw retry "$f" 2>/dev/null; then retries=$((retries + 1)); fi
   done
   heads=$(wc -w <<<"$heads")
+  tries=$((heads + retries + ${retry:-0}))
   if [ "$heads" -gt 0 ] && grep -qxF "Factory-CI-Fix: PR #$number" <<<"$msgs"; then
     own="after the factory's own fix"
-  elif [ "$heads" -ge "$CI_TRIES" ]; then
-    own="after $heads factory tries on this branch"
+  elif [ "$tries" -ge "$CI_TRIES" ]; then
+    own="after $tries factory tries on this branch"
   fi
   if [ -n "$own" ]; then
     (cd "$dir" && { timeout 60 gh label create needs-ci-call --description 'The factory could not fix a failing CI check without a person' </dev/null >/dev/null 2>&1 || true; } &&
@@ -542,8 +657,11 @@ fix_ci() {
     return 0
   }
   # The push rules, enforced where a pattern can (as for conflict sessions).
-  # A unit that fails to start leaves the worktree for cleanup and no marker, so it is retried.
-  run_unit "$name" "$wt" "$STATE/ci-$slug-pr-$number.log" "$id" "$(basename "$dir")" \
+  # A unit that fails to start leaves the worktree for cleanup and no marker (or
+  # the first attempt's, on a retry), so it is retried.
+  if [ -n "$retry" ]; then prev=$(cat "$rec" 2>/dev/null || true); fi
+  mark_started "$rec" "$retry"
+  run_unit "$name" "$wt" "$STATE/ci-$slug-pr-$number.log" "$id" "$(basename "$dir")" "$rec" \
     -p --model "$MODEL_BUILD_MEDIUM" --permission-mode auto --output-format text --add-dir "$basewt" \
     --disallowedTools="Bash(git push -f*),Bash(git push --force*),Bash(git push *--force*),Bash(git push * -f*),Bash(git push *+*),Bash(git push *--delete*),Bash(git push * :*),Bash(git push *--mirror*),Bash(git push *--all*),Bash(git push *:$base),Bash(git push *:$base'),Bash(git push *:refs/heads/$base*),Bash(git -* push*),Bash(git pull*),Bash(git rebase*),Bash(git -* rebase*),Bash(git commit --amend*),Bash(git commit *--amend*),Bash(gh pr edit *--body*),Bash(gh pr edit * -b*),Bash(gh pr edit * -F*),Bash(gh pr edit *--title*),Bash(gh pr edit * -t*),Bash(gh -* pr edit*),Bash(gh pr merge*),Bash(gh -* pr merge*),Bash(gh api*)" \
     "You are an unattended factory CI session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
@@ -564,11 +682,12 @@ To label the PR for a person: gh pr edit $number --add-label needs-ci-call (if t
 6. Every check passed: commit with a message whose last line is exactly 'Factory-CI-Fix: PR #$number' (the dispatcher reads it to tell its own fix from other pushes). Confirm that gh pr view $number --json headRefOid --jq .headRefOid still equals $sha (if it moved, push nothing, say so in one PR comment, and go to step 7). Then git push origin 'HEAD:$branch'. After the push, post exactly one PR comment: each failing check's name, its cause, the fix, and the checks that passed.
 7. If you end without pushing, leave nothing unpushed in this worktree: git reset --hard $sha.
 8. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). If a fix would take one of these, treat it as a decision a person must make (step 4)." || {
+    unmark "$rec" "$prev"
     echo "PR #$number in $dir: could not start unit $name; trying again next tick"
     return 0
   }
-  date -Is >"$rec"
-  echo "started CI session for PR #$number ($list) at ${sha:0:12} in $dir (unit $name, model $MODEL_BUILD_MEDIUM, log $STATE/ci-$slug-pr-$number.log)"
+  [ -z "$retry" ] || say_retry "$number" "$dir" CI
+  echo "started ${retry:+second }CI session for PR #$number ($list) at ${sha:0:12} in $dir (unit $name, model $MODEL_BUILD_MEDIUM, log $STATE/ci-$slug-pr-$number.log)"
 }
 
 # Start a CI session for each open PR from a branch this machine launched whose
@@ -635,7 +754,7 @@ ci_fixes() {
 
 # Start a reviewer for each finished builder whose open PR head has no stamp yet.
 reviews() {
-  local dir branch key pr number sha body
+  local dir branch key pr number sha body retry
   while read -r dir branch key; do
     [ "$(running)" -lt "$CAP" ] || return 0
     key=${key:-$(cardkey "$branch")}
@@ -651,9 +770,14 @@ reviews() {
     active "factory-ci-$(reposlug "$dir")-pr-$number" && continue
     body=$(cd "$dir" && gh pr view "$number" --json body --jq .body </dev/null 2>/dev/null) || continue
     grep -qE "^Reviewed: $sha\b" <<<"$body" && continue
-    # One reviewer per head sha. If it ran and left no stamp, a person looks.
-    [ -e "$STATE/reviewed/$key-$sha" ] && continue
-    review "$dir" "$branch" "$key" "$number" "$sha"
+    # One reviewer per head sha. If it ran and left no stamp, a person looks;
+    # one that was cut off is started once more (CAT-1481).
+    retry=
+    if [ -e "$STATE/reviewed/$key-$sha" ]; then
+      retry_once "$STATE/reviewed/$key-$sha" "factory-review-$key" review "$dir" "$number" "$sha" || continue
+      retry=1
+    fi
+    review "$dir" "$branch" "$key" "$number" "$sha" "$retry"
   done < <(launched)
 }
 
@@ -664,7 +788,7 @@ reviews() {
 # lockfile for supply-chain signals and the PR's CI (red CI means "needs a
 # look", CAT-1337), comments, and never pushes or merges.
 review_pr() {
-  local dir=$1 number=$2 sha=$3 author=$4 branch=$5 fork=$6 dep=${7:-false} name wt push prompt model=$MODEL_REVIEW
+  local dir=$1 number=$2 sha=$3 author=$4 branch=$5 fork=$6 dep=${7:-false} retry=${8:-} name wt push prompt model=$MODEL_REVIEW rec prev=
   local -a perms=(--permission-mode auto)
   name=factory-review-$(reposlug "$dir")-pr-$number
   wt=$dir/.claude/worktrees/$name
@@ -728,14 +852,19 @@ You did not write this code. PR #$number on branch $branch was opened by $author
 7. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). If a finding can only be fixed by one of these, do not do it: say exactly what is needed in the step 5 comment, and do not stamp.
 8. Finish with one PR comment: what you ran, what you answered or fixed, and the stamp (or why there is none)."
   fi
-  # A unit that fails to start leaves the worktree for cleanup and no marker, so it is retried.
-  run_unit "$name" "$wt" "$STATE/review-$(reposlug "$dir")-pr-$number.log" "" "$(basename "$dir")" \
+  # A unit that fails to start leaves the worktree for cleanup and no marker (or
+  # the first attempt's, on a retry), so it is retried.
+  rec=$STATE/reviewed/$(reposlug "$dir")/$number-$sha
+  if [ -n "$retry" ]; then prev=$(cat "$rec" 2>/dev/null || true); fi
+  mark_started "$rec" "$retry"
+  run_unit "$name" "$wt" "$STATE/review-$(reposlug "$dir")-pr-$number.log" "" "$(basename "$dir")" "$rec" \
     -p --model "$model" "${perms[@]}" --output-format text "$prompt" || {
+    unmark "$rec" "$prev"
     echo "PR #$number in $dir: could not start unit $name; trying again next tick"
     return 0
   }
-  date -Is >"$STATE/reviewed/$(reposlug "$dir")/$number-$sha"
-  echo "started $([ "$dep" = true ] && echo "dependency ")review of PR #$number by $author at $sha in $dir (unit $name, model $model)"
+  [ -z "$retry" ] || say_retry "$number" "$dir" review
+  echo "started ${retry:+second }$([ "$dep" = true ] && echo "dependency ")review of PR #$number by $author at $sha in $dir (unit $name, model $model)"
 }
 
 # Start a reviewer for each open, non-draft PR in the configured repos that a
@@ -744,7 +873,7 @@ You did not write this code. PR #$number on branch $branch was opened by $author
 # (reviews() handles those, once their builder has finished). Dependabot's PRs
 # count only when review-authors lists dependabot or dependabot[bot] (CAT-1327).
 pr_reviews() {
-  local authors dir _ slug prs number sha author branch fork dep pending
+  local authors dir _ slug prs number sha author branch fork dep pending retry
   authors=$(review_authors)
   [ -n "$authors" ] || { echo "no review authors (gh api user failed, no review-authors line); skipping other PRs"; return 0; }
   while read -r dir _; do
@@ -777,8 +906,13 @@ pr_reviews() {
       launched | awk -v d="$dir" -v b="$branch" '$1 == d && $2 == b { found = 1 } END { exit !found }' && continue
       active "factory-review-$slug-pr-$number" && continue
       active "factory-conflict-$slug-pr-$number" && continue
-      # One reviewer per head sha. If it ran and left no stamp, a person looks.
-      [ -e "$STATE/reviewed/$slug/$number-$sha" ] && continue
+      # One reviewer per head sha. If it ran and left no stamp, a person looks;
+      # one that was cut off is started once more (CAT-1481).
+      retry=
+      if [ -e "$STATE/reviewed/$slug/$number-$sha" ]; then
+        retry_once "$STATE/reviewed/$slug/$number-$sha" "factory-review-$slug-pr-$number" review "$dir" "$number" "$sha" || continue
+        retry=1
+      fi
       # A Dependabot PR whose required CI is still running waits for a later
       # tick (no marker): its one review per sha would otherwise just say
       # "CI pending" because it started first (CAT-1337). If gh can't tell, review.
@@ -790,7 +924,7 @@ pr_reviews() {
           continue
         fi
       fi
-      review_pr "$dir" "$number" "$sha" "$author" "$branch" "$fork" "$dep"
+      review_pr "$dir" "$number" "$sha" "$author" "$branch" "$fork" "$dep" "$retry"
     done <<<"$prs"
   done < <(repos)
 }

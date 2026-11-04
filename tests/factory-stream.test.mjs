@@ -414,7 +414,7 @@ test("the heartbeat unit starts and stops with the dispatcher timer; Remote Cont
   assert.match(unit, /^ExecStart=%h\/\.local\/bin\/claude-factory-stream heartbeat$/m);
   assert.match(read(join(FACTORY, "systemd", "claude-rc@.service")), /^UnsetEnvironment=.*\bFACTORY_INGEST_TOKEN\b/m);
   const install = read(join(FACTORY, "install.sh"));
-  assert.match(install, /for f in claude-factory-dispatch claude-factory-stream( [a-z-]+)*; do/);
+  assert.match(install, /for f in claude-factory-dispatch claude-factory-stream( claude-factory-[a-z-]+)*; do/);
   assert.doesNotMatch(install, /echo[^\n]*\$FACTORY_INGEST_TOKEN|\$\{FACTORY_INGEST_TOKEN/, "install.sh must never print the token");
 });
 
