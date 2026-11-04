@@ -104,6 +104,36 @@ lockfile-only audits, `osv-scanner`), denies `git push`, `gh pr merge` and
 `reviewed/<repo>/<pr>-<sha>` record, and the `review-<repo>-pr-<n>.log` log
 with the other PR reviews.
 
+**Merge conflicts (CAT-1468):** each tick, before the reviews, any open,
+non-draft PR that GitHub lists as `CONFLICTING` gets a conflict session in its
+own worktree (`factory-conflict-<repo>-pr-<n>`), detached at the PR head. It
+merges the PR's base branch in (a merge commit, never a rebase or force-push),
+keeps both sides' intent (both sides' list entries; old-format entries moved
+to the current format), runs every check the repo's CLAUDE.md and CI run, and
+only then pushes to the PR's own branch, with one PR comment saying which files
+conflicted, how each was resolved and which checks passed. The new head has no
+stamp, so the next review sweep reviews it. When both sides changed the same
+logic and picking one loses behaviour, it doesn't guess: it comments both
+versions on the PR, adds the label `needs-conflict-call`, and pushes nothing;
+a person resolves it, or removes the label to let the next tick try again. A
+failed check also pushes nothing, gets one PR comment with the output and the
+same label, so a red check isn't retried on every push to main. It never
+merges the PR, edits its body or touches a card. The usual spellings of a
+force-push, a branch delete, a push to the base, a rebase, `gh pr merge` and
+`gh api` are also denied by pattern (`--disallowedTools`). That list backs up
+the prompt; it is not a sandbox, so a protected default branch is still the
+guard against a push to it.
+Skipped: Dependabot PRs, PRs from forks, PRs labelled `no-factory-review`
+(that opt-out covers conflict sessions too) or `needs-conflict-call`, PRs whose
+head is the default branch or another open PR's base (a push there would land
+on a shared branch), PRs with a builder or reviewer running on them, and PRs
+that are neither from a branch this machine launched nor by one of its review
+authors. Conflict sessions share the cap and show in
+`claude-factory-dispatch status`; no reviewer starts on a PR while its conflict
+session runs. Each PR is tried once per (head sha, base sha), recorded in
+`~/.local/state/claude-factory/conflicts/<repo>/<pr>-<head>-<base>`, and logs
+to `conflict-<repo>-pr-<n>.log`; a new push to either side tries again.
+
 **Waiting on you to merge (CAT-1336):** when a PR from a branch this machine's
 factory launched is open, stamped at its head (`Reviewed: <head sha>`) and its
 CI is green (every check in `gh pr checks` passed or was skipped; a PR with no
@@ -124,8 +154,8 @@ new push after the label went on doesn't take it off; the merge or close
 does. PRs the factory didn't build are never labelled, and nothing happens
 while the factory is paused.
 
-**Caps (per machine):** at most 2 sessions run at once (builders and reviewers
-together), and no new card is picked up while 3 or more PRs from branches this
+**Caps (per machine):** at most 2 sessions run at once (builders, reviewers and
+conflict sessions together), and no new card is picked up while 3 or more PRs from branches this
 machine's factory launched are open (those waiting on you to merge count too).
 Reviews still run while that cap holds; they are how PRs get unstuck. To change
 either cap on one machine, add a drop-in with `systemctl --user edit
