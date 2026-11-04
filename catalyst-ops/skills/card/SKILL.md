@@ -21,7 +21,9 @@ One or two sentences: the problem and who it hurts.
 Source: <the design source path in the repo and the frame, e.g. catalyst_os `docs/design/factory/README.md`, frame 2>
 Regions, in order:
 1. <region> — "<exact copy>"
-2. <region> — "<exact copy>"
+2. <region> — "<exact copy>", <live: what the data fills in>
+(Exact copy is the frame's fixed words: labels, headings, buttons, placeholders. Mark a
+value that comes from data, such as a count, a card title or a name, as <live: …>.)
 
 ## Checklist
 1. <a command and its expected output, e.g. `npm test -- menu` passes>
@@ -55,8 +57,8 @@ Optional: what's out of scope, the test target (a non-production database only),
 3. **Screen cards get a Design section.** If the card builds or changes a
    screen, fill `## Design` from the repo's design source (for catalyst_os,
    `docs/design/factory/README.md` and the frame number): the source path,
-   the regions in order, and the exact copy. Copy the words, don't
-   paraphrase them. Add at least one checklist line a reviewer can tick from
+   the regions in order, and the exact copy. Copy the fixed words, don't
+   paraphrase them, and mark data-driven values `<live: …>`. Add at least one checklist line a reviewer can tick from
    the PR's screenshot. Anything the builder changes from the frame goes
    under *Decisions made* in the PR. If the repo has no design source for
    the screen, say so under Notes instead of inventing one. A card with no
