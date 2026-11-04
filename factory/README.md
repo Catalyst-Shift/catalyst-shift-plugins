@@ -3,8 +3,8 @@
 Every 5 minutes the dispatcher claims the top **Ready For Factory** card in each
 Linear project you list, and starts one unattended Claude Code session for it in
 its own worktree. When that session has opened a PR, a fresh session reviews the
-PR and stamps it `Reviewed: <head sha>`. People merge, except for low-risk PRs at
-stage 2 (see Review below). Kevin's and Keith's Omarchy machines both run it from
+PR and stamps it `Reviewed: <head sha>`. People merge, except for PRs whose risk
+the repo's stage on the Factory Board allows (see Review below). Kevin's and Keith's Omarchy machines both run it from
 this folder; Keith's setup follows this README.
 
 ## Daily use
@@ -16,7 +16,8 @@ git -C ~/Projects/catalyst-shift-plugins pull && ~/Projects/catalyst-shift-plugi
 touch ~/.local/state/claude-factory/paused      # pause: no new sessions or reviews
 rm ~/.local/state/claude-factory/paused         # resume
 
-claude-factory-dispatch status                    # one screen: running, waiting on you to merge, other open PRs, paused, boot check
+claude-factory-dispatch status                    # one screen: running, waiting on you to merge, other open PRs, stages, paused, boot check
+claude-factory-dispatch merge-rule <repo> <risk> --dry-run   # may a reviewer self-merge that risk now? (stage and source; changes nothing)
 claude-factory-bootcheck                          # will it all come back after a reboot? (read-only; see First install)
 systemctl --user list-units 'factory-*'          # what's running
 journalctl --user -u claude-factory -n 50        # what the dispatcher did
@@ -502,12 +503,29 @@ units; gstack goes back to its bundled Chromium.
    `.github/CODEOWNERS`), fixes or answers each finding, and writes one line
    `Reviewed: <40-char head sha> — /review[, /cso]` in the PR body. It never
    merges itself. A hard stop moves the card to Blocked.
-   **Stage 2 (CAT-1326).** After stamping, the reviewer runs `gh pr merge <n>
-   --auto --squash --match-head-commit <stamped sha>` only when the PR targets
-   the default branch, whose CLAUDE.md has the exact line `Factory stage: 2`,
-   the card's Risk is Low, no file in the diff matches `.github/CODEOWNERS`, and
-   the stamp is still at the head. GitHub merges once the required checks are
-   green. Otherwise nobody turns on auto-merge: not the builder, and never the
+   **Stages (CAT-1326, CAT-1486).** The dispatcher gives the reviewer the
+   repo's stage: the one the Factory Board computes (`GET
+   /api/factory/stages`, read each tick with the machine token and cached in
+   `~/.local/state/claude-factory/stages.json`). On a 503 `read_failed` or a
+   network error it keeps the cached answer for up to 24 hours; on a 401 or
+   403, a 503 `not_configured`, no token, or no (fresh) cache, it uses the old
+   rule: stage 2 when the default branch's CLAUDE.md has the exact line
+   `Factory stage: 2`, else stage 1. A repo the board's answer leaves out is
+   stage 1. `stages claude-md` in repos.conf
+   ignores the board. `claude-factory-dispatch status --json` shows each
+   repo's stage and its source (`board`, `cache` or `claude-md`).
+   After stamping, the reviewer runs `gh pr merge <n> --auto --squash
+   --match-head-commit <stamped sha>` only when the PR targets the default
+   branch, the card's Risk is one the stage allows (stage 2: Low; stage 3: Low
+   or Medium; stage 4: any), below stage 4 no file in the diff matches
+   `.github/CODEOWNERS`, the stamp is still at the head, and, right before,
+   `claude-factory-dispatch merge-rule <repo> <risk> --dry-run` still prints
+   `self-merge allowed` (so a founder's veto on the board stops it from the
+   next tick). GitHub merges once the required checks are green. Before a
+   stage-4 High auto-merge, the reviewer adds the card label `post-merge-review`
+   and the comment `post-merge review due <next working day>` (no label, no
+   auto-merge); the dispatcher then leaves the
+   merged card's status alone until a founder clears the label. Otherwise nobody turns on auto-merge: not the builder, and never the
    reviewer of a PR without a factory card. These rules live in the prompts; the
    dispatcher does not check them itself. GitHub backs up two of them: a
    CODEOWNERS path still needs a code-owner approval, and `--match-head-commit`

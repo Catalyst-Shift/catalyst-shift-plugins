@@ -38,6 +38,13 @@
 # model review claude-opus-5-5
 # model dep-review claude-opus-5-5
 #
+# Where each repo's factory stage comes from (CAT-1486). board (the default)
+# reads the stages the Factory Board computes each tick, keeps the last answer
+# when the board can't be read, and falls back to the CLAUDE.md line
+# 'Factory stage: 2' when it has no answer. claude-md ignores the board (the
+# rollback): only that CLAUDE.md line counts, so at most Low PRs self-merge.
+# stages claude-md
+#
 # ~/Projects/catalyst-shift catalyst-shift-site
 # ~/Projects/lbl-nextjs lbl-nextjs
 # ~/Projects/nourish-enablement nourish-rep-enablement

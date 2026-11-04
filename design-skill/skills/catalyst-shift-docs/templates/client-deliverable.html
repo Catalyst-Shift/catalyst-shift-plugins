@@ -1,15 +1,15 @@
 <!doctype html>
 <!--
-  Catalyst Shift — Client Deliverable Template (site-fidelity, dark, screen-first)
+  Catalyst Shift — Client Deliverable Template (paper, editorial; prints as is)
   ============================================================
   USAGE FOR CLAUDE:
     1. The client deliverable is what gets handed to the client mid- or end-engagement.
-       Examples: ICP doc, sales playbook, ops audit, content system, brand brief.
+       Examples: a build handoff, an operating guide for an automation, an AI adoption plan, a sales playbook, a company-brain map.
     2. Replace every {{PLACEHOLDER}}. Use {{DELIVERABLE_TYPE}} as the kicker.
-    3. Section structure is flexible — pattern is § 01 What this is · § 02 How to use ·
-       § 03 The work itself (multiple sub-sections allowed) · § 04 What's next.
+    3. Section structure is flexible — pattern is 01 What this is · 02 How to use ·
+       03 The work itself (multiple sub-sections allowed) · 04 What's next.
     4. This is the most "internal" of the doc types — keep tone direct, low marketing.
-    5. Print via Cmd/Ctrl+P — print rules in doc-shell.css invert the canvas.
+    5. Print via Cmd/Ctrl+P — the page is already paper; print drops the nav and footer.
   ============================================================
 -->
 <html lang="en">
@@ -17,19 +17,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{DELIVERABLE_NAME}} — {{CLIENT_NAME}} — Catalyst Shift</title>
-<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <link rel="stylesheet" href="../assets/colors_and_type.css">
 <link rel="stylesheet" href="../assets/doc-shell.css">
 <style>
   .callout {
     margin: 16px 0; padding: 18px 22px;
     background: var(--surface); border: 1px solid var(--border);
-    border-left: 2px solid var(--accent); border-radius: var(--r-3);
+    border-left: 3px solid var(--signal); border-radius: var(--r-4);
     max-width: 720px;
   }
   .callout .label {
-    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--link);
     margin-bottom: 8px;
   }
   .callout p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
@@ -62,15 +62,7 @@
 
 <header class="nav">
   <div class="nav-inner">
-    <a class="lockup" href="#">
-      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        
-        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
-        <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
-        <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
-      </svg>
-      <span class="wordmark">Catalyst<span class="sh">Shift</span></span>
-    </a>
+    <a class="lockup" href="https://catalystshift.ai"><span class="wordmark">Catalyst <span class="sh">Shift</span></span></a>
     <div class="nav-meta">
       <span>{{DELIVERABLE_TYPE}} · {{DOC_NUMBER}}</span>
       <span>{{ISSUE_DATE}}</span>
@@ -80,10 +72,9 @@
 </header>
 
 <section class="hero">
-  <div class="hero-glow"></div>
   <div class="hero-inner">
     <div class="pill"><span class="badge">{{DELIVERABLE_TYPE}}</span></div>
-    <div class="doc-kicker">{{OFFER_NAME}} · Deliverable</div>
+    <div class="doc-kicker">{{ENGAGEMENT_NAME}} · Deliverable</div>
     <h1 class="doc">
       {{DELIVERABLE_NAME}}<br>
       <span class="subline">{{ONE_LINE_PURPOSE}}</span>
@@ -92,14 +83,14 @@
 
     <div class="cover-strip">
       <div class="cell"><div class="label">For</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
-      <div class="cell"><div class="label">Engagement</div><div class="value">{{OFFER_NAME}}<small>{{SPINE_STOP}}</small></div></div>
+      <div class="cell"><div class="label">Engagement</div><div class="value">{{ENGAGEMENT_NAME}}<small>{{PHASE_READ_BUILD_LAND_OR_STAY}}</small></div></div>
       <div class="cell"><div class="label">Owner</div><div class="value">{{OWNER_NAME}}<small>{{OWNER_ROLE}}</small></div></div>
       <div class="cell"><div class="label">Version</div><div class="value">v{{VERSION}}<small>{{ISSUE_DATE}}</small></div></div>
     </div>
   </div>
 </section>
 
-<!-- § 01 — WHAT THIS IS -->
+<!-- 01 — WHAT THIS IS -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -125,7 +116,7 @@
   </div>
 </section>
 
-<!-- § 02 — HOW TO USE -->
+<!-- 02 — HOW TO USE -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -154,7 +145,7 @@
   </div>
 </section>
 
-<!-- § 03 — THE WORK -->
+<!-- 03 — THE WORK -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -177,13 +168,7 @@
       <p>{{BODY_PARAGRAPH_3}}</p>
 
       <div class="module-frame" style="margin-top: 16px;">
-        <div class="chrome">
-          <span class="dots"><span></span><span></span><span></span></span>
-          <span class="crumb">catalyst&nbsp;os · {{CLIENT_SHORT}} · {{MODULE_ID_LOWER}}</span>
-          <span class="right">{{MODULE_ID}}</span>
-        </div>
         <div class="data-toolbar">
-          <span class="module-id">{{MODULE_ID}}</span>
           <span class="title">{{TABLE_TITLE}}</span>
           <span class="meta">{{N_ROWS}} rows</span>
         </div>
@@ -191,7 +176,7 @@
           <thead><tr><th>{{COL_1}}</th><th>Status</th><th>{{COL_3}}</th><th>{{COL_4}}</th></tr></thead>
           <tbody>
             <tr><td class="outcome">{{ROW_1_LABEL}}</td><td><span class="dot positive">{{ROW_1_STATUS}}</span></td><td class="metric">{{ROW_1_VALUE}}</td><td class="deadline">{{ROW_1_NOTE}}</td></tr>
-            <tr><td class="outcome">{{ROW_2_LABEL}}</td><td><span class="dot signal">{{ROW_2_STATUS}}</span></td><td class="metric">{{ROW_2_VALUE}}</td><td class="deadline">{{ROW_2_NOTE}}</td></tr>
+            <tr><td class="outcome">{{ROW_2_LABEL}}</td><td><span class="dot positive">{{ROW_2_STATUS}}</span></td><td class="metric">{{ROW_2_VALUE}}</td><td class="deadline">{{ROW_2_NOTE}}</td></tr>
             <tr><td class="outcome">{{ROW_3_LABEL}}</td><td><span class="dot caution">{{ROW_3_STATUS}}</span></td><td class="metric">{{ROW_3_VALUE}}</td><td class="deadline">{{ROW_3_NOTE}}</td></tr>
           </tbody>
         </table>
@@ -200,7 +185,7 @@
   </div>
 </section>
 
-<!-- § 04 — WHAT'S NEXT -->
+<!-- 04 — WHAT'S NEXT -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -223,7 +208,7 @@
 
 <footer class="colophon">
   <div class="inner">
-    <span>Catalyst Shift · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
+    <span><span class="wordmark">Catalyst <span class="sh">Shift</span></span> · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
     <span>{{DELIVERABLE_TYPE}} · {{DOC_NUMBER}} · v{{VERSION}}</span>
   </div>
 </footer>

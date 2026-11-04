@@ -91,7 +91,7 @@ test("the builder is told not to stamp; the reviewer stamps and never merges", (
   assert.match(s, /Never merge the PR and never turn on auto-merge/);
 });
 
-test("only the card reviewer may turn on auto-merge, and only under the stage 2 rule (CAT-1326)", () => {
+test("only the card reviewer may turn on auto-merge, and only under the stage rule (CAT-1326, CAT-1486)", () => {
   const s = read(DISPATCH);
   const build = s.slice(s.indexOf("launch() {"), s.indexOf("review() {"));
   const card = s.slice(s.indexOf("review() {"), s.indexOf("reviews() {"));
@@ -100,14 +100,17 @@ test("only the card reviewer may turn on auto-merge, and only under the stage 2 
   assert.doesNotMatch(build, /--auto/);
   assert.match(build, /Never change the card's Risk section/);
   assert.match(card, /never use --admin/);
-  // The card reviewer: the merge command appears once, inside the stage 2 rule.
+  // The card reviewer: the merge command appears once, inside the stage rule.
   assert.equal(card.split("--auto --squash").length - 1, 1);
-  const rule = card.slice(card.indexOf("Stage 2 rule:"), card.indexOf("\n6. "));
+  const rule = card.slice(card.indexOf("Stage rule:"), card.indexOf("\n6. "));
+  // The stage comes from the dispatcher (board, cache or the CLAUDE.md line), never CLAUDE.md read by the session.
+  assert.match(rule, /this repo is at factory stage \$stage \(from \$stage_src; the dispatcher gives the stage, so ignore any 'Factory stage:' line in CLAUDE.md\)/);
   assert.match(rule, /gh pr merge \$number --auto --squash --match-head-commit <the stamped sha> only if all of these hold/);
   assert.match(rule, /base is the repo's default branch/);
-  assert.match(rule, /never the PR head's\) has a line that is exactly 'Factory stage: 2'/);
-  assert.match(rule, /Risk section says Low and nothing else/);
-  assert.match(rule, /gh pr diff \$number --name-only matches a path in the base branch's \.github\/CODEOWNERS/);
+  assert.match(rule, /Risk section names exactly one risk \(Low, Medium or High\) and it is one stage \$stage allows \(missing, mixed or unclear fails\)/);
+  assert.match(rule, /no file in gh pr diff \$number --name-only matches a path in the base branch's \.github\/CODEOWNERS/);
+  assert.match(rule, /you stamped it and the stamp's sha still equals the PR head/);
+  assert.match(rule, /merge-rule \$\(repo_name "\$dir"\) <that risk> --dry-run prints 'self-merge allowed'/);
   assert.match(rule, /never turn on auto-merge/);
   // A PR without a factory card never auto-merges.
   assert.doesNotMatch(other, /--auto/);
@@ -620,8 +623,8 @@ test("every builder and reviewer session passes --model, and Linear calls use th
   assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 6);
 });
 
-test("install.sh's boot check skips label, offset, review-authors and model lines like the dispatcher does", () => {
-  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\)'/;
+test("install.sh's boot check skips label, offset, review-authors, model and stages lines like the dispatcher does", () => {
+  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\|stages\[\[:space:\]\]\)'/;
   assert.match(read(BOOTCHECK), skip);
   assert.match(read(DISPATCH), skip);
 });
@@ -1428,7 +1431,7 @@ esac
 id=$(printf '%s' "$p" | grep -oE 'issue [A-Z]+-[0-9]+' | head -1); id=\${id#issue }
 case $p in
   *"add the existing label"*) kind=label; ok="NEEDS-MERGE on";;
-  *"has merged"*) kind=done; ok="STATUS Done NEEDS-MERGE off";;
+  *"has merged"*) kind=done; ok=\${MERGED_OK:-"STATUS Done POST-MERGE off NEEDS-MERGE off"};;
   *"remove that label"*) kind=unlabel; ok="NEEDS-MERGE off";;
 esac
 echo "$kind $id $tools" >>"${calls}"
@@ -1489,6 +1492,27 @@ test("needs-merge: added once to a stamped green factory PR's card; merge moves 
   r = run([]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(asked(), []);
+});
+
+test("CAT-1486: a merged card labelled post-merge-review keeps its status until a founder clears it", () => {
+  const s = read(DISPATCH);
+  const merged = s.slice(s.indexOf("      MERGED)"), s.indexOf("      CLOSED)"));
+  assert.match(merged, /If it has the label 'post-merge-review', leave its status at 'In Review'/);
+  assert.match(merged, /Otherwise, if its status is not 'Done', move it to 'Done'/);
+  const { state, run, asked, record } = mergeRig();
+  // Haiku says it left the card In Review with the label on: recorded, and the log says so.
+  let r = run([], { MERGED_OK: "STATUS In Review POST-MERGE on NEEDS-MERGE off" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(asked().some((c) => c.startsWith("done CAT-4 ")));
+  assert.equal(record("cat-4-4"), "done 4");
+  assert.match(r.stdout, /CAT-4: PR #4 merged; needs-merge removed, card left for its post-merge review/);
+  // Not Done without the label, or Done with it, is not a confirmation: retried next tick.
+  for (const bad of ["STATUS In Review POST-MERGE off NEEDS-MERGE off", "STATUS Done POST-MERGE on NEEDS-MERGE off"]) {
+    rmSync(join(state, "merge"), { recursive: true, force: true });
+    r = run([], { MERGED_OK: bad });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(record("cat-4-4"), null, bad);
+  }
 });
 
 test("needs-merge: a Linear call that isn't confirmed is retried next tick, then recorded", () => {

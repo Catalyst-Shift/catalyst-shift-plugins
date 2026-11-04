@@ -1,14 +1,14 @@
 <!doctype html>
 <!--
-  Catalyst Shift — SOW Template (site-fidelity, dark, screen-first)
+  Catalyst Shift — SOW Template (paper, editorial; prints as is)
   ============================================================
   USAGE FOR CLAUDE:
     1. The SOW MIRRORS the proposal's scope, outcomes, fees and timeline. If proposal exists, copy values verbatim.
     2. Replace every {{PLACEHOLDER}}. Do not invent figures.
-    3. Section structure: § 01 Parties · § 02 Scope · § 03 Deliverables & Timeline ·
-       § 04 Outcomes & Guarantee · § 05 Fees & Payment · § 06 Terms · § 07 Sign-off.
-    4. Locked phrases from BRAND.md must appear in § 04 (guarantee).
-    5. Print via Cmd/Ctrl+P — shared print rules in doc-shell.css invert the canvas.
+    3. Section structure: 01 Parties · 02 Scope · 03 Deliverables & Timeline ·
+       04 Outcomes & Guarantee · 05 Fees & Payment · 06 Terms · 07 Sign-off.
+    4. Locked phrases from BRAND.md must appear in 04 (guarantee).
+    5. Print via Cmd/Ctrl+P — the page is already paper; print drops the nav and footer.
   ============================================================
 -->
 <html lang="en">
@@ -16,7 +16,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SOW — {{CLIENT_NAME}} — Catalyst Shift</title>
-<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <link rel="stylesheet" href="../assets/colors_and_type.css">
 <link rel="stylesheet" href="../assets/doc-shell.css">
 <style>
@@ -37,64 +37,40 @@
   }
   .term .v { color: var(--text); font-size: 15px; line-height: 1.5; }
 </style>
-<style>
-/* v3 site — per-use-case module ID colors (showcase rail) */
-.module-rail .row .id.m01 { color: var(--m01); }
-.module-rail .row .id.m02 { color: var(--m02); }
-.module-rail .row .id.m03 { color: var(--m03); }
-.module-rail .row .id.m04 { color: var(--m04); }
-.module-rail .row .id.m05 { color: var(--m05); }
-@media print {
-  .module-rail .row .id.m01 { color: #1A9E7A !important; }
-  .module-rail .row .id.m02 { color: #C2456F !important; }
-  .module-rail .row .id.m03 { color: #5E4FD1 !important; }
-  .module-rail .row .id.m04 { color: #B5851F !important; }
-  .module-rail .row .id.m05 { color: #2E6FBF !important; }
-}
-</style>
 </head>
 <body>
 
 <header class="nav">
   <div class="nav-inner">
-    <a class="lockup" href="#">
-      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        
-        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
-        <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
-        <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
-      </svg>
-      <span class="wordmark">Catalyst<span class="sh">Shift</span></span>
-    </a>
+    <a class="lockup" href="https://catalystshift.ai"><span class="wordmark">Catalyst <span class="sh">Shift</span></span></a>
     <div class="nav-meta">
       <span>SOW · {{DOC_NUMBER}}</span>
       <span>{{ISSUE_DATE}}</span>
-      <span class="live">Active</span>
+      <span class="live">For signature</span>
     </div>
   </div>
 </header>
 
 <section class="hero">
-  <div class="hero-glow"></div>
   <div class="hero-inner">
     <div class="pill"><span class="badge">SOW</span></div>
-    <div class="doc-kicker">Statement of Work · {{OFFER_NAME}}</div>
+    <div class="doc-kicker">Statement of Work · {{ENGAGEMENT_NAME}}</div>
     <h1 class="doc">
-      Statement of Work.<br>
-      <span class="subline">{{CLIENT_NAME}} · {{OFFER_NAME}}</span>
+      Statement of Work.
+      <span class="subline">{{CLIENT_NAME}} · {{ENGAGEMENT_NAME}}</span>
     </h1>
     <p class="lede">This SOW formalizes the engagement scoped in Proposal {{PROPOSAL_DOC_NUMBER}}. It supersedes the proposal upon signature by both parties.</p>
 
     <div class="cover-strip">
       <div class="cell"><div class="label">Effective</div><div class="value">{{EFFECTIVE_DATE}}<small>SOW · {{DOC_NUMBER}}</small></div></div>
       <div class="cell"><div class="label">Client</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_LEGAL_NAME}}</small></div></div>
-      <div class="cell"><div class="label">Scope</div><div class="value">{{OFFER_NAME}}<small>{{SPINE_STOPS_COVERED_ONE_LINE}}</small></div></div>
-      <div class="cell"><div class="label">Fee</div><div class="value">{{ENGAGEMENT_PRICE}}<small>fixed scope + {{CARE_MONTHLY}} / mo care</small></div></div>
+      <div class="cell"><div class="label">Scope</div><div class="value">{{ENGAGEMENT_NAME}}<small>{{SERVICES_USED_ONE_LINE}}</small></div></div>
+      <div class="cell"><div class="label">Fee</div><div class="value">{{ENGAGEMENT_PRICE}}<small>fixed scope + {{STAY_MONTHLY}} / mo Stay</small></div></div>
     </div>
   </div>
 </section>
 
-<!-- § 01 — PARTIES -->
+<!-- 01 — PARTIES -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -112,27 +88,25 @@
   </div>
 </section>
 
-<!-- § 02 — SCOPE -->
+<!-- 02 — SCOPE -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
       <div class="s-num">02</div>
       <div class="s-eyebrow">Scope</div>
-      <div class="module-rail">
-        <!-- The spine (BRAND.md). Mark the stops this engagement covers with class="row active".
-             MSP-audience doc only: swap these five rows for M.01 The Operator Brief · M.02 Churn Early Warning ·
-             M.03 Proposal Generation · M.04 Pipeline Visibility · M.05 Authority Engine (see BRAND.md). -->
-        <div class="row active"><span class="id">CS</span><span>{{OFFER_NAME}}</span></div>
-        <div class="row"><span class="id m01">01</span><span>Connect</span></div>
-        <div class="row"><span class="id m02">02</span><span>Normalize</span></div>
-        <div class="row"><span class="id m03">03</span><span>Synthesize</span></div>
-        <div class="row"><span class="id m04">04</span><span>Act</span></div>
-        <div class="row"><span class="id m05">05</span><span>Keep</span></div>
-      </div>
+      <!-- The six services (BRAND.md), in the site's order. class="row on" = this engagement uses it. -->
+      <ul class="service-rail" aria-label="The six services">
+        <li class="row">Build software and AI applications</li>
+        <li class="row">Connect your company brain</li>
+        <li class="row">Set up Copilot and other AI platforms</li>
+        <li class="row">Get your people using AI</li>
+        <li class="row">Automate sales and marketing</li>
+        <li class="row">Automate operations</li>
+      </ul>
     </aside>
     <div class="s-body">
       <h2 class="s-title">What is in scope.</h2>
-      <p>Catalyst Shift will deliver <strong>{{OFFER_NAME}}</strong> for {{CLIENT_NAME}}: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}, and keep it running under the care contract in § 05.</p>
+      <p>Catalyst Shift will deliver <strong>{{ENGAGEMENT_NAME}}</strong> for {{CLIENT_NAME}}: {{ONE_LINE_DESCRIPTION_OF_THE_OUTCOME}}, and keep it working and in use under Stay, in 05.</p>
 
       <h3>Included</h3>
       <ul>
@@ -155,7 +129,7 @@
   </div>
 </section>
 
-<!-- § 03 — DELIVERABLES & TIMELINE -->
+<!-- 03 — DELIVERABLES & TIMELINE -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -164,21 +138,22 @@
     </aside>
     <div class="s-body">
       <h2 class="s-title">Deliverables and timeline.</h2>
-      <p>Implementation runs <strong>{{DURATION}}</strong> from kickoff. Phases below are sequential; dates assume on-time client inputs per § 06.</p>
+      <p>The engagement runs on Read, Build, Land and Stay, in that order, from kickoff on {{KICKOFF_DATE}}. Dates assume on-time client inputs per 06.</p>
 
-      <h4>Week 0 — Onboarding</h4>
-      <p>{{WHAT_HAPPENS_BEFORE_WORK_BEGINS}}</p>
-      <h4>Weeks 1–{{X}} — {{PHASE_1_NAME}}</h4>
-      <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
-      <h4>Weeks {{X+1}}–{{Y}} — {{PHASE_2_NAME}}</h4>
-      <p>{{WHAT_GETS_INSTALLED_IN_THIS_PHASE}}</p>
-      <h4>Week {{FINAL}} — Go-live</h4>
-      <p>{{FIRST_OUTCOME_AT_GO_LIVE_AND_THE_ONGOING_MANAGED_CADENCE}}</p>
+      <ol class="step-rule" aria-label="Read, Build, Land, Stay">
+        <li><span class="step">Read</span><span class="dur">{{READ_WEEKS}} weeks</span><span class="what">{{WHAT_WE_READ_AND_WHO_WE_TALK_TO}}</span></li>
+        <li><span class="step">Build</span><span class="dur">{{BUILD_WEEKS}} weeks</span><span class="what">{{WHAT_GETS_BUILT}}</span></li>
+        <li><span class="step">Land</span><span class="dur">{{LAND_WEEKS}} weeks</span><span class="what">{{HOW_THE_PEOPLE_START_USING_IT}}</span></li>
+        <li><span class="step">Stay</span><span class="dur">Monthly</span><span class="what">{{WHAT_STAY_KEEPS_WORKING}}</span></li>
+      </ol>
+
+      <h4>Deliverables by phase</h4>
+      <p>{{EACH_DELIVERABLE_FROM_02_WITH_THE_PHASE_AND_DATE_IT_LANDS}}</p>
     </div>
   </div>
 </section>
 
-<!-- § 04 — OUTCOMES & GUARANTEE -->
+<!-- 04 — OUTCOMES & GUARANTEE -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -186,40 +161,34 @@
       <div class="s-eyebrow">Outcomes</div>
     </aside>
     <div class="s-body">
-      <h2 class="s-title">Outcomes — in writing.</h2>
+      <h2 class="s-title">Outcomes, in writing.</h2>
       <p>Catalyst Shift commits to the following measurable outcomes for {{CLIENT_NAME}}.</p>
 
       <div class="module-frame" style="margin-top: 16px;">
-        <div class="chrome">
-          <span class="dots"><span></span><span></span><span></span></span>
-          <span class="crumb">catalyst&nbsp;os · {{CLIENT_SHORT}} · sow.outcomes</span>
-          <span class="right">M.OUT — TARGETS</span>
-        </div>
         <div class="data-toolbar">
-          <span class="module-id">M.OUT — OUTCOMES</span>
-          <span class="title">Targets &amp; deadlines</span>
-          <span class="meta">3 outcomes · 1 final deadline</span>
+          <span class="title">Outcomes and dates</span>
+          <span class="meta">{{N}} outcomes</span>
         </div>
         <table class="outcomes">
-          <thead><tr><th>Outcome</th><th>Status</th><th>Metric</th><th>By</th></tr></thead>
+          <thead><tr><th>Outcome</th><th>Status</th><th>Measure</th><th>By</th></tr></thead>
           <tbody>
-            <tr><td class="outcome">{{OUTCOME_1}}</td><td><span class="dot positive">target</span></td><td class="metric">{{TARGET_1}}</td><td class="deadline">{{DEADLINE_1}}</td></tr>
-            <tr><td class="outcome">{{OUTCOME_2}}</td><td><span class="dot signal">target</span></td><td class="metric">{{TARGET_2}}</td><td class="deadline">{{DEADLINE_2}}</td></tr>
-            <tr><td class="outcome">{{OUTCOME_3}}</td><td><span class="dot caution">target</span></td><td class="metric">{{TARGET_3}}</td><td class="deadline">{{DEADLINE_3}}</td></tr>
+            <tr><td class="outcome">{{OUTCOME_1}}</td><td><span class="dot positive">target</span></td><td class="metric">{{MEASURE_1}}</td><td class="deadline">{{DEADLINE_1}}</td></tr>
+            <tr><td class="outcome">{{OUTCOME_2}}</td><td><span class="dot positive">target</span></td><td class="metric">{{MEASURE_2}}</td><td class="deadline">{{DEADLINE_2}}</td></tr>
+            <tr><td class="outcome">{{OUTCOME_3}}</td><td><span class="dot positive">target</span></td><td class="metric">{{MEASURE_3}}</td><td class="deadline">{{DEADLINE_3}}</td></tr>
           </tbody>
         </table>
       </div>
 
       <div class="guarantee">
-        <div class="label">Guarantee · in writing</div>
-        <p>The deliverables and outcomes above are committed <strong>in writing</strong> as part of this SOW — named deliverables, the metrics Catalyst Shift will measure, and the dates by which they'll be measured.</p>
-        <p>Measurement methodology, data sources, and reporting cadence are documented in the onboarding kickoff and confirmed by both parties before measurement begins.</p>
+        <div class="label">In writing</div>
+        <p>The deliverables and outcomes above are committed <strong>in writing</strong> as part of this SOW: named deliverables, the metrics Catalyst Shift will measure, and the dates by which they'll be measured.</p>
+        <p>Measurement methodology, data sources, and reporting cadence are documented during Read and confirmed by both parties before measurement begins.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- § 05 — FEES & PAYMENT -->
+<!-- 05 — FEES & PAYMENT -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -232,20 +201,20 @@
       <div class="pricing-card">
         <div>
           <div class="tier-id">Fixed-scope engagement</div>
-          <div class="tier-name">{{OFFER_NAME}}</div>
-          <div class="tier-line">One fixed price for the scope in § 02, plus a monthly care contract from signature.</div>
+          <div class="tier-name">{{ENGAGEMENT_NAME}}</div>
+          <div class="tier-line">One fixed price for the scope in 02, then a monthly Stay once the work lands.</div>
         </div>
         <div class="fee-block">
           <div class="fee">{{ENGAGEMENT_PRICE}}</div>
-          <small>+ {{CARE_MONTHLY}} / mo care</small>
+          <small>+ {{STAY_MONTHLY}} / mo Stay</small>
         </div>
       </div>
 
       <h4>Engagement</h4>
-      <p><strong>{{ENGAGEMENT_PRICE}}</strong>, fixed for the scope in § 02. {{PAYMENT_SCHEDULE}}</p>
+      <p><strong>{{ENGAGEMENT_PRICE}}</strong>, fixed for the scope in 02. {{PAYMENT_SCHEDULE}}</p>
 
-      <h4>Care contract</h4>
-      <p><strong>{{CARE_MONTHLY}} / month</strong> from signature, billed monthly — {{WHAT_THE_CARE_CONTRACT_KEEPS_RUNNING}}. {{TERM}}. Further work is scoped in writing.</p>
+      <h4>Stay</h4>
+      <p><strong>{{STAY_MONTHLY}} / month</strong> from {{STAY_START}}, billed monthly: {{WHAT_STAY_KEEPS_WORKING}}. {{TERM}}. Further work is scoped in writing.</p>
 
       <h4>Late payment</h4>
       <p>Invoices are net-{{NET_DAYS}}. Past-due invoices accrue {{LATE_INTEREST}}% interest per month or the maximum allowed by law, whichever is lower.</p>
@@ -253,7 +222,7 @@
   </div>
 </section>
 
-<!-- § 06 — TERMS -->
+<!-- 06 — TERMS -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -264,7 +233,7 @@
       <h2 class="s-title">Operating terms.</h2>
 
       <div class="terms-grid">
-        <div class="term"><div class="k">Term</div><div class="v">From {{EFFECTIVE_DATE}} through delivery of all outcomes in § 04.</div></div>
+        <div class="term"><div class="k">Term</div><div class="v">From {{EFFECTIVE_DATE}} through delivery of all outcomes in 04.</div></div>
         <div class="term"><div class="k">IP / Ownership</div><div class="v">All deliverables transfer to {{CLIENT_NAME}} on final payment. Catalyst Shift retains rights to underlying frameworks and tools.</div></div>
         <div class="term"><div class="k">Confidentiality</div><div class="v">Both parties treat shared information as confidential for 3 years from end of engagement.</div></div>
         <div class="term"><div class="k">Client inputs</div><div class="v">{{CLIENT_NAME}} provides timely access to systems, data, decision-makers, and brand assets per the onboarding checklist.</div></div>
@@ -275,7 +244,7 @@
   </div>
 </section>
 
-<!-- § 07 — SIGN-OFF -->
+<!-- 07 — SIGN-OFF -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -304,7 +273,7 @@
 
 <footer class="colophon">
   <div class="inner">
-    <span>Catalyst Shift · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
+    <span><span class="wordmark">Catalyst <span class="sh">Shift</span></span> · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
     <span>SOW · {{DOC_NUMBER}} · {{ISSUE_DATE}}</span>
   </div>
 </footer>
