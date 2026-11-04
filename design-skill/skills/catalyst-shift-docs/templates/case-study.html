@@ -1,13 +1,13 @@
 <!doctype html>
 <!--
-  Catalyst Shift — Case Study Template (site-fidelity, dark, screen-first)
+  Catalyst Shift — Case Study Template (paper, editorial; prints as is)
   ============================================================
   USAGE FOR CLAUDE:
     1. Case studies are written AFTER an engagement closes. Quote the client.
     2. Replace every {{PLACEHOLDER}}. Never invent metrics — pull from the SOW outcomes table.
-    3. Section structure: § 01 Context · § 02 What we installed · § 03 Results · § 04 What changed.
-    4. Every metric needs a status dot (positive / signal). Don't show negatives in case studies.
-    5. Print via Cmd/Ctrl+P — print rules in doc-shell.css invert the canvas.
+    3. Section structure: 01 Context · 02 What we built · 03 Results · 04 What changed.
+    4. Every metric needs a status dot (positive / caution). Never name the client or quote anyone without their written consent; otherwise anonymize (industry, size, region).
+    5. Print via Cmd/Ctrl+P — the page is already paper; print drops the nav and footer.
   ============================================================
 -->
 <html lang="en">
@@ -15,14 +15,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Case Study — {{CLIENT_NAME}} — Catalyst Shift</title>
-<link rel="icon" type="image/svg+xml" href="../assets/mark-dark.svg">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <link rel="stylesheet" href="../assets/colors_and_type.css">
 <link rel="stylesheet" href="../assets/doc-shell.css">
 <style>
   .quote-hero {
     margin: 28px 0 0; padding: 28px 32px;
-    border: 1px solid var(--border); border-left: 2px solid var(--signal);
-    border-radius: var(--r-3); background: var(--surface);
+    border: 1px solid var(--border); border-left: 3px solid var(--signal);
+    border-radius: var(--r-4); background: var(--surface);
     max-width: 880px;
   }
   .quote-hero p {
@@ -36,35 +36,12 @@
   }
   .quote-hero .who strong { color: var(--text-dim); font-weight: 500; }
 </style>
-<style>
-/* v3 site — per-use-case module ID colors (showcase rail) */
-.module-rail .row .id.m01 { color: var(--m01); }
-.module-rail .row .id.m02 { color: var(--m02); }
-.module-rail .row .id.m03 { color: var(--m03); }
-.module-rail .row .id.m04 { color: var(--m04); }
-.module-rail .row .id.m05 { color: var(--m05); }
-@media print {
-  .module-rail .row .id.m01 { color: #1A9E7A !important; }
-  .module-rail .row .id.m02 { color: #C2456F !important; }
-  .module-rail .row .id.m03 { color: #5E4FD1 !important; }
-  .module-rail .row .id.m04 { color: #B5851F !important; }
-  .module-rail .row .id.m05 { color: #2E6FBF !important; }
-}
-</style>
 </head>
 <body>
 
 <header class="nav">
   <div class="nav-inner">
-    <a class="lockup" href="#">
-      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        
-        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#34E2C2" stroke-width="1.5" fill="none"/>
-        <path d="M12 7L7 9.5v5l5 2.5 5-2.5v-5L12 7z" fill="#34E2C2" opacity="0.4"/>
-        <circle cx="12" cy="12" r="2" fill="#34E2C2"/>
-      </svg>
-      <span class="wordmark">Catalyst<span class="sh">Shift</span></span>
-    </a>
+    <a class="lockup" href="https://catalystshift.ai"><span class="wordmark">Catalyst <span class="sh">Shift</span></span></a>
     <div class="nav-meta">
       <span>Case study</span>
       <span>{{ENGAGEMENT_END_DATE}}</span>
@@ -73,10 +50,9 @@
 </header>
 
 <section class="hero">
-  <div class="hero-glow"></div>
   <div class="hero-inner">
     <div class="pill"><span class="badge">Case study</span></div>
-    <div class="doc-kicker">{{OFFER_NAME}}</div>
+    <div class="doc-kicker">{{ENGAGEMENT_NAME}}</div>
     <h1 class="doc">
       {{HEADLINE_RESULT_IN_ONE_LINE}}<br>
       <span class="subline">{{SUPPORTING_LINE_NAMING_THE_PROBLEM_THAT_WAS_SOLVED}}</span>
@@ -85,14 +61,14 @@
 
     <div class="cover-strip">
       <div class="cell"><div class="label">Client</div><div class="value">{{CLIENT_NAME}}<small>{{CLIENT_INDUSTRY_SIZE}}</small></div></div>
-      <div class="cell"><div class="label">Engagement</div><div class="value">{{OFFER_NAME}}<small>{{SPINE_STOPS_COVERED_ONE_LINE}}</small></div></div>
+      <div class="cell"><div class="label">Engagement</div><div class="value">{{ENGAGEMENT_NAME}}<small>{{SERVICES_USED_ONE_LINE}}</small></div></div>
       <div class="cell"><div class="label">Headline metric</div><div class="value">{{HEADLINE_METRIC}}<small>{{HEADLINE_METRIC_LABEL}}</small></div></div>
-      <div class="cell"><div class="label">Status</div><div class="value">Live<small>Care contract · {{MONTHS_LIVE}} months</small></div></div>
+      <div class="cell"><div class="label">Status</div><div class="value">In Stay<small>{{MONTHS_IN_STAY}} months</small></div></div>
     </div>
   </div>
 </section>
 
-<!-- § 01 — CONTEXT -->
+<!-- 01 — CONTEXT -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -112,30 +88,28 @@
   </div>
 </section>
 
-<!-- § 02 — WHAT WE INSTALLED -->
+<!-- 02 — WHAT WE INSTALLED -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
       <div class="s-num">02</div>
-      <div class="s-eyebrow">Installed</div>
-      <div class="module-rail">
-        <!-- The spine (BRAND.md). Mark the stops this engagement covers with class="row active".
-             MSP-audience doc only: swap these five rows for M.01 The Operator Brief · M.02 Churn Early Warning ·
-             M.03 Proposal Generation · M.04 Pipeline Visibility · M.05 Authority Engine (see BRAND.md). -->
-        <div class="row active"><span class="id">CS</span><span>{{OFFER_NAME}}</span></div>
-        <div class="row"><span class="id m01">01</span><span>Connect</span></div>
-        <div class="row"><span class="id m02">02</span><span>Normalize</span></div>
-        <div class="row"><span class="id m03">03</span><span>Synthesize</span></div>
-        <div class="row"><span class="id m04">04</span><span>Act</span></div>
-        <div class="row"><span class="id m05">05</span><span>Keep</span></div>
-      </div>
+      <div class="s-eyebrow">Built</div>
+      <!-- The six services (BRAND.md), in the site's order. class="row on" = this engagement uses it. -->
+      <ul class="service-rail" aria-label="The six services">
+        <li class="row">Build software and AI applications</li>
+        <li class="row">Connect your company brain</li>
+        <li class="row">Set up Copilot and other AI platforms</li>
+        <li class="row">Get your people using AI</li>
+        <li class="row">Automate sales and marketing</li>
+        <li class="row">Automate operations</li>
+      </ul>
     </aside>
     <div class="s-body">
-      <h2 class="s-title">What we installed.</h2>
+      <h2 class="s-title">What we built.</h2>
 
       <p class="pull">
-        <span class="a">Their systems already held the answer.</span>
-        <span class="b">We connected them, made sense of them, and acted on it.</span>
+        <span class="a">We found where {{CLIENT_SHORT}} ran slower than it should.</span>
+        <span class="b">We built what fixed it, and stayed until their people were using it.</span>
       </p>
 
       <h3>The build</h3>
@@ -146,13 +120,19 @@
         <li><strong>{{DELIVERABLE_4_NAME}}</strong> — {{ONE_LINE_DESCRIPTION}}</li>
       </ul>
 
-      <h3>Timeline</h3>
-      <p>{{2-3_SENTENCES_ON_HOW_THE_DURATION_WEEKS_BROKE_DOWN}}</p>
+      <h3>Read, Build, Land, Stay</h3>
+      <ol class="step-rule" aria-label="Read, Build, Land, Stay">
+        <li><span class="step">Read</span><span class="dur">{{READ_WEEKS}} weeks</span></li>
+        <li><span class="step">Build</span><span class="dur">{{BUILD_WEEKS}} weeks</span></li>
+        <li><span class="step">Land</span><span class="dur">{{LAND_WEEKS}} weeks</span></li>
+        <li><span class="step">Stay</span><span class="dur">Monthly</span></li>
+      </ol>
+      <p>{{1-2_SENTENCES_ON_WHAT_HAPPENED_IN_EACH_PHASE}}</p>
     </div>
   </div>
 </section>
 
-<!-- § 03 — RESULTS -->
+<!-- 03 — RESULTS -->
 <section class="s">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -160,28 +140,13 @@
       <div class="s-eyebrow">Results</div>
     </aside>
     <div class="s-body">
-      <h2 class="s-title">What hit.</h2>
+      <h2 class="s-title">What changed, measured.</h2>
       <p>The outcomes from the SOW, measured at handoff.</p>
 
       <div class="module-frame" style="margin-top: 16px;">
-        <div class="chrome">
-          <span class="dots"><span></span><span></span><span></span></span>
-          <span class="crumb">catalyst&nbsp;os · {{CLIENT_SHORT}} · results</span>
-          <span class="right">M.OUT — DELIVERED</span>
-        </div>
         <div class="data-toolbar">
-          <span class="module-id">M.OUT — OUTCOMES</span>
           <span class="title">Delivered against target</span>
           <span class="meta">measured {{MEASUREMENT_DATE}}</span>
-        </div>
-
-        <div class="sparkbar">
-          <div class="meta"><span class="label">{{PRIMARY_METRIC_LABEL}}</span><span class="delta">+{{ACTUAL_LIFT}}% delivered</span></div>
-          <svg width="220" height="32" viewBox="0 0 220 32" aria-hidden="true">
-            <path d="M0,28 L20,26 L40,26 L60,22 L80,18 L100,15 L120,12 L140,9 L160,7 L180,5 L200,4 L220,3"
-                  fill="none" stroke="#34E2C2" stroke-width="1.5"/>
-            <circle cx="220" cy="3" r="3" fill="#34E2C2"/>
-          </svg>
         </div>
 
         <table class="outcomes">
@@ -189,7 +154,7 @@
           <tbody>
             <tr><td class="outcome">{{OUTCOME_1}}</td><td><span class="dot positive">hit</span></td><td class="metric">{{TARGET_1}}</td><td class="metric">{{DELIVERED_1}}</td></tr>
             <tr><td class="outcome">{{OUTCOME_2}}</td><td><span class="dot positive">hit</span></td><td class="metric">{{TARGET_2}}</td><td class="metric">{{DELIVERED_2}}</td></tr>
-            <tr><td class="outcome">{{OUTCOME_3}}</td><td><span class="dot signal">on track</span></td><td class="metric">{{TARGET_3}}</td><td class="metric">{{DELIVERED_3}}</td></tr>
+            <tr><td class="outcome">{{OUTCOME_3}}</td><td><span class="dot caution">on track</span></td><td class="metric">{{TARGET_3}}</td><td class="metric">{{DELIVERED_3}}</td></tr>
           </tbody>
         </table>
       </div>
@@ -197,7 +162,7 @@
   </div>
 </section>
 
-<!-- § 04 — WHAT CHANGED -->
+<!-- 04 — WHAT CHANGED -->
 <section class="s alt">
   <div class="s-inner s-grid">
     <aside class="s-rail">
@@ -206,7 +171,7 @@
     </aside>
     <div class="s-body">
       <h2 class="s-title">What changed inside the business.</h2>
-      <p>{{2-3_SENTENCES_ON_WHAT_THE_CLIENTS_DAY_LOOKS_LIKE_NOW_THAT_THE_OPERATING_LAYER_IS_INSTALLED}}</p>
+      <p>{{2-3_SENTENCES_ON_WHAT_THE_CLIENTS_DAY_LOOKS_LIKE_NOW_AND_WHETHER_THEIR_PEOPLE_ARE_USING_IT}}</p>
 
       <div class="quote-hero">
         <p>"{{CLIENT_VERBATIM_QUOTE_ABOUT_THE_OUTCOME}}"</p>
@@ -214,14 +179,14 @@
       </div>
 
       <h3 style="margin-top: 36px;">What's next</h3>
-      <p>{{1-2_SENTENCES_ON_THE_CARE_CONTRACT_OR_THE_NEXT_STOP_ON_THE_SPINE}}</p>
+      <p>{{1-2_SENTENCES_ON_WHAT_STAY_KEEPS_WORKING_AND_ANY_NEXT_PIECE_OF_WORK}}</p>
     </div>
   </div>
 </section>
 
 <footer class="colophon">
   <div class="inner">
-    <span>Catalyst Shift · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
+    <span><span class="wordmark">Catalyst <span class="sh">Shift</span></span> · <a href="https://catalystshift.ai">catalystshift.ai</a></span>
     <span>Case study · {{CLIENT_NAME}} · {{ENGAGEMENT_END_DATE}}</span>
   </div>
 </footer>

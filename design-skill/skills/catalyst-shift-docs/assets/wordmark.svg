@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 48" aria-label="Catalyst Shift">
+  <!-- The wordmark on paper: "Catalyst Shift" on one line, Switzer 700, "Shift" in deep teal.
+       On Ink, make the first tspan #F5F2EB and the second #34E2C2. No symbol, no mark. -->
+  <text x="0" y="36" font-family="Switzer, 'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="36" letter-spacing="-1.08"><tspan fill="#15171B">Catalyst </tspan><tspan fill="#0B7C6E">Shift</tspan></text>
+</svg>
