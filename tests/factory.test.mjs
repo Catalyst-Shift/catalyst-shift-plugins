@@ -984,7 +984,8 @@ git checkout -q --detach HEAD~1 && echo main >doc.md && git commit -q -am main &
   let main = sh(`git -C ${repo} rev-parse HEAD`);
   const fake = (c) => c.repeat(40);
   const pr = (number, login, extra = {}) => ({
-    number, headRefOid: fake(String(number % 10)), baseRefOid: main, headRefName: `b/${number}`, baseRefName: "main",
+    // baseRefOid is stale on purpose: GitHub only moves it when the head is pushed.
+    number, headRefOid: fake(String(number % 10)), baseRefOid: fake("b"), headRefName: `b/${number}`, baseRefName: "main",
     mergeable: "CONFLICTING", body: "", author: { login }, isDraft: false, labels: [], isCrossRepository: false, ...extra,
   });
   const fixture = join(t, "prs.json");
@@ -1060,6 +1061,7 @@ esac
     assert.equal(sh(`git -C ${wt} rev-parse --abbrev-ref HEAD`), "HEAD");
     const prompt = read(`${units}.${name}`);
     assert.ok(prompt.includes(`git merge --no-ff -m 'Merge main into b/21' ${main}`), prompt);
+    assert.match(prompt, /If git merges it with no conflicts .* skip step 3/);
     assert.match(prompt, /git push origin 'HEAD:b\/21'/);
     assert.match(prompt, /Never rebase, never force-push/);
     assert.match(prompt, /Never merge the PR, never turn on auto-merge, never edit the PR body/);
@@ -1071,7 +1073,8 @@ esac
     assert.doesNotMatch(prompt, /--auto|--admin/);
     // The push rules are enforced, not only asked for.
     const args = read(`${units}.${name}.args`);
-    for (const d of ["Bash(git push --force*)", "Bash(git push -f*)", "Bash(git rebase*)", "Bash(gh pr merge*)", "Bash(gh api*)"]) {
+    for (const d of ["Bash(git push --force*)", "Bash(git push -f*)", "Bash(git push *--delete*)", "Bash(git push * :*)",
+      "Bash(git push *:main)", "Bash(git -* push*)", "Bash(git pull*)", "Bash(git rebase*)", "Bash(gh pr merge*)", "Bash(gh -* pr merge*)", "Bash(gh api*)"]) {
       assert.ok(args.includes(d), `missing ${d} in --disallowedTools`);
     }
 
@@ -1119,6 +1122,38 @@ esac
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(started(), [name]);
     assert.ok(tried().includes(`21-${head}-${main}`), tried().join(" "));
+
+    // A full cap stops new sessions, not the sweep: #28's label still clears
+    // its try even though #21, earlier in the list, hits the cap.
+    const setLabels = (n, labels) => {
+      const prs = JSON.parse(read(fixture));
+      prs.find((p) => p.number === n).labels = labels;
+      writeFileSync(fixture, JSON.stringify(prs));
+    };
+    rmSync(join(state, "conflicts", "my-repo", `21-${head}-${main}`));
+    assert.ok(tried().some((f) => f.startsWith("28-")), tried().join(" "));
+    setLabels(28, [{ name: "needs-conflict-call" }]);
+    writeFileSync(units, "factory-other.service\n");
+    r = tick(1);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(started(), ["factory-other"]);
+    assert.ok(!tried().some((f) => f.startsWith("28-")), tried().join(" "));
+
+    // A unit that fails to start leaves no marker, so the next tick tries again.
+    setLabels(28, []);
+    setLabels(21, [{ name: "no-factory-review" }]);
+    const goodRun = read(join(bin, "systemd-run"));
+    writeFileSync(join(bin, "systemd-run"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    writeFileSync(units, "");
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /PR #28 .*could not start unit factory-conflict-my-repo-pr-28/);
+    assert.ok(!tried().some((f) => f.startsWith("28-")), tried().join(" "));
+    writeFileSync(join(bin, "systemd-run"), goodRun, { mode: 0o755 });
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(conflictUnits(), ["factory-conflict-my-repo-pr-28"], r.stdout);
+    assert.ok(tried().includes(`28-${head}-${main}`), tried().join(" "));
   } finally {
     rmSync(t, { recursive: true, force: true });
   }

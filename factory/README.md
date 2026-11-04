@@ -118,8 +118,11 @@ versions on the PR, adds the label `needs-conflict-call`, and pushes nothing;
 a person resolves it, or removes the label to let the next tick try again. A
 failed check also pushes nothing, gets one PR comment with the output and the
 same label, so a red check isn't retried on every push to main. It never
-merges the PR, edits its body or touches a card; force-push, rebase,
-`gh pr merge` and `gh api` are denied to it outright (`--disallowedTools`).
+merges the PR, edits its body or touches a card. The usual spellings of a
+force-push, a branch delete, a push to the base, a rebase, `gh pr merge` and
+`gh api` are also denied by pattern (`--disallowedTools`). That list backs up
+the prompt; it is not a sandbox, so a protected default branch is still the
+guard against a push to it.
 Skipped: Dependabot PRs, PRs from forks, PRs labelled `no-factory-review`
 (that opt-out covers conflict sessions too) or `needs-conflict-call`, PRs whose
 head is the default branch or another open PR's base (a push there would land
