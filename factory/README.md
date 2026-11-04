@@ -133,6 +133,10 @@ authors. Conflict sessions share the cap and show in
 session runs. Each PR is tried once per (head sha, base sha), recorded in
 `~/.local/state/claude-factory/conflicts/<repo>/<pr>-<head>-<base>`, and logs
 to `conflict-<repo>-pr-<n>.log`; a new push to either side tries again.
+Each conflicting PR the sweep passes over gets one journal line per tick
+saying why (`PR #<n> in <repo> conflicts; …`, including `waiting for a free
+slot (<running>/<cap>)`), and PRs whose mergeability GitHub still shows as
+`UNKNOWN` are listed per repo and never resolved (CAT-1478).
 
 **Waiting on you to merge (CAT-1336):** when a PR from a branch this machine's
 factory launched is open, stamped at its head (`Reviewed: <head sha>`) and its

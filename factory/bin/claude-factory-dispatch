@@ -270,9 +270,10 @@ resolve() {
   # for; the price is the fetch above on every tick while the cap is full. A
   # full cap stops new sessions, not the sweep: later PRs' labels still clear
   # their tries. `|| true`: a failed systemctl must not end the tick (set -e),
-  # and wc still prints a count, as in the other running() checks.
+  # and wc still prints a count, as in the other running() checks. Asked as
+  # "below the cap?", so a CAP that isn't a number holds sessions back, as there.
   busy=$(running) || true
-  if [ "$busy" -ge "$CAP" ]; then
+  if ! [ "$busy" -lt "$CAP" ] 2>/dev/null; then
     echo "PR #$number in $dir conflicts; waiting for a free slot ($busy/$CAP)"
     return 0
   fi

@@ -1186,6 +1186,16 @@ esac
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.deepEqual(conflictUnits(), ["factory-conflict-my-repo-pr-28"], r.stdout);
     writeFileSync(join(bin, "systemctl"), goodCtl, { mode: 0o755 });
+
+    // A cap that isn't a number holds conflict sessions back, as it holds back
+    // builds and reviews; a failed test must not read as "below the cap".
+    rmSync(join(state, "conflicts", "my-repo", `28-${head}-${main}`));
+    const wt28 = join(repo, ".claude/worktrees", "factory-conflict-my-repo-pr-28");
+    if (existsSync(wt28)) sh(`git -C ${repo} worktree remove --force ${wt28}`);
+    writeFileSync(units, "");
+    r = tick("two");
+    assert.deepEqual(conflictUnits(), [], r.stdout);
+    assert.match(r.stdout, /PR #28 in \S+ conflicts; waiting for a free slot \(0\/two\)/);
   } finally {
     rmSync(t, { recursive: true, force: true });
   }
