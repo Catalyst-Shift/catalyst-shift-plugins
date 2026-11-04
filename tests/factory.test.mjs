@@ -15,7 +15,8 @@ const FACTORY = join(ROOT, "factory");
 const DISPATCH = join(FACTORY, "bin", "claude-factory-dispatch");
 const INSTALL = join(FACTORY, "install.sh");
 const MARK_DONE = join(FACTORY, "bin", "claude-factory-mark-done");
-const SCRIPTS = [DISPATCH, INSTALL, MARK_DONE];
+const BOOTCHECK = join(FACTORY, "bin", "claude-factory-bootcheck");
+const SCRIPTS = [DISPATCH, INSTALL, MARK_DONE, BOOTCHECK];
 const read = (f) => readFileSync(f, "utf8");
 // CAT-1481: a line for systemd-run stubs. It runs the unit's ExecStopPost at
 // once, as systemd would when the session exits ($SESSION_EXIT, default 0), so
@@ -412,10 +413,100 @@ test("every builder and reviewer session passes --model, and Linear calls use th
   assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 3);
 });
 
-test("install.sh skips label, offset, review-authors and model lines like the dispatcher does", () => {
+test("install.sh's boot check skips label, offset, review-authors and model lines like the dispatcher does", () => {
   const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\)'/;
-  assert.match(read(INSTALL), skip);
+  assert.match(read(BOOTCHECK), skip);
   assert.match(read(DISPATCH), skip);
+});
+
+// CAT-1483: the boot check. loginctl and systemctl are stubbed: they log every
+// call, Linger comes from $LINGER, `is-enabled` answers from $ENABLED, and
+// show-environment sets FACTORY_INGEST_TOKEN only when $TOKEN is set.
+const bootFixture = () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-boot-"));
+  const home = join(t, "home"), bin = join(t, "bin"), log = join(t, "calls");
+  for (const d of [bin, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  writeFileSync(log, "");
+  writeFileSync(join(bin, "loginctl"), `#!/bin/sh\necho "loginctl $*" >>"${log}"\n[ "$1" = show-user ] && echo "$LINGER"\nexit 0\n`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), `#!/bin/sh
+echo "systemctl $*" >>"${log}"
+case "$2" in
+  is-enabled) case " $ENABLED " in *" $3 "*) echo enabled;; *) echo disabled; exit 1;; esac;;
+  show-environment) echo HOME=/x; [ -n "$TOKEN" ] && echo FACTORY_INGEST_TOKEN=secret;;
+esac
+exit 0
+`, { mode: 0o755 });
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"),
+    `# ~/Projects/commented proj\nlabel kevin-omarchy\noffset 0\nreview-authors kkreative\nmodel review claude-sonnet-5-5\n\n~/Projects/lumen lumen\n~/Projects/catalyst-shift-plugins catalyst-shift-plugins\n`);
+  const run = (args, env = {}) => spawnSync("bash", [BOOTCHECK, ...args], {
+    encoding: "utf8",
+    env: { HOME: home, USER: "kev", PATH: `${bin}:/usr/bin:/bin`, LINGER: "no", ENABLED: "", TOKEN: "", ...env },
+  });
+  return { t, home, bin, log, run };
+};
+const ALL_UNITS = "claude-factory.timer claude-factory-heartbeat.service claude-rc@lumen.service claude-rc@catalyst-shift-plugins.service";
+
+test("boot check: a MISSING line with its fix for linger, the timer, the heartbeat (token set) and every repo's claude-rc@", () => {
+  const { t, log, run } = bootFixture();
+  const r = run([], { TOKEN: "1" });
+  assert.equal(r.status, 1);
+  const lines = r.stdout.trimEnd().split("\n");
+  assert.equal(lines.length, 5, r.stdout);
+  for (const l of lines) assert.match(l, /^ {2}MISSING: /);
+  assert.match(r.stdout, /MISSING: Linger off.*->  loginctl enable-linger kev$/m);
+  assert.match(r.stdout, /->  systemctl --user enable --now claude-factory\.timer$/m);
+  assert.match(r.stdout, /->  systemctl --user enable --now claude-factory-heartbeat\.service$/m);
+  assert.match(r.stdout, /->  systemctl --user enable --now claude-rc@lumen\.service$/m);
+  assert.match(r.stdout, /->  systemctl --user enable --now claude-rc@catalyst-shift-plugins\.service$/m);
+  assert.doesNotMatch(r.stdout, /secret|commented|kevin-omarchy|claude-rc@(label|offset|model|review-authors)/);
+  // Read-only: only show-user, is-enabled and show-environment were asked.
+  const calls = read(log).trim().split("\n");
+  for (const c of calls) assert.match(c, /^(loginctl show-user kev -p Linger --value|systemctl --user (is-enabled \S+|show-environment))$/, c);
+  rmSync(t, { recursive: true, force: true });
+});
+
+test("boot check: all ok when everything is enabled; no heartbeat line without the token", () => {
+  const { t, run } = bootFixture();
+  let r = run([], { LINGER: "yes", ENABLED: ALL_UNITS });
+  assert.equal(r.status, 0, r.stdout);
+  const lines = r.stdout.trimEnd().split("\n");
+  assert.equal(lines.length, 4, r.stdout);
+  for (const l of lines) assert.match(l, /^ {2}ok: /);
+  assert.doesNotMatch(r.stdout, /heartbeat/);
+  r = run([], { LINGER: "yes", ENABLED: ALL_UNITS, TOKEN: "1" });
+  assert.equal(r.status, 0, r.stdout);
+  assert.match(r.stdout, /ok: claude-factory-heartbeat\.service enabled/);
+  rmSync(t, { recursive: true, force: true });
+});
+
+test("boot check --summary is one line: boot: ok, or boot: <n> missing (run install.sh)", () => {
+  const { t, run } = bootFixture();
+  let r = run(["--summary"], { LINGER: "yes", ENABLED: ALL_UNITS, TOKEN: "1" });
+  assert.equal(r.stdout, "boot: ok\n");
+  r = run(["--summary"], { LINGER: "yes", ENABLED: "claude-factory.timer claude-rc@catalyst-shift-plugins.service", TOKEN: "1" });
+  assert.equal(r.stdout, "boot: 2 missing (run install.sh)\n");
+  assert.equal(r.status, 1);
+  rmSync(t, { recursive: true, force: true });
+});
+
+test("status ends with the boot check's one line and enables nothing", () => {
+  const { t, home, bin, log } = bootFixture();
+  const env = { HOME: home, USER: "kev", PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: "/bin/true", LINGER: "no", ENABLED: "claude-factory.timer", TOKEN: "" };
+  let r = spawnSync("bash", [DISPATCH, "status"], { encoding: "utf8", env });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Paused: no\nboot: 3 missing \(run install\.sh\)\n$/);
+  r = spawnSync("bash", [DISPATCH, "status"], { encoding: "utf8", env: { ...env, LINGER: "yes", ENABLED: ALL_UNITS } });
+  assert.match(r.stdout, /\nboot: ok\n$/);
+  assert.doesNotMatch(read(log), /enable-linger|systemctl --user (enable|start|restart) /);
+  rmSync(t, { recursive: true, force: true });
+});
+
+test("install.sh ends with the boot check and its last word depends on it", () => {
+  const s = read(INSTALL);
+  assert.match(s, /claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do/);
+  const at = s.indexOf('"$SRC/bin/claude-factory-bootcheck" || boot=1');
+  assert.ok(at > s.indexOf("== Prerequisites") && at > s.indexOf("claude-rc-*.service"), "boot check runs after everything else");
+  assert.match(s.slice(at), /^"\$SRC\/bin\/claude-factory-bootcheck" \|\| boot=1\n\nif \[ "\$missing" = 1 \][^\n]*\nelif \[ "\$boot" = 1 \][^\n]*\nelse echo "== Done"; fi\n$/);
 });
 
 // CAT-1320: every open PR in a configured repo gets a reviewer, not only the
@@ -2137,7 +2228,7 @@ test("mark-done: done on exit 0, stopped on SIGTERM, untouched otherwise, only s
     assert.ok(!existsSync(join(state, "ci/r/missing")));
     // It never calls the dispatcher.
     assert.doesNotMatch(read(MARK_DONE), /claude-factory-dispatch|\$CLAUDE/);
-    assert.match(read(INSTALL), /for f in claude-factory-dispatch claude-factory-stream claude-factory-mark-done; do/);
+    assert.match(read(INSTALL), /for f in claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do/);
   } finally {
     rmSync(t, { recursive: true, force: true });
   }
