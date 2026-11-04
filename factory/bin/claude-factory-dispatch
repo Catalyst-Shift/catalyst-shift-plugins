@@ -32,7 +32,7 @@
 # state/pass.json for the heartbeat (claude-factory-heartbeat.service).
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
-#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...")
+#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...", "model <job> <model>")
 #   pause:  touch ~/.local/state/claude-factory/paused
 #   status: claude-factory-dispatch status   (--json: running cards, last seq sent, spool length)
 #   watch:  systemctl --user list-units 'factory-*'; logs in ~/.local/state/claude-factory/
@@ -80,6 +80,39 @@ if [ "$OFFSET" -ge 300 ]; then echo "ignoring 'offset $OFFSET' in $CONF: it must
 # gh runs as here. "review-authors <login>..." replaces that list. Listing
 # dependabot (or dependabot[bot]) there adds Dependabot's PRs (CAT-1327).
 REVIEW_AUTHORS=$(awk '$1 == "review-authors" { for (i = 2; i <= NF; i++) print $i }' "$CONF")
+# The model each job runs on (CAT-1476): "model <job> <model>" in repos.conf,
+# else the default. Builders follow the card's Risk (build-low for Low,
+# build-medium for Medium, build-high for High or anything unclear). review is
+# every reviewer except Dependabot's (dep-review); housekeeping is the Linear
+# pick, settle and needs-merge calls.
+JOBS="build-high build-medium build-low review dep-review housekeeping"
+while read -r _ job _; do
+  [[ " $JOBS " == *" $job "* ]] || echo "ignoring 'model $job' in $CONF: the jobs are $JOBS" >&2
+done < <(awk '$1 == "model"' "$CONF")
+conf_model() {
+  local m
+  m=$(awk -v j="$1" '$1 == "model" && $2 == j { print $3; exit }' "$CONF")
+  if [[ -n $m && ! $m =~ ^[A-Za-z0-9.-]+$ ]]; then
+    echo "ignoring 'model $1 $m' in $CONF: a model is letters, digits, dots and dashes; using $2" >&2
+    m=
+  fi
+  printf '%s' "${m:-$2}"
+}
+MODEL_BUILD_HIGH=$(conf_model build-high claude-opus-5-5)
+MODEL_BUILD_MEDIUM=$(conf_model build-medium claude-opus-5-5)
+MODEL_BUILD_LOW=$(conf_model build-low claude-sonnet-5-5)
+MODEL_REVIEW=$(conf_model review claude-sonnet-5-5)
+MODEL_DEP_REVIEW=$(conf_model dep-review claude-haiku-5-5)
+MODEL_HOUSEKEEPING=$(conf_model housekeeping haiku)
+# A builder's model from its card's Risk, as the pick read it (no Risk, or
+# anything but Low or Medium, is build-high).
+builder_model() {
+  case ${1,,} in
+    low) echo "$MODEL_BUILD_LOW" ;;
+    medium) echo "$MODEL_BUILD_MEDIUM" ;;
+    *) echo "$MODEL_BUILD_HIGH" ;;
+  esac
+}
 
 running() { systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' | wc -l; }
 active() { systemctl --user is-active --quiet "$1.service"; }
@@ -107,7 +140,7 @@ waiting() {
   echo "$n"
 }
 
-repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
+repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
 
 # A finished session's worktree goes once nothing in it would be lost. Each
 # worktree has the name of the unit that uses it: factory-<card key> (builder),
@@ -146,12 +179,12 @@ reposlug() { basename "$1" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9\n' '-'; 
 
 pick() {
   local project=$1
-  (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
+  (cd "$STATE" && timeout 300 "$CLAUDE" -p --model "$MODEL_HOUSEKEEPING" --output-format text \
     --allowedTools="${LINEAR}__list_issues,${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment" \
     "In Linear, list issues in project '$project' whose status is 'Ready For Factory' and that are either assigned to me or unassigned. Ignore issues assigned to anyone else. If there are none, print exactly NONE and stop.
 Skip any issue that is blocked: get it with includeRelations true, then get each issue listed under blockedBy to read its status (the relations list does not show status). If any of them is not Done, Canceled or Duplicate, skip the issue, whoever is working on the blocker. Also skip any parent issue: list issues with parentId set to its identifier (limit 1); if that returns any issue, it has sub-issues and only tracks other cards, so it is never built itself. Take one of the remaining issues: highest priority first (Urgent, High, Medium, Low, then no priority), oldest first within a priority. If none remain, print exactly NONE and stop. Right before claiming it, get that issue again: if its status is no longer 'Ready For Factory' or it is now assigned to someone other than me, print exactly NONE and stop. Otherwise update that issue: status 'In Progress', assignee 'me', and add the labels 'factory'${MACHINE_LABEL:+ and '$MACHINE_LABEL'} (keep its existing labels). Add a comment on it: 'Picked up by the factory dispatcher on $HOST at $(date -Is). An unattended Claude session is working on it.'
-Then get the issue once more. If its assignee is not me (another machine claimed it at the same moment), add no further changes and print exactly NONE. Otherwise print exactly one final line: PICK <identifier> <gitBranchName>" </dev/null 2>&1) | tee "$STATE/pick-$project.log" |
-    grep -oE '^PICK [A-Z]+-[0-9]+ [A-Za-z0-9._/-]+$' | tail -1 || true
+Then get the issue once more. If its assignee is not me (another machine claimed it at the same moment), add no further changes and print exactly NONE. Otherwise print exactly one final line: PICK <identifier> <gitBranchName> <risk>, where <risk> is Low, Medium or High as the issue's Risk section (a 'Risk' heading in its description) says, or Unknown if it has none, names more than one level or is unclear." </dev/null 2>&1) | tee "$STATE/pick-$project.log" |
+    grep -oE '^PICK [A-Z]+-[0-9]+ [A-Za-z0-9._/-]+( [A-Za-z]+)?$' | tail -1 || true
 }
 
 # Starts a transient user unit running one unattended Claude session. With
@@ -159,15 +192,17 @@ Then get the issue once more. If its assignee is not me (another machine claimed
 # board) and is the only process that gets the token; it removes the token
 # from the session's environment. Without, the unit drops the token itself.
 run_unit() {
-  local unit=$1 dir=$2 log=$3 card=$4 repo=$5 unset_env="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN"
+  local unit=$1 dir=$2 log=$3 card=$4 repo=$5 unset_env="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN" a prev= model=default
   shift 5
   local -a cmd=("$CLAUDE" "$@")
+  # The session's --model goes in the unit's description, for status.
+  for a in "$@"; do [ "$prev" = --model ] && model=$a; prev=$a; done
   if streaming; then
     cmd=("$NODE" "$STREAM" run --unit "$unit" --card "$card" --repo "$repo" -- "$CLAUDE" "$@")
   else
     unset_env+=" FACTORY_INGEST_TOKEN"
   fi
-  systemd-run --user --quiet --unit="$unit" --collect \
+  systemd-run --user --quiet --unit="$unit" --collect --description="Claude factory session $unit (model $model)" \
     --working-directory="$dir" \
     --setenv=PATH="$PATH" \
     --property=UnsetEnvironment="$unset_env" \
@@ -176,10 +211,11 @@ run_unit() {
 }
 
 launch() {
-  local dir=$1 id=$2 branch=$3 key
+  local dir=$1 id=$2 branch=$3 risk=${4:-Unknown} key model
   key=$(cardkey "$id")
+  model=$(builder_model "$risk")
   run_unit "factory-$key" "$dir" "$STATE/$key.log" "$id" "$(basename "$dir")" \
-    -p --permission-mode auto -w "factory-$key" --output-format text \
+    -p --model "$model" --permission-mode auto -w "factory-$key" --output-format text \
     "You are an unattended factory session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
 Card: $id in Linear. It is already In Progress and assigned to the person who runs this machine. Branch: $branch
@@ -199,7 +235,7 @@ Card: $id in Linear. It is already In Progress and assigned to the person who ru
   echo "$dir $branch $key" >>"$LAUNCHED"
   # A card can come back (Blocked, then Ready For Factory again): settle it again.
   rm -f "$STATE/settled/$key"
-  echo "started $id in $dir (unit factory-$key, log $STATE/$key.log)"
+  echo "started $id in $dir (unit factory-$key, model $model for risk $risk, log $STATE/$key.log)"
 }
 
 # Reviewer for one PR: a fresh session in a fresh worktree, detached at the PR head.
@@ -214,7 +250,7 @@ review() {
   git -C "$dir" fetch --quiet origin "$branch" </dev/null
   git -C "$dir" worktree add --quiet --detach "$wt" "$sha" </dev/null
   run_unit "factory-review-$key" "$wt" "$STATE/review-$key.log" "$id" "$(basename "$dir")" \
-    -p --permission-mode auto --output-format text \
+    -p --model "$MODEL_REVIEW" --permission-mode auto --output-format text \
     "You are an unattended factory reviewer on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
 You did not write this code. Another session built card $id and opened PR #$number on branch $branch. Your job is to review it as a fresh pair of eyes and stamp it.
@@ -229,7 +265,7 @@ You did not write this code. Another session built card $id and opened PR #$numb
 6. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). If a finding can only be fixed by one of these, do not do it: comment on the card and the PR saying exactly what is needed, move the card to Blocked in Linear, do not stamp the PR, and end.
 7. Finish with a comment on the card: what you ran, what you fixed, what you answered, and the stamp."
   date -Is >"$STATE/reviewed/$key-$sha"
-  echo "started review of $id PR #$number at $sha in $dir (unit factory-review-$key, log $STATE/review-$key.log)"
+  echo "started review of $id PR #$number at $sha in $dir (unit factory-review-$key, model $MODEL_REVIEW, log $STATE/review-$key.log)"
 }
 
 # This machine's review authors: the review-authors line, else the login gh runs as.
@@ -378,7 +414,7 @@ reviews() {
 # lockfile for supply-chain signals and the PR's CI (red CI means "needs a
 # look", CAT-1337), comments, and never pushes or merges.
 review_pr() {
-  local dir=$1 number=$2 sha=$3 author=$4 branch=$5 fork=$6 dep=${7:-false} name wt push prompt
+  local dir=$1 number=$2 sha=$3 author=$4 branch=$5 fork=$6 dep=${7:-false} name wt push prompt model=$MODEL_REVIEW
   local -a perms=(--permission-mode auto)
   name=factory-review-$(reposlug "$dir")-pr-$number
   wt=$dir/.claude/worktrees/$name
@@ -401,6 +437,7 @@ review_pr() {
     # package authors, so assume the prompt can be talked round. dontAsk refuses
     # every command not listed here; the repo's own .claude settings (which may
     # allow npm install or git push, or add hooks) and MCP servers are not loaded.
+    model=$MODEL_DEP_REVIEW
     perms=(--permission-mode dontAsk --setting-sources user --strict-mcp-config
       --allowedTools="Read,Grep,Glob,Write,Bash(gh pr view *),Bash(gh pr diff *),Bash(gh pr checks *),Bash(gh pr comment *),Bash(gh pr edit *),Bash(git fetch *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(npm view *),Bash(npm audit --package-lock-only*),Bash(pnpm audit*),Bash(yarn npm audit*),Bash(osv-scanner *),Bash(command -v *),Bash(date *)"
       --disallowedTools="Bash(git push*),Bash(gh pr merge*),Bash(gh api*)")
@@ -443,12 +480,12 @@ You did not write this code. PR #$number on branch $branch was opened by $author
   fi
   # A unit that fails to start leaves the worktree for cleanup and no marker, so it is retried.
   run_unit "$name" "$wt" "$STATE/review-$(reposlug "$dir")-pr-$number.log" "" "$(basename "$dir")" \
-    -p "${perms[@]}" --output-format text "$prompt" || {
+    -p --model "$model" "${perms[@]}" --output-format text "$prompt" || {
     echo "PR #$number in $dir: could not start unit $name; trying again next tick"
     return 0
   }
   date -Is >"$STATE/reviewed/$(reposlug "$dir")/$number-$sha"
-  echo "started $([ "$dep" = true ] && echo "dependency ")review of PR #$number by $author at $sha in $dir (unit $name)"
+  echo "started $([ "$dep" = true ] && echo "dependency ")review of PR #$number by $author at $sha in $dir (unit $name, model $model)"
 }
 
 # Start a reviewer for each open, non-draft PR in the configured repos that a
@@ -525,7 +562,7 @@ settle() {
     if [ "$pr" = "0" ]; then
       # Recorded only when haiku confirms the status it read or set: a Linear
       # outage or a missing connector is retried next tick, not recorded.
-      out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
+      out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model "$MODEL_HOUSEKEEPING" --output-format text \
         --allowedTools="${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment" \
         "Get Linear issue $id. If its status is 'In Progress' and it is assigned to me, move it to 'Blocked' and add this comment: 'The factory session on $HOST ended without a PR and without moving this card. Its log is $STATE/$key.log on that machine. A person should check it.' Otherwise change nothing.
 Then print exactly one final line: SETTLED <the status it ends in>" </dev/null 2>&1) || true)
@@ -557,7 +594,7 @@ green() {
 # succeeds only when the output has the exact confirmation line asked for.
 linear_issue() {
   local id=$1 confirm=$2 prompt=$3 out
-  out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model haiku --output-format text \
+  out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model "$MODEL_HOUSEKEEPING" --output-format text \
     --allowedTools="${LINEAR}__get_issue,${LINEAR}__save_issue" \
     "$prompt" </dev/null 2>&1) || true)
   printf '%s %s\n%s\n' "$(date -Is)" "$id" "$out" >>"$STATE/merge.log"
@@ -610,12 +647,13 @@ merges() {
 # One screen: what's running, what's waiting on a person to merge, what's
 # waiting on review, and whether it's paused.
 status() {
-  local unit since dir branch key pr number state stamped url merge='' open=''
+  local unit since model dir branch key pr number state stamped url merge='' open=''
   echo "Running (cap $CAP):"
   systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' |
     while read -r unit _; do
       since=$(systemctl --user show "$unit" -p ActiveEnterTimestamp --value)
-      echo "  ${unit%.service}  since $since"
+      model=$(systemctl --user show "$unit" -p Description --value | sed -n 's/.*(model \([A-Za-z0-9.-]*\))$/\1/p')
+      echo "  ${unit%.service}  ${model:+model $model  }since $since"
     done
   while read -r dir branch key; do
     pr=$(factory_pr "$dir" "$branch") || continue
@@ -724,7 +762,7 @@ while read -r dir project; do
   [ "$(running)" -lt "$CAP" ] || break
   line=$(pick "$project")
   [ -n "$line" ] || continue
-  read -r _ id branch <<<"$line"
-  launch "$dir" "$id" "$branch"
+  read -r _ id branch risk <<<"$line"
+  launch "$dir" "$id" "$branch" "${risk:-Unknown}"
   PASS_RESULT="ok: started $id"
 done < <(repos)

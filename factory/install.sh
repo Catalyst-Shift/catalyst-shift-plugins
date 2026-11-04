@@ -123,7 +123,7 @@ echo "  loginctl enable-linger $USER     # keep it running while you are logged 
 echo "  systemctl --user enable --now claude-factory.timer"
 echo "  systemctl --user enable --now claude-factory-heartbeat.service   # heartbeat to the board; starts and stops with the timer"
 if [ -f "$CONF" ]; then
-  { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]])' "$CONF" || true; } | while read -r dir _; do
+  { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]])' "$CONF" || true; } | while read -r dir _; do
     echo "  systemctl --user enable --now claude-rc@$(basename "$dir").service"
   done
 fi
