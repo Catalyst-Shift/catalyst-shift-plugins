@@ -2,10 +2,11 @@
 // Red-path checker for catalyst-shift-plugins — CI twin of the platform's
 // .claude/hooks/protected-paths.mjs --check (HOW_WE_BUILD.md §4/§6, CAT-537).
 //
-// This repo ships the rails other repos run on: the /next skill, the
+// This repo ships the rails other repos run on: the factory dispatcher, the
 // Ways of Working canon block, plugin manifests, and its own CI. This script
-// is the deep-path list: /next feeds it the changed file names to decide when
-// /cso runs. The red-approved workflow that also used it was retired under
+// is the deep-path list: give it the changed file names to decide when /cso
+// runs. (/next, which used it that way, was removed in catalyst-ops 0.8.0.)
+// The red-approved workflow that also used it was retired under
 // CAT-1297; the merge gate is now a code-owner approval (.github/CODEOWNERS).
 //
 // Check-only — there is no PreToolUse mode here (nobody edits this repo from a
@@ -23,7 +24,6 @@ export const PROTECTED = [
   { kind: "segment", path: ".claude-plugin", why: "plugin / marketplace manifest — what every install picks up; governance PR only" },
   { kind: "segment", path: "hooks", why: "a plugin hook runs inside every Claude session that installs it (verify-gate) — governance PR only" },
   { kind: "prefix", path: "catalyst-ops/skills/ways-of-working/", why: "the canon block's generator source — a four-surface change, governance PR only" },
-  { kind: "prefix", path: "catalyst-ops/skills/next/", why: "the by-hand build skill that opens PRs — deep review" },
   { kind: "prefix", path: "scripts/protected-paths", why: "this checker — governance PR only" },
   { kind: "prefix", path: "tests/protected-paths", why: "this checker's tests — governance PR only" },
 ];
