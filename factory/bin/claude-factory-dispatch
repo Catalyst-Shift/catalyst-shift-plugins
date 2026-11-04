@@ -60,9 +60,15 @@
 # has its session stopped and its card moved to Blocked, and the machine tells
 # the board with POST .../control/ack. When the board can't be reached the last
 # settings stay in force and the heartbeat says control is stale.
+# With the token set, each tick also reads every repo's factory stage from the
+# board (CAT-1486; GET /api/factory/stages, cached in state/stages.json), and a
+# card reviewer turns on auto-merge by that stage: 2 = Low, 3 = Low and Medium,
+# 4 = any risk. Without the board it falls back to the cache, then to the old
+# CLAUDE.md line `Factory stage: 2`; "stages claude-md" in repos.conf skips the board.
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
-#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...", "model <job> <model>")
+#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...", "model <job> <model>", "stages board|claude-md")
+#   stages: claude-factory-dispatch merge-rule <repo> <risk> --dry-run   (whether a reviewer may self-merge that risk now; changes nothing)
 #   pause:  touch ~/.local/state/claude-factory/paused
 #   retros: claude-factory-dispatch retro --since 7d   (clean, accepted, rejected and structural retros, and touches, per repo)
 #   status: claude-factory-dispatch status   (ends with the boot check in one line; --json: running cards, last seq sent, spool length)
@@ -85,6 +91,8 @@ HOST=${HOSTNAME:-$(uname -n)}
 # can tell a reboot from a crash.
 MARK_DONE=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/claude-factory-mark-done
 BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)
+# This script by its real path: a reviewer runs its merge-rule before turning on auto-merge (CAT-1486).
+DISPATCH_SELF=$(readlink -f "${BASH_SOURCE[0]}")
 
 # Subscription only: never let an API key in the environment turn this into paid usage.
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
@@ -185,7 +193,7 @@ waiting() {
   echo "$n"
 }
 
-repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
+repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
 
 # A finished session's worktree goes once nothing in it would be lost. Each
 # worktree has the name of the unit that uses it: factory-<card key> (builder),
@@ -550,7 +558,7 @@ Card: $id in Linear. It is already In Progress and assigned to the person who ru
 1. You start in a fresh git worktree. Put it on the card's branch first: if scripts/session.sh supports --here, run: scripts/session.sh --here $branch
    Otherwise: git fetch origin, then git switch --no-track -c $branch origin/main (or git switch --track -c $branch origin/$branch if that branch is already pushed), and set up .env.local and dependencies the way this repo's CLAUDE.md describes.
 2. Read the card and its comments, then follow this repo's CLAUDE.md for how to build, test, review and open the PR. If the card has a '## Design' section, read it and the design source it names before the first UI edit, build the regions in that order with that copy (values marked '<live: ...>' come from data, not the frame), and record anything you change from the frame under Decisions made. Then take a screenshot of each changed page (the verify-board screenshot where the repo has one, otherwise one from /qa on the preview), post them as one comment on the card rather than in the PR, and in the PR body name each file next to the checklist line it proves with a link to that comment; if the upload fails, list the file names in the PR body and say so. Before the first edit, look at this project's other In Progress cards. If one of them would change the same code in the same files (the same functions, components or logic) or migrate the same tables, the card that went In Progress later waits. A shared list that both cards only add to, such as a nav link, a feature-map row or an index entry, is not overlap: add your line and keep going, and fix any merge conflict in it when you rebase before the PR. When it does wait: if yours went In Progress after it, and it is not already blocked by your card, comment on your card that it waits on that card, add it as 'blocked by' on your card, move your card back to Ready For Factory, and end. Otherwise keep going: never add a relation that would make two cards block each other.
-3. Open the PR, but do not turn on auto-merge and do not merge, whatever CLAUDE.md says about auto-merge or its factory stage. Only the reviewer session may turn on auto-merge, and only under its stage 2 rule. Never change the card's Risk section.
+3. Open the PR, but do not turn on auto-merge and do not merge, whatever CLAUDE.md says about auto-merge or its factory stage. Only the reviewer session may turn on auto-merge, and only under its stage rule. Never change the card's Risk section.
 4. A separate reviewer session, started by the dispatcher after you finish, reviews the PR and stamps it. Do not write a 'Reviewed:' line in the PR body yourself.
 5. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). Do none of these. Also stop if the card is too unclear to build without guessing at a product decision. In either case comment on the card saying exactly what you need, move it to Blocked, and end. Smaller forks: pick a recommendation and record it under Decisions made in the PR body.
 6. Leave the card in a clear end state before you stop, and say which in a final comment on the card:
@@ -566,9 +574,11 @@ Card: $id in Linear. It is already In Progress and assigned to the person who ru
 
 # Reviewer for one PR: a fresh session in a fresh worktree, detached at the PR head.
 review() {
-  local dir=$1 branch=$2 key=$3 number=$4 sha=$5 retry=${6:-} id wt rec prev=
+  local dir=$1 branch=$2 key=$3 number=$4 sha=$5 retry=${6:-} id wt rec prev= stage stage_src
   id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
   wt=$dir/.claude/worktrees/factory-review-$key
+  # CAT-1486: the stage this tick settled on (board, cache or the CLAUDE.md line).
+  read -r stage stage_src < <(stage_of "$dir")
   rec=$STATE/reviewed/$key-$sha
   if [ -e "$wt" ]; then
     echo "$id: PR #$number needs a review, but $wt is left over with unpushed work; not starting one"
@@ -590,7 +600,7 @@ You did not write this code. Another session built card $id and opened PR #$numb
 4. When done, put exactly one stamp line in the PR body. Read the body with gh pr view $number --json body --jq .body, remove any existing line starting with 'Reviewed:', add this line, and write it back with gh pr edit $number --body-file <file>:
    Reviewed: <full 40-character head sha after your own pushes, from git rev-parse HEAD once pushed> — /review
    (write '— /review, /cso' if you ran /cso). Check that the sha equals gh pr view $number --json headRefOid --jq .headRefOid.
-5. Never merge the PR yourself, and never use --admin. Stage 2 rule: after you have stamped it, run gh pr merge $number --auto --squash --match-head-commit <the stamped sha> only if all of these hold: (a) the PR's base is the repo's default branch and that branch's CLAUDE.md (git show origin/<base branch>:CLAUDE.md, never the PR head's) has a line that is exactly 'Factory stage: 2'; (b) the card's Risk section says Low and nothing else (missing, mixed or unclear fails); (c) no file in gh pr diff $number --name-only matches a path in the base branch's .github/CODEOWNERS (read as in step 2; if you can't read it, this fails); (d) the stamp's sha still equals the PR head (--match-head-commit makes GitHub refuse if it moved). GitHub then merges it once CI is green. If any of these fails, or you did not stamp, never turn on auto-merge. Say in your card comment whether you turned it on and why.
+5. Never merge the PR yourself, and never use --admin. Stage rule: this repo is at factory stage $stage (from $stage_src; the dispatcher gives the stage, so ignore any 'Factory stage:' line in CLAUDE.md). Stage $stage lets you self-merge risk: $(stage_risks "$stage"). After you have stamped it, run gh pr merge $number --auto --squash --match-head-commit <the stamped sha> only if all of these hold: (a) the PR's base is the repo's default branch; (b) the card's Risk section names exactly one risk (Low, Medium or High) and it is one stage $stage allows (missing, mixed or unclear fails); (c) $([ "$stage" = 4 ] && echo "stage 4 allows code-owner paths, so this one holds" || echo "no file in gh pr diff $number --name-only matches a path in the base branch's .github/CODEOWNERS (read as in step 2; if you can't read it, this fails)"); (d) you stamped it and the stamp's sha still equals the PR head (--match-head-commit makes GitHub refuse if it moved); (e) right before the gh pr merge, $DISPATCH_SELF merge-rule $(repo_name "$dir") <that risk> --dry-run prints 'self-merge allowed' (a founder's veto on the board shows there from the next tick; 'no self-merge' or an error fails). GitHub then merges it once CI is green. If any of these fails, or you did not stamp, never turn on auto-merge. $([ "$stage" = 4 ] && echo "(f) Stage 4 with Risk High: once (a) to (e) hold and before the gh pr merge, add the existing label 'post-merge-review' to the card (keep all its other labels) and comment on the card exactly 'post-merge review due $(next_working_day)'; if either fails, never turn on auto-merge, and if the gh pr merge then fails, take the label off again. The card then stays In Review until a founder clears that label. ")Say in your card comment whether you turned it on and why.
 6. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). If a finding can only be fixed by one of these, do not do it: comment on the card and the PR saying exactly what is needed, move the card to Blocked in Linear, do not stamp the PR, and end.
 7. Finish with a comment on the card: what you ran, what you fixed, what you answered, and the stamp." || {
     unmark "$rec" "$prev"
@@ -1168,14 +1178,16 @@ green() {
 }
 
 # One cheap haiku call allowed only to read and update a Linear issue. It
-# succeeds only when the output has the exact confirmation line asked for.
+# succeeds only when a whole output line matches the confirmation asked for
+# (an extended regex; plain words match themselves). LINEAR_OUT keeps the output.
 linear_issue() {
   local id=$1 confirm=$2 prompt=$3 out tools=${4:-${LINEAR}__get_issue,${LINEAR}__save_issue}
   out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model "$MODEL_HOUSEKEEPING" --output-format text \
     --allowedTools="$tools" \
     "$prompt" </dev/null 2>&1) || true)
   printf '%s %s\n%s\n' "$(date -Is)" "$id" "$out" >>"$STATE/merge.log"
-  grep -qxF "$confirm" <<<"$out"
+  LINEAR_OUT=$out
+  grep -qxE "$confirm" <<<"$out"
 }
 
 # CAT-1336: keep each launched card's `needs-merge` label in step with its PR,
@@ -1208,9 +1220,15 @@ merges() {
         echo "$id: PR #$number is stamped and green; labelled needs-merge ($url)" ;;
       MERGED)
         [ "$last" != "done $number" ] || continue
-        linear_issue "$id" "STATUS Done NEEDS-MERGE off" "Get Linear issue $id. Its PR $url has merged. If its status is not 'Done', move it to 'Done'. If it has the label 'needs-merge', remove that label and keep all its other labels. Change nothing else. Then print exactly one final line: STATUS <the status it ends in> NEEDS-MERGE <on or off: whether the issue still has the label needs-merge>" || continue
+        # CAT-1486: a stage-4 High merge carries post-merge-review; its card
+        # stays where it is until a founder clears the label after reviewing.
+        linear_issue "$id" "STATUS (Done POST-MERGE off|In Review POST-MERGE on) NEEDS-MERGE off" "Get Linear issue $id. Its PR $url has merged. If it has the label 'post-merge-review', leave its status at 'In Review' (move it there if it is anywhere else; a founder reviews the merge and clears that label). Otherwise, if its status is not 'Done', move it to 'Done'. If it has the label 'needs-merge', remove that label and keep all its other labels. Change nothing else. Then print exactly one final line: STATUS <the status it ends in> POST-MERGE <on or off: whether the issue has the label post-merge-review> NEEDS-MERGE <on or off: whether the issue still has the label needs-merge>" || continue
         echo "done $number" >"$rec"
-        echo "$id: PR #$number merged; card Done, needs-merge removed" ;;
+        if grep -qxF 'STATUS In Review POST-MERGE on NEEDS-MERGE off' <<<"$LINEAR_OUT"; then
+          echo "$id: PR #$number merged; needs-merge removed, card left for its post-merge review"
+        else
+          echo "$id: PR #$number merged; card Done, needs-merge removed"
+        fi ;;
       CLOSED)
         # Only a label this dispatcher added is taken off; the status stays.
         [ "$last" = "labelled $number" ] || continue
@@ -1275,6 +1293,144 @@ control_fetch() {
     echo "the board's control endpoint did not answer (${code:-no response}); keeping the last settings"
   fi
   control_load loud
+}
+
+# CAT-1486: each repo's factory stage, as the board computes it (CAT-1471:
+# stages move on evidence, with a founder veto), so the reviewer's self-merge
+# rule follows the board and not a CLAUDE.md line. Each tick asks
+# GET /api/factory/stages with the machine token. A good answer is kept in
+# state/stages.json; state/stages-source says what this tick settled on:
+#   board      this tick's answer;
+#   cache      the board could not be read (503 read_failed, a network error or
+#              any other failure): the last good answer stays, for 24 hours;
+#   claude-md  no token, "stages claude-md" in repos.conf, a 401 or 403, a 503
+#              not_configured, or a failure with no cache (or one over 24 hours old): the old rule, the
+#              default branch's CLAUDE.md line 'Factory stage: 2' (else stage 1).
+# A repo the board's answer leaves out is stage 1 (never its CLAUDE.md line: the
+# board answered, and a line must not raise what the board did not grant).
+# Nothing after the tick calls the board: status, the reviewer prompt and
+# merge-rule read these two files, so a veto is honoured from the next tick.
+STAGES_URL=${CLAUDE_FACTORY_STAGES_URL:-https://os.catalystshift.ai/api/factory/stages}
+STAGES_MODE=$(awk '$1 == "stages" { print $2; exit }' "$CONF")
+case "$STAGES_MODE" in
+  ''|board) STAGES_MODE=board ;;
+  claude-md) ;;
+  *) echo "ignoring 'stages $STAGES_MODE' in $CONF: it is board or claude-md" >&2; STAGES_MODE=board ;;
+esac
+
+# The cache counts for STAGES_MAX_AGE seconds after the board last answered
+# (24 hours, the board's veto window): past that the board has been unreadable
+# too long to trust a stage a founder may have vetoed, so the CLAUDE.md line rules.
+STAGES_MAX_AGE=${CLAUDE_FACTORY_STAGES_MAX_AGE:-86400}
+stages_cache_fresh() {
+  local at ts
+  [ -s "$STATE/stages.json" ] || return 1
+  at=$(jq -r '.fetchedAt // empty' "$STATE/stages.json" 2>/dev/null || true)
+  ts=$(date -d "$at" +%s 2>/dev/null) || return 1
+  [ -n "$at" ] && [ $(($(date +%s) - ts)) -le "$STAGES_MAX_AGE" ]
+}
+
+stages_fetch() {
+  local code err src
+  if [ "$STAGES_MODE" = claude-md ] || [ -z "$INGEST_TOKEN" ]; then
+    src=claude-md
+  else
+    code=$(control_call "$STATE/stages.new" "$STAGES_URL")
+    if [ "$code" = 200 ] && jq -e 'type == "object" and (.repos | type) == "array"' "$STATE/stages.new" >/dev/null 2>&1 &&
+      jq -c --arg at "$(date -Is)" '{fetchedAt: $at, repos: [.repos[] | select(type == "object" and (.repo | type) == "string"
+        and (.stage | type) == "number" and (.stage == 1 or .stage == 2 or .stage == 3 or .stage == 4)) | {repo, stage: (.stage | floor)}]}' \
+        "$STATE/stages.new" >"$STATE/stages.json.tmp" 2>/dev/null; then
+      mv "$STATE/stages.json.tmp" "$STATE/stages.json"
+      src=board
+    else
+      rm -f "$STATE/stages.json.tmp"
+      err=$(jq -r 'if type == "object" and (.code | type) == "string" then .code else empty end' "$STATE/stages.new" 2>/dev/null || true)
+      if [ "$code" = 401 ] || [ "$code" = 403 ] || { [ "$code" = 503 ] && [ "$err" = not_configured ]; }; then src=claude-md
+      elif stages_cache_fresh; then src=cache
+      else src=claude-md; fi
+      echo "the board's stages endpoint answered ${code:-nothing}${err:+ $err}; using $([ "$src" = cache ] && echo 'the last answer' || echo "each repo's CLAUDE.md line")"
+    fi
+    rm -f "$STATE/stages.new"
+  fi
+  printf '%s\n' "$src" >"$STATE/stages-source.tmp" && mv "$STATE/stages-source.tmp" "$STATE/stages-source"
+}
+
+# A repo's name on the board: its GitHub repo name, else its folder name.
+repo_name() {
+  local u
+  u=$(git -C "$1" remote get-url origin 2>/dev/null </dev/null || true)
+  u=${u%/}; u=${u%.git}; u=${u##*[/:]}
+  printf '%s' "${u:-$(basename "$1")}"
+}
+
+# The old rule: stage 2 only when the default branch's CLAUDE.md has the exact line.
+claude_md_stage() {
+  local md
+  md=$(git -C "$1" show origin/HEAD:CLAUDE.md 2>/dev/null </dev/null || git -C "$1" show origin/main:CLAUDE.md 2>/dev/null </dev/null || true)
+  if grep -qx 'Factory stage: 2' <<<"$md"; then echo 2; else echo 1; fi
+}
+
+# "<stage> <source>" for a repo folder, as the last tick left it (no network).
+stage_of() {
+  local src s=
+  src=$(cat "$STATE/stages-source" 2>/dev/null || true)
+  if [ "$STAGES_MODE" = board ] && { [ "$src" = board ] || [ "$src" = cache ]; }; then
+    # The lowest stage when a name appears twice; stage 1 when the board's answer leaves the repo out.
+    s=$(jq -r --arg r "$(repo_name "$1")" '[.repos[]? | select((.repo | ascii_downcase) == ($r | ascii_downcase)) | .stage] | min // 1' \
+      "$STATE/stages.json" 2>/dev/null || true)
+    if [[ $s =~ ^[1-4]$ ]]; then echo "$s $src"; return 0; fi
+    echo "1 $src"
+    return 0
+  fi
+  echo "$(claude_md_stage "$1") claude-md"
+}
+
+# The risks a stage lets the reviewer self-merge.
+stage_risks() {
+  case $1 in
+    2) echo "Low" ;;
+    3) echo "Low or Medium" ;;
+    4) echo "Low, Medium or High" ;;
+    *) echo "none" ;;
+  esac
+}
+stage_allows() {
+  case $1:$2 in 2:Low | 3:Low | 3:Medium | 4:Low | 4:Medium | 4:High) return 0 ;; esac
+  return 1
+}
+
+# The next working day (Monday to Friday) after today: when a stage-4 High merge's post-merge review is due.
+next_working_day() {
+  local base=${CLAUDE_FACTORY_TODAY:-today} d=1
+  while [ "$(date -d "$base +$d day" +%u)" -gt 5 ]; do d=$((d + 1)); done
+  date -d "$base +$d day" +%F
+}
+
+# claude-factory-dispatch merge-rule <repo> <risk> [--dry-run]: whether the
+# reviewer may turn on auto-merge for a PR of that risk in that repo, from the
+# stage the last tick settled on. It never merges or changes anything (so
+# --dry-run changes nothing either); it exits 0 when self-merge is allowed.
+merge_rule() {
+  local want=$1 risk=${2:-} dir= d _ stage src risks
+  # Only a repo in repos.conf: by its folder path, its GitHub name or its folder name.
+  while read -r d _; do
+    if [ "$want" = "$d" ] || [ "${want,,}" = "$(repo_name "$d" | tr '[:upper:]' '[:lower:]')" ]; then dir=$d; break; fi
+  done < <(repos)
+  if [ -z "$dir" ]; then
+    while read -r d _; do
+      if [ "${want,,}" = "$(basename "$d" | tr '[:upper:]' '[:lower:]')" ]; then dir=$d; break; fi
+    done < <(repos)
+  fi
+  if [ -z "$dir" ]; then echo "merge-rule: $want is not a repo in $CONF" >&2; return 2; fi
+  read -r stage src < <(stage_of "$dir")
+  risks=$(stage_risks "$stage")
+  case ${risk,,} in low) risk=Low ;; medium) risk=Medium ;; high) risk=High ;; *) risk=${risk:-unknown} ;; esac
+  if stage_allows "$stage" "$risk"; then
+    echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: self-merge allowed (stage $stage allows $risks), with a current stamp, green CI, --match-head-commit$([ "$stage" = 4 ] || echo ' and no code-owner paths')$([ "$stage:$risk" != 4:High ] || echo ", and a post-merge review due $(next_working_day)")"
+    return 0
+  fi
+  echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: no self-merge (stage $stage allows $risks)"
+  return 1
 }
 
 # A card id in stop[]: stop its session, move the card to Blocked with the
@@ -1516,6 +1672,8 @@ status() {
   printf '%s' "$merge"
   echo "Other open factory PRs (no new pickups at $WAITING_CAP open in all):"
   printf '%s' "$open"
+  # CAT-1486: the stage each repo's reviewer merges by.
+  jq -r '"Stages: " + ([.repos[] | "\(.repo) \(.stage) (\(.source))"] | join(", "))' <<<"$(stages_json)"
   if [ -e "$STATE/paused" ]; then echo "Paused: yes (rm $STATE/paused to resume)"; else echo "Paused: no"; fi
   if [ -n "$CTL_PAUSED_UNTIL" ]; then echo "Paused by the board until $CTL_PAUSED_UNTIL (control version $CTL_VERSION)"; fi
   # CAT-1483: will it all come back after a reboot? Read-only, one line.
@@ -1554,12 +1712,31 @@ status_json() {
         '(input? // {}) as $s | {unit: $unit, card: ($s.card // (if $card == "" then null else $card end)), repo: ($s.repo // null),
           since: $since, sessionId: ($s.sessionId // null), lastSeq: ($s.lastSeq // null), spool: ($s.spoolEvents // null)}' "$f"
     done | jq -s --argjson cap "$CAP" --argjson paused "$paused" --argjson streaming "$(streaming && echo true || echo false)" --argjson control "$control" \
-      '{paused: $paused, cap: $cap, streaming: $streaming, control: $control, running: .}'
+      --argjson stages "$(stages_json)" \
+      '{paused: $paused, cap: $cap, streaming: $streaming, control: $control, stages: $stages, running: .}'
+}
+
+# CAT-1486: each repo's stage and where it came from (board, cache or
+# claude-md), as the last tick left it, plus when the board last answered.
+stages_json() {
+  local dir _ stage src
+  while read -r dir _; do
+    read -r stage src < <(stage_of "$dir")
+    jq -cn --arg repo "$(repo_name "$dir")" --argjson stage "$stage" --arg source "$src" '{repo: $repo, stage: $stage, source: $source}'
+  done < <(repos) | jq -s --arg at "$(jq -r '.fetchedAt // empty' "$STATE/stages.json" 2>/dev/null || true)" --arg mode "$STAGES_MODE" \
+    '{mode: $mode, boardAnsweredAt: (if $at == "" then null else $at end), repos: .}'
 }
 
 if [ "${1:-}" = "status" ]; then
   if [ "${2:-}" = "--json" ]; then status_json; else status; fi
   exit 0
+fi
+
+if [ "${1:-}" = "merge-rule" ]; then
+  [ $# -ge 3 ] || { echo "usage: claude-factory-dispatch merge-rule <repo> <risk> [--dry-run]" >&2; exit 2; }
+  rc=0
+  merge_rule "$2" "$3" || rc=$?
+  exit "$rc"
 fi
 
 if [ "${1:-}" = "retro" ]; then
@@ -1610,6 +1787,8 @@ fi
 # The heartbeat shows the pause and the control state without waiting for the end of the pass.
 write_pass "${PASS_RESULT/#ok/running}"
 control_stop
+# CAT-1486: each repo's stage from the board, before any reviewer starts.
+stages_fetch
 
 if [ -e "$STATE/paused" ]; then
   echo "paused ($STATE/paused exists)"
