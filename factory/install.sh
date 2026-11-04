@@ -28,7 +28,7 @@ if [ ! -x "$CHROME" ]; then
 fi
 
 echo "== Installing from $SRC"
-for f in claude-factory-dispatch claude-factory-stream claude-factory-bootcheck; do
+for f in claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do
   install -Dm755 "$SRC/bin/$f" "$BIN/$f"
   echo "  $BIN/$f"
 done
