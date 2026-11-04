@@ -50,6 +50,12 @@ test("the pick skips parent issues (cards with sub-issues), so an epic never tak
   assert.match(s, /--allowedTools="\$\{LINEAR\}__list_issues,/);
 });
 
+test("a shared list both cards only add to (nav link, feature-map row) is not overlap", () => {
+  const s = read(DISPATCH);
+  assert.match(s, /would change the same code in the same files/);
+  assert.match(s, /A shared list that both cards only add to, such as a nav link, a feature-map row or an index entry, is not overlap/);
+});
+
 test("every claude and systemd-run call in the dispatcher reads stdin from /dev/null", () => {
   const s = read(DISPATCH);
   // pick(): the claude -p call ends its prompt with </dev/null
