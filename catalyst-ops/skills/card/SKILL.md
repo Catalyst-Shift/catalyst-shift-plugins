@@ -30,8 +30,8 @@ value that comes from data, such as a count, a card title or a name, as <live: �
 2. <a URL and its expected state on the preview, e.g. /menu loads with no console error>
 3. <a DB/API assertion, e.g. GET /api/orders/123 returns 404 for another tenant>
 (3–8 lines. Each one is checkable from the PR's evidence. No "works well", no "looks good".
-A screen card has at least one line checkable from the screenshot the PR links: which regions, in
-which order, with which words, e.g. `/factory shows the brief, six tiles, the floor, Running
+A screen card has at least one line checkable from the screenshot the PR links: which
+regions, in which order, with which words, e.g. `/factory shows the brief, six tiles, the floor, Running
 now and Needs you in that order`.)
 
 ## Risk
@@ -58,9 +58,10 @@ Optional: what's out of scope, the test target (a non-production database only),
    screen, fill `## Design` from the repo's design source (for catalyst_os,
    `docs/design/factory/README.md` and the frame number): the source path,
    the regions in order, and the exact copy. Copy the fixed words, don't
-   paraphrase them, and mark data-driven values `<live: …>`. Add at least one checklist line a reviewer can tick from
-   the screenshot the PR links. Anything the builder changes from the frame goes
-   under *Decisions made* in the PR. If the repo has no design source for
+   paraphrase them, and mark data-driven values `<live: …>`. Add at least
+   one checklist line a reviewer can tick from the screenshot the PR links.
+   Anything the builder changes from the frame goes under *Decisions made*
+   in the PR. If the repo has no design source for
    the screen, say so under Notes instead of inventing one. A card with no
    screen leaves `## Design` out.
 4. **Dependencies.** If this card can only land after another, set that as a
