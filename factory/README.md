@@ -169,7 +169,7 @@ head is labelled instead (`CI_TRIES` in the dispatcher), so no PR can start
 sessions without end. A PR labelled `needs-ci-call` waits for
 a person, and its tries are forgotten when the dispatcher labels it and
 whenever a tick sees the label (red or green),
-so removing the label lets the next tick try once more. One `gh pr list` per
+so removing the label lets the next tick try again, with its tries starting over. One `gh pr list` per
 repo finds the PRs, not one call per launched branch. Each red PR the sweep
 passes over gets one journal line per tick saying why (`PR #<n> in <repo>
 fails CI (<checks>); …`): labelled `needs-ci-call`, `no-factory-review` (the

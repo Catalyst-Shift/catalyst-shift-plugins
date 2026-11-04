@@ -1591,9 +1591,13 @@ esac
     assert.ok(prompt.includes(`git worktree add --detach ${basewt} origin/main`), prompt);
     const args = argv.join("\n");
     for (const d of ["Bash(git push --force*)", "Bash(git push -f*)", "Bash(git push *--delete*)", "Bash(git push *:main)",
-      "Bash(git -* push*)", "Bash(git pull*)", "Bash(git rebase*)", "Bash(git commit --amend*)", "Bash(gh pr merge*)", "Bash(gh api*)"]) {
+      "Bash(git -* push*)", "Bash(git pull*)", "Bash(git rebase*)", "Bash(git commit --amend*)", "Bash(gh pr merge*)", "Bash(gh api*)",
+      // It may label the PR but never rewrite its body (and so its 'Reviewed:' stamp).
+      "Bash(gh pr edit *--body*)", "Bash(gh pr edit * -b*)", "Bash(gh pr edit * -F*)", "Bash(gh -* pr edit*)"]) {
       assert.ok(args.includes(d), `missing ${d} in --disallowedTools`);
     }
+    // PR comments may be public: the prompt keeps secrets out of them.
+    assert.match(prompt, /never paste environment values, \.env\.local contents, tokens, keys or URLs with credentials/);
 
     // From here on #21 is stamped at its head, so its card reviewer stays out of the way.
     const stamp = () => edit(21, (p) => { p.body = `Reviewed: ${head} — /review`; });
