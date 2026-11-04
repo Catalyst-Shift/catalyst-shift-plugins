@@ -254,7 +254,7 @@ resolve() {
   timeout 120 git -C "$dir" fetch --quiet origin "+refs/heads/$branch:refs/remotes/origin/$branch" "+refs/heads/$base:refs/remotes/origin/$base" </dev/null &&
     [ "$(git -C "$dir" rev-parse "refs/remotes/origin/$branch" </dev/null)" = "$sha" ] &&
     basesha=$(git -C "$dir" rev-parse "refs/remotes/origin/$base" </dev/null) && [[ $basesha =~ ^[0-9a-f]{40}$ ]] || {
-    echo "PR #$number in $dir: could not fetch $branch at $sha and $base; trying again next tick"
+    echo "PR #$number in $dir conflicts; could not fetch $branch at $sha and $base, trying again next tick"
     return 0
   }
   rec=$STATE/conflicts/$slug/$number-$sha-$basesha
@@ -267,15 +267,17 @@ resolve() {
     return 0
   fi
   # Checked last, so the cap is named only when a free slot is all the PR waits
-  # for. A full cap stops new sessions, not the sweep: later PRs' labels still
-  # clear their tries.
-  busy=$(running)
+  # for; the price is the fetch above on every tick while the cap is full. A
+  # full cap stops new sessions, not the sweep: later PRs' labels still clear
+  # their tries. `|| true`: a failed systemctl must not end the tick (set -e),
+  # and wc still prints a count, as in the other running() checks.
+  busy=$(running) || true
   if [ "$busy" -ge "$CAP" ]; then
     echo "PR #$number in $dir conflicts; waiting for a free slot ($busy/$CAP)"
     return 0
   fi
   git -C "$dir" worktree add --quiet --detach "$wt" "$sha" </dev/null || {
-    echo "PR #$number in $dir: could not check out $sha; trying again next tick"
+    echo "PR #$number in $dir conflicts; could not check out $sha, trying again next tick"
     return 0
   }
   # The push rules, enforced where a pattern can: conflicted hunks, the PR and
@@ -316,7 +318,8 @@ To label the PR for a person (steps 3 and 4): gh pr edit $number --add-label nee
 # person, and its tries are forgotten meanwhile, so removing the label lets the
 # next tick try again. Each CONFLICTING PR it passes over gets one line saying
 # why (CAT-1478), and PRs whose mergeability GitHub hasn't computed yet (UNKNOWN
-# until someone opens them) are listed, never resolved. No such PR, no output.
+# until someone opens them) are listed, never resolved; that list comes before
+# the ownership checks, so both machines list the same PR. No such PR, no output.
 conflicts() {
   local authors dir _ slug prs unknown mergeable number sha branch base called shared author key def
   authors=$(review_authors)

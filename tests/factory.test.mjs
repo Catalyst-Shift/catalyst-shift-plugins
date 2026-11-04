@@ -1130,6 +1130,9 @@ esac
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(started(), ["factory-other"]);
     assert.ok(r.stdout.includes(`PR #21 in ${repo} conflicts; waiting for a free slot (1/1)`), r.stdout);
+    // The cap is named only when a slot is all a PR waits for.
+    assert.match(r.stdout, /PR #25 in \S+ conflicts; it is a Dependabot PR/);
+    assert.doesNotMatch(r.stdout, /PR #25 .*free slot/);
     writeFileSync(units, "");
     r = tick(1);
     assert.equal(r.status, 0, r.stderr);
@@ -1167,6 +1170,22 @@ esac
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(conflictUnits(), ["factory-conflict-my-repo-pr-28"], r.stdout);
     assert.ok(tried().includes(`28-${head}-${main}`), tried().join(" "));
+
+    // CAT-1478: systemctl failing to list units (a user bus hiccup) must not end
+    // the tick under set -e at the cap check; the sweep goes on as before.
+    rmSync(join(state, "conflicts", "my-repo", `28-${head}-${main}`));
+    const goodCtl = read(join(bin, "systemctl"));
+    writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in
+  *list-units*) exit 1;;
+  *is-active*) grep -qxF "\${!#}" "${units}";;
+esac
+`, { mode: 0o755 });
+    writeFileSync(units, "");
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.deepEqual(conflictUnits(), ["factory-conflict-my-repo-pr-28"], r.stdout);
+    writeFileSync(join(bin, "systemctl"), goodCtl, { mode: 0o755 });
   } finally {
     rmSync(t, { recursive: true, force: true });
   }
@@ -1231,7 +1250,8 @@ esac
     assert.ok(r.stdout.includes(`PR #42 in ${repo} conflicts; its reviewer factory-review-my-repo-pr-42 is running`), r.stdout);
     assert.ok(r.stdout.includes(`2 PRs (#43, #44) in ${repo}: mergeability not computed yet`), r.stdout);
     assert.doesNotMatch(r.stdout, /#45|PR #4[345] in/);
-    // Nothing started: UNKNOWN PRs never get a session.
+    // UNKNOWN PRs never reach resolve(): the doesNotMatch above would see its
+    // "could not fetch" line (git fails here). Nothing new started either.
     assert.deepEqual(read(units).trim().split("\n"), ["factory-review-cat-9.service", "factory-review-my-repo-pr-42.service"]);
 
     // One UNKNOWN PR reads in the singular.
