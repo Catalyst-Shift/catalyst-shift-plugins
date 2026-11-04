@@ -54,9 +54,10 @@ Review, Blocked and Done.
 **Dependencies:** when one card must land before another, mark it in Linear
 (Blocked by / Blocks). The dispatcher never picks a card while anything it is
 blocked by is unfinished (not Done, Canceled or Duplicate), whichever machine
-has the blocker. A session that finds an earlier In Progress card touching the
-same files or tables puts its own card back in Ready For Factory, blocked by
-that card. Only the card that went In Progress later waits, so two cards never
+has the blocker. A session that finds an earlier In Progress card changing the
+same code or tables puts its own card back in Ready For Factory, blocked by
+that card. Adding to the same list (a nav link, a feature-map row) doesn't
+count: it builds and resolves that conflict on rebase. Only the card that went In Progress later waits, so two cards never
 block each other.
 
 **Parent issues** (cards with sub-issues, like a Factory v2 epic) are never
