@@ -2,6 +2,24 @@
 
 This repo holds the Catalyst Shift Claude Code plugins (`catalyst-ops`, `design-skill`). Its operating canon is the Ways of Working block below — the same block every Catalyst Shift surface carries.
 
+## Rules and what enforces them
+
+Each rule is a row: the rule, what makes it impossible to break (a test, a lint,
+a CI step; "judgment" only when no command can see it), and the card it came
+from. `/correct` (catalyst-ops) adds the enforcing check to a row and deletes the
+prose line a check makes redundant; a repeated rule with nothing enforcing it is
+fixed in the same change. This section sits above the Ways of Working block on
+purpose: the block is byte-identical across surfaces and ends the file.
+
+| Rule | Enforced by | Source card |
+|---|---|---|
+| The Ways of Working block is byte-identical in CLAUDE.md and the ways-of-working skill | `validate` step "The Ways of Working block is byte-identical" | CAT-1297 |
+| A deep path (`.github/`, CLAUDE.md, manifests, hooks, the ways-of-working skill, the checkers) needs a code-owner approval | `.github/CODEOWNERS`, mirrored by `scripts/protected-paths.mjs` and `tests/protected-paths.test.mjs` | CAT-1243 |
+| A PR merges only with `Reviewed: <head sha>` in its body | `review stamp` check (`.github/workflows/review-stamp.yml`) | CAT-1299 |
+| The dispatcher and installer are valid bash, hardcode no home path, and every `claude` / `systemd-run` call reads stdin from `/dev/null` | `tests/factory.test.mjs` | CAT-1298 |
+| A `factory-reflect` or `/correct` PR never touches a gate (`.github/`, rulesets, CODEOWNERS, required checks, the Ways of Working block, the ways-of-working skill) | `validate` step "A factory-reflect or /correct PR touches no gate", `scripts/retro-guard.mjs`, `tests/retro-guard.test.mjs` | CAT-1433 |
+| A merged factory PR is retro'd once: `retro: clean` or a `/reflect` session | `tests/factory-retro.test.mjs` | CAT-1433 |
+
 ## Ways of Working — Catalyst Shift
 
 <!-- Canonical block. Byte-identical in: each repo's CLAUDE.md, the HQ project

@@ -52,6 +52,15 @@ jobs:
           node-version: 22
       - name: Checker tests
         run: node --test 'tests/*.test.mjs'
+      - name: A factory-reflect or /correct PR touches no gate (CAT-1433)
+        if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'factory-reflect') || startsWith(github.head_ref, 'factory-correct'))
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          set -e
+          git fetch --no-tags --unshallow || true
+          git fetch --no-tags origin "$BASE:refs/remotes/origin/$BASE"
+          git diff -z --name-only "origin/$BASE...HEAD" | node scripts/retro-guard.mjs --check --base "origin/$BASE"
       - name: The Ways of Working block is byte-identical in CLAUDE.md and the ways-of-working skill
         run: |
           set -e

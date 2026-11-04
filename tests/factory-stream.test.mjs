@@ -414,7 +414,7 @@ test("the heartbeat unit starts and stops with the dispatcher timer; Remote Cont
   assert.match(unit, /^ExecStart=%h\/\.local\/bin\/claude-factory-stream heartbeat$/m);
   assert.match(read(join(FACTORY, "systemd", "claude-rc@.service")), /^UnsetEnvironment=.*\bFACTORY_INGEST_TOKEN\b/m);
   const install = read(join(FACTORY, "install.sh"));
-  assert.match(install, /for f in claude-factory-dispatch claude-factory-stream( [a-z-]+)*; do/);
+  assert.match(install, /for f in claude-factory-dispatch claude-factory-stream( claude-factory-[a-z-]+)*; do/);
   assert.doesNotMatch(install, /echo[^\n]*\$FACTORY_INGEST_TOKEN|\$\{FACTORY_INGEST_TOKEN/, "install.sh must never print the token");
 });
 
@@ -937,4 +937,70 @@ test("install.sh writes installed.json from the repo, the plugin manifests and g
   assert.match(s, /installed\.json/);
   assert.match(s, /\.claude-plugin\/plugin\.json/);
   assert.match(s, /rev-parse HEAD/);
+});
+
+// ---- CAT-1484: a session cut off by a reboot is shown as ended.
+
+const BOOT = (() => {
+  try {
+    return readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
+  } catch {
+    return null;
+  }
+})();
+
+test("state files record this boot's id next to the pid", async (t) => {
+  if (!BOOT) return t.skip("no boot id on this OS");
+  const { home: h, state, bin } = home();
+  writeFileSync(join(bin, "claude"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const b = board();
+  await b.up();
+  const env = { HOME: h, PATH: `${bin}:/usr/bin:/bin`, FACTORY_INGEST_TOKEN: TOKEN, FACTORY_INGEST_URL: b.url() };
+  const code = await new Promise((res) => spawn(process.execPath, [STREAM, "run", "--unit", "factory-cat-77", "--", "claude", "-p", "x"], { env }).on("close", res));
+  assert.equal(code, 0);
+  const s = JSON.parse(read(join(state, "stream", "factory-cat-77.json")));
+  assert.equal(s.bootId, BOOT);
+  await b.down();
+});
+
+test("drain ends a session from another boot or with a gone pid, once, after its spool; a live wrapper is untouched", async (t) => {
+  if (!BOOT) return t.skip("no boot id on this OS");
+  const { home: h, state } = home();
+  const dir = join(state, "spool");
+  const sdir = join(state, "stream");
+  mkdirSync(dir, { recursive: true });
+  mkdirSync(sdir, { recursive: true });
+  const batch = (sid, seq, n = 1) => JSON.stringify({ machine: "kevin-omarchy", card: "CAT-5", sessionId: sid, seq, events: Array.from({ length: n }, (_, i) => ({ type: "text", seq: seq + i })) });
+  const gone = spawnSync("true").pid; // a pid that has exited
+  const st = (sessionId, o) => writeFileSync(join(sdir, `${sessionId}.json`), JSON.stringify({ unit: sessionId, card: "CAT-5", sessionId, ...o }));
+  // Same pid as a live process, but another boot: the pid was reused.
+  st("rebooted", { pid: process.pid, bootId: "00000000-other-boot", lastSeq: 0 });
+  writeFileSync(join(dir, "rebooted.jsonl"), `${batch("rebooted", 0)}\n${batch("rebooted", 1, 2)}\n`);
+  st("pidgone", { pid: gone, bootId: BOOT, lastSeq: 4 }); // no spool left
+  st("alive", { pid: process.pid, bootId: BOOT, lastSeq: 0 });
+  writeFileSync(join(dir, "alive.jsonl"), `${batch("alive", 0)}\n`);
+  st("clean", { pid: null, bootId: BOOT, lastSeq: 3 });
+  const b = board();
+  await b.up();
+  const env = { HOME: h, PATH: "/usr/bin:/bin", FACTORY_INGEST_TOKEN: TOKEN, FACTORY_INGEST_URL: b.url() };
+  const run = () => new Promise((res) => spawn(process.execPath, [STREAM, "drain"], { env }).on("close", res));
+  assert.equal(await run(), 0);
+  const sent = b.bodies.map((x) => `${x.sessionId}:${x.events.map((e) => (e.stage ? `${e.stage}/${e.note}#${e.seq}` : e.seq)).join(",")}`);
+  assert.deepEqual(sent, ["rebooted:0", "rebooted:1,2", "rebooted:end/ended: machine restarted#3", "pidgone:end/ended: process gone#5"]);
+  assert.ok(existsSync(join(dir, "alive.jsonl")), "a live wrapper's spool was touched");
+  assert.equal(JSON.parse(read(join(sdir, "rebooted.json"))).pid, null);
+  assert.equal(JSON.parse(read(join(sdir, "pidgone.json"))).ended, true);
+  assert.equal(JSON.parse(read(join(sdir, "alive.json"))).pid, process.pid);
+  // Only once.
+  assert.equal(await run(), 0);
+  assert.equal(b.bodies.length, 4);
+  await b.down();
+
+  // Board down: no end sent, not marked; the next tick tries again.
+  st("retry", { pid: gone, bootId: BOOT, lastSeq: 0 });
+  const down = board(() => 503);
+  await down.up();
+  await new Promise((res) => spawn(process.execPath, [STREAM, "drain"], { env: { ...env, FACTORY_INGEST_URL: down.url() } }).on("close", res));
+  assert.equal(JSON.parse(read(join(sdir, "retry.json"))).pid, gone);
+  await down.down();
 });

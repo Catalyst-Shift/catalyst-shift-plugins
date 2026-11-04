@@ -1,5 +1,10 @@
 # Changelog — catalyst-ops
 
+## 0.10.0 — 2026-11-04 (CAT-1433)
+
+- New `reflect` skill (`/reflect`) and `correct` skill (`/correct`), adapted from Lauren Tan's pstack. `/reflect` runs after a merged factory card that had friction: it judges each lesson (durable, decision-changing, not a one-off, not already covered, routed to a skill the session used), comments `retro: <accepted> accepted, <rejected> rejected` on the card, and batches accepted skill and CLAUDE.md edits into the repo's one open `factory-reflect` PR, which a person approves and nobody self-merges. `/correct` handles a mistake that has happened twice at the highest level that works (architecture, types, a lint whose error names the fix, a test, a written rule last), proves the check fails on the real past mistake, and keeps the `## Rules and what enforces them` table in CLAUDE.md. Retros never add a gate; `validate` fails a `factory-reflect*` or `factory-correct*` PR that touches `.github/`, rulesets, CODEOWNERS, the required-checks list or the hard-stop list.
+- The dispatcher starts the retro (`factory/README.md`, "How a card flows" step 5). A clean merged PR gets `retro: clean` and no session. This replaces the weekly gardener (CAT-1434).
+
 ## 0.9.0 — 2026-11-04 (CAT-1459)
 
 - A screen card carries a Design section. `/card` adds `## Design` to the format, for cards that build or change a screen only: the design source path and frame (for catalyst_os, `docs/design/factory/README.md`), the regions in order, and the exact copy. A screen card's checklist has at least one line a reviewer can tick from the PR's screenshot, and anything the builder changed from the frame goes under *Decisions made* in the PR. Cards with no screen leave it out.

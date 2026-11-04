@@ -186,6 +186,38 @@ didn't. A failure to read a PR's required checks gets its own journal line
 (`could not read its required checks`); a repo with no required checks gets
 none. PRs the factory didn't build, and forks, are out of scope.
 
+**Cut-off sessions (CAT-1481):** the once-per-head records above (`reviewed/`,
+`conflicts/`, `ci/`) say whether that session finished. Just before a
+reviewer, conflict or CI unit starts, its record is written as `started <date>
+<boot id>` (the id from `/proc/sys/kernel/random/boot_id`). The unit's
+`ExecStopPost` runs `claude-factory-mark-done <record>` (a separate script, so
+units started by this version never run a dispatcher tick after a rollback). It
+rewrites the record to `done <date>` when the session exited 0, and to
+`stopped <date> <boot id>` when it was stopped (SIGTERM: `systemctl --user
+stop`, or a shutdown). A record still `started` with no unit running (or
+starting or stopping) means the session was cut off: a power loss, a crash, or
+a session that died on start (any non-zero exit). A `stopped` record counts as
+cut off only when the boot id has changed since (the machine shut down); in
+the same boot it was a person's stop, and it stays tried. The sweep that finds
+a cut-off record at the PR's current head starts the session once more and,
+as it starts it, logs `PR #<n> in <dir>: <kind> session was
+interrupted (<reason>); retrying once` (`<kind>` is review, conflict or CI;
+the reason is `the machine restarted`, `unit result <result>` while systemd
+still has the unit, or `it ended without finishing`). The retry's record
+carries ` retry`. If that one is cut off too, nothing starts again at that
+head: the PR gets one comment saying a person should look, the journal says
+so, and the record becomes `interrupted <date> retry <reason>`; a new push
+gets a fresh try. A CI retry counts toward `CI_TRIES`, at an earlier head or
+this one. Records written before this change hold a bare date and still mean
+tried, so upgrading starts nothing new. Nothing is retried while `systemctl
+--user` can't reach the user bus. A cut-off session that left uncommitted
+work in its worktree waits for a person, as before (`left over with unpushed
+work`), and so does one waiting for a free slot: neither logs a retry until it
+starts. Builders are not covered: `settle` already handles a builder that ends
+without a PR. A machine-wide failure (the subscription's usage limit, an
+expired login, no network) fails the retry too, so each PR it hit gets the
+"cut off twice" comment.
+
 **Waiting on you to merge (CAT-1336):** when a PR from a branch this machine's
 factory launched is open, stamped at its head (`Reviewed: <head sha>`) and its
 CI is green (every check in `gh pr checks` passed or was skipped; a PR with no
@@ -233,7 +265,8 @@ line runs on its default:
 | `build-low` | builder for a Low-risk card | `claude-sonnet-5-5` |
 | `review` | the card reviewer and the reviewer of other PRs | `claude-sonnet-5-5` |
 | `dep-review` | the Dependabot dependency reviewer | `claude-haiku-5-5` |
-| `housekeeping` | the Linear pick, settle and needs-merge calls | `haiku` |
+| `housekeeping` | the Linear pick, settle, needs-merge, retro-clean, touch and report calls | `haiku` |
+| `retro` | the `/reflect` session after a merged PR that had friction (CAT-1433) | `claude-sonnet-5-5` |
 
 ```
 model build-low claude-opus-5-5
@@ -446,12 +479,49 @@ units; gstack goes back to its bundled Chromium.
    The dispatcher starts at most one reviewer per head sha, recorded as
    `~/.local/state/claude-factory/reviewed/cat-NNN-<sha>`. A new push (by a
    person, say) changes the head, so the next tick reviews again. If a reviewer
-   ends without stamping, the dispatcher doesn't retry that sha: look at
-   `review-cat-NNN.log`.
+   finishes without stamping, the dispatcher doesn't retry that sha: look at
+   `review-cat-NNN.log`. One that was cut off (a reboot, a crash, a non-zero
+   exit) is started once more (see "Cut-off sessions" above).
    Any other open PR without a stamp goes through the same review on unit
    `factory-review-<repo>-pr-<n>` (see "Every PR gets reviewed" above).
 4. **Clean up.** Each tick removes a finished builder or reviewer worktree once
    it has no uncommitted changes and nothing unpushed.
+5. **Retro (CAT-1433).** The pass after a factory PR merges looks at it once
+   (`~/.local/state/claude-factory/retro/cat-NNN-<pr>`), from the PR alone, with
+   no model: review comments or a `Factory-Review-Fix:` commit, a
+   `Factory-CI-Fix:` commit or a `Merge … into …` commit, a commit without the
+   Claude co-author trailer, a PR comment from anyone but the deploy bots in
+   `CLAUDE_FACTORY_RETRO_IGNORE` (default `vercel|github-actions|dependabot|codecov|supabase|linear|sentry|neon-database|socket-security`),
+   a `needs-ci-call` / `needs-conflict-call` label, or a later merged PR that
+   reverts it. None of those: the card gets `retro: clean` and no session starts.
+   Any of them: unit `factory-retro-cat-NNN` (job `retro` in Models, default
+   Sonnet; counts toward the running cap) runs `/reflect` in a worktree on the
+   default branch. It judges each lesson (durable, decision-changing, not a
+   one-off, not already covered, routed to a skill the session used), comments
+   `retro: <n> accepted, <n> rejected` on the card with each rejection's reason,
+   and batches accepted skill and CLAUDE.md edits into the repo's one open
+   `factory-reflect` PR. Anything a lint, type, test or script could enforce, or
+   a repeat of a mistake in the rules table, goes to `/correct`: a
+   `factory-correct/cat-NNN` PR with the check proven against the commit that had
+   the mistake, merged under the repo's normal stage. The `factory-reflect` PR
+   is never self-merged; Kevin or Keith approve it from the Retros page's
+   **Review release** or on GitHub. `validate` fails any `factory-reflect*` or
+   `factory-correct*` PR that touches `.github/`, a ruleset, CODEOWNERS, the
+   required-checks list, the hard-stop list (the Ways of Working block) or the
+   ways-of-working skill (`scripts/retro-guard.mjs`). A retro never adds a gate.
+   A retro whose unit fails to start is retried next tick; one that ran and left
+   no `retro:` comment is not (look at `retro-cat-NNN.log`).
+6. **Touches.** A card with an open PR is checked (at most every 15 minutes) for
+   a person pulling it back out of In Review to In Progress, Ready For Factory or
+   Todo; each such move gets one `touch: <who> <reason> [<time>]` comment.
+   Moves to Done, Canceled and Blocked don't count (the factory's own reviewer
+   and settle pass move cards to Blocked).
+
+`claude-factory-dispatch retro --since 7d` (`--since <N>d`, default 7d) prints
+one line per repo with the counts of clean retros, accepted, rejected and
+structural (sent to `/correct`) lessons and touches, read from those `retro:`
+and `touch:` comments with one housekeeping call per repo. It takes no lock and
+changes nothing.
 
 ## Files
 
@@ -459,6 +529,7 @@ units; gstack goes back to its bundled Chromium.
 |---|---|
 | `bin/claude-factory-dispatch` | `~/.local/bin/` |
 | `bin/claude-factory-stream` (node 18+) | `~/.local/bin/` |
+| `bin/claude-factory-mark-done` | `~/.local/bin/` |
 | `bin/claude-factory-bootcheck` | `~/.local/bin/` |
 | `systemd/claude-factory.service`, `.timer` | `~/.config/systemd/user/` |
 | `systemd/claude-factory-heartbeat.service` | `~/.config/systemd/user/` |

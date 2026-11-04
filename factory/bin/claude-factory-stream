@@ -692,7 +692,7 @@ async function run(opts, rest, env = process.env) {
   let lastWrite = 0;
   const writeState = (ended = false) =>
     safely("write the stream state", () =>
-      writeJson(stateFile, { unit, card, repo: opts.repo || null, sessionId, startedAt, pid: ended ? null : process.pid, lastSeq: box.lastSeq, spoolEvents: box.spoolEvents }),
+      writeJson(stateFile, { unit, card, repo: opts.repo || null, sessionId, startedAt, pid: ended ? null : process.pid, bootId: bootId(), lastSeq: box.lastSeq, spoolEvents: box.spoolEvents }),
     );
   let stage = role === "review" ? "review" : "start";
   const status = (st, note) => box.push({ type: "status", at: new Date().toISOString(), card, stage: st, note });
@@ -788,6 +788,15 @@ async function run(opts, rest, env = process.env) {
 
 // ---- drain: spools of sessions that have ended.
 
+/** This boot's id, or null where the kernel does not give one. A pid means nothing across boots. */
+const bootId = () => {
+  try {
+    return fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim() || null;
+  } catch {
+    return null;
+  }
+};
+
 const alive = (pid) => {
   try {
     process.kill(pid, 0);
@@ -814,6 +823,48 @@ async function drainLine(url, token, line, rejected, deadline = Infinity) {
   return "stop";
 }
 
+/**
+ * Why a state file's session is over without the wrapper having said so, or null.
+ * A clean end leaves pid null. A pid still in the file whose boot differs from
+ * this one is not trusted even if some process now has that number.
+ */
+function deadReason(s, boot) {
+  if (!s.pid) return null;
+  if (boot && s.bootId && s.bootId !== boot) return "ended: machine restarted";
+  return alive(s.pid) ? null : "ended: process gone";
+}
+
+/** Highest seq the session is known to have used: its state file and whatever is left in its spool. */
+function lastSeqOf(s, spoolFile) {
+  let last = Number.isInteger(s.lastSeq) ? s.lastSeq : -1;
+  try {
+    for (const line of fs.readFileSync(spoolFile, "utf8").split("\n")) {
+      if (!line) continue;
+      try {
+        for (const e of JSON.parse(line).events || []) if (Number.isInteger(e.seq) && e.seq > last) last = e.seq;
+      } catch {}
+    }
+  } catch {}
+  return last;
+}
+
+/** Sends the one `status end` a dead session never sent, then marks its state file ended so it goes once. */
+async function endDead(env, url, token, d) {
+  // Read before the spool is sent and removed, or the spool's seqs are gone.
+  const seq = (d.last ?? lastSeqOf(d.s, path.join(spoolDir(env), `${d.s.sessionId}.jsonl`))) + 1;
+  const event = { type: "status", at: new Date().toISOString(), card: d.s.card ?? null, stage: "end", note: d.reason, seq };
+  const body = JSON.stringify({ machine: machineName(env), card: d.s.card ?? null, sessionId: d.s.sessionId, seq, events: [event] });
+  const r = await post(url, token, body);
+  // 400/413 can never succeed: stop retrying it. Anything else is tried again next tick.
+  if (r.status !== 202 && r.status !== 400 && r.status !== 413) {
+    log(`drain ${d.s.sessionId}: end event not sent (${r.status ? `board answered ${r.status}` : r.error})`);
+    return false;
+  }
+  safely("mark the session ended", () => writeJson(d.file, { ...d.s, pid: null, ended: true, lastSeq: seq }));
+  log(`drain ${d.s.sessionId}: ${d.reason}`);
+  return true;
+}
+
 async function drain(env = process.env) {
   const token = env[TOKEN_VAR];
   if (!token) return 0;
@@ -829,15 +880,22 @@ async function drain(env = process.env) {
       .sort((a, b) => a.t - b.t)
       .map((x) => x.f);
   } catch {
-    return 0;
+    files = []; // no spool directory: a dead session may still need its end
   }
   // A session still running sends its own spool.
   const live = new Set();
+  // Sessions the wrapper never closed: the machine restarted or the process is gone.
+  const dead = new Map();
+  const boot = bootId();
   safely("read the stream state", () => {
     for (const f of fs.readdirSync(streamDir(env))) {
       try {
-        const s = JSON.parse(fs.readFileSync(path.join(streamDir(env), f), "utf8"));
-        if (s.pid && alive(s.pid)) live.add(s.sessionId);
+        const file = path.join(streamDir(env), f);
+        const s = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (!s.pid || !s.sessionId) continue;
+        const reason = deadReason(s, boot);
+        if (reason) dead.set(s.sessionId, { s, file, reason });
+        else live.add(s.sessionId);
       } catch {}
     }
   });
@@ -847,6 +905,8 @@ async function drain(env = process.env) {
     if (live.has(sessionId)) continue;
     const file = path.join(dir, f);
     const lines = fs.readFileSync(file, "utf8").split("\n").filter(Boolean);
+    const dying = dead.get(sessionId);
+    if (dying) dying.last = lastSeqOf(dying.s, file);
     let sent = 0;
     let stopped = false;
     for (const line of lines) {
@@ -860,7 +920,16 @@ async function drain(env = process.env) {
     safely("rewrite the spool", () => replaceSpool(file, left));
     if (sent) log(`drain ${sessionId}: sent ${sent} spooled batches${left.length ? `, ${left.length} left` : ""}`);
     // The board is down or the time is up: the next tick goes on from here.
-    if (stopped) break;
+    if (stopped) return 0;
+    // Its spool is out: now the end the wrapper never sent.
+    const d = dead.get(sessionId);
+    if (d && !left.length && (await endDead(env, url, token, d))) dead.delete(sessionId);
+  }
+  // Dead sessions whose spool was already empty or gone.
+  for (const d of dead.values()) {
+    if (Date.now() > deadline) break;
+    if (fs.existsSync(path.join(dir, `${d.s.sessionId}.jsonl`))) continue;
+    if (!(await endDead(env, url, token, d))) break;
   }
   return 0;
 }
