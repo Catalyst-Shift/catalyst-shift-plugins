@@ -54,6 +54,8 @@ test("a shared list both cards only add to (nav link, feature-map row) is not ov
   const s = read(DISPATCH);
   assert.match(s, /would change the same code in the same files/);
   assert.match(s, /A shared list that both cards only add to, such as a nav link, a feature-map row or an index entry, is not overlap/);
+  // When there is overlap, the later card still waits, and two cards never block each other.
+  assert.match(s, /When there is overlap: if yours went In Progress after it, and it is not already blocked by your card, comment on your card that it waits on that card, add it as 'blocked by' on your card, move your card back to Ready For Factory, and end\. Otherwise keep going: never add a relation that would make two cards block each other\./);
 });
 
 test("every claude and systemd-run call in the dispatcher reads stdin from /dev/null", () => {

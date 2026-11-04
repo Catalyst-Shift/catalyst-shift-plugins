@@ -56,9 +56,10 @@ Review, Blocked and Done.
 blocked by is unfinished (not Done, Canceled or Duplicate), whichever machine
 has the blocker. A session that finds an earlier In Progress card changing the
 same code or tables puts its own card back in Ready For Factory, blocked by
-that card. Adding to the same list (a nav link, a feature-map row) doesn't
-count: it builds and resolves that conflict on rebase. Only the card that went In Progress later waits, so two cards never
-block each other.
+that card. Both cards adding to the same list (a nav link, a feature-map row)
+doesn't count: the later session keeps building and fixes that merge conflict
+when it rebases. Only the card that went In Progress later waits, so two cards
+never block each other.
 
 **Parent issues** (cards with sub-issues, like a Factory v2 epic) are never
 picked, even in Ready For Factory: they track other cards and are not built.
