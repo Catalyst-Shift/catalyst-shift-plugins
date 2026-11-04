@@ -1222,6 +1222,11 @@ esac
     assert.doesNotMatch(prompt, /--auto|--admin/);
     // The push rules are enforced, not only asked for.
     const args = read(`${units}.${name}.args`);
+    // CAT-1479: run_unit gets the card and repo slots before the claude args,
+    // so -p and --permission-mode auto reach claude instead of being shifted off.
+    const argv = args.split("\n");
+    assert.ok(argv.includes("-p"), args);
+    assert.equal(argv[argv.indexOf("--permission-mode") + 1], "auto", args);
     for (const d of ["Bash(git push --force*)", "Bash(git push -f*)", "Bash(git push *--delete*)", "Bash(git push * :*)",
       "Bash(git push *:main)", "Bash(git -* push*)", "Bash(git pull*)", "Bash(git rebase*)", "Bash(gh pr merge*)", "Bash(gh -* pr merge*)", "Bash(gh api*)"]) {
       assert.ok(args.includes(d), `missing ${d} in --disallowedTools`);
@@ -1424,6 +1429,332 @@ esac
     r = tick();
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "", r.stdout);
+  } finally {
+    rmSync(t, { recursive: true, force: true });
+  }
+});
+
+// CAT-1479: each tick, an open PR from a branch this machine launched whose
+// required checks fail at its head gets one CI session (real git here),
+// detached at that head, once per (head sha, failing check set). Each red PR it
+// passes over says why. Its own fix failing again labels the PR needs-ci-call.
+test("ci_fixes: one CI session per red factory PR and (head, failing set), skips logged, own fix failing again labels needs-ci-call", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-ci-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
+  const repo = join(t, "My_Repo"), work = join(t, "work"), units = join(t, "units"), ghlog = join(t, "gh.log");
+  for (const d of [bin, state, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+  const sh = (cmd) => {
+    const r = spawnSync("bash", ["-c", cmd], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: t, ...gitEnv } });
+    assert.equal(r.status, 0, `${cmd}\n${r.stderr}`);
+    return r.stdout.trim();
+  };
+  sh(`git init -q --bare ${t}/origin.git && git clone -q ${t}/origin.git ${repo} 2>/dev/null
+cd ${repo} && echo base >doc.md && git add doc.md && git commit -q -m base && git push -q origin HEAD:main
+echo pr >doc.md && git commit -q -am pr && git push -q origin HEAD:refs/heads/b/cat-8-x && git checkout -q --detach main
+git clone -q ${t}/origin.git ${work} 2>/dev/null && cd ${work} && git checkout -q b/cat-8-x`);
+  let head = sh(`git -C ${repo} rev-parse origin/b/cat-8-x`);
+  const fake = (c) => c.repeat(40);
+  const fail = (name) => ({ name, bucket: "fail", link: `https://ci/${name.replace(/\W+/g, "-")}` });
+  const pass = (name) => ({ name, bucket: "pass", link: "https://ci/ok" });
+  const red = [fail("lint, typecheck, test, build"), fail("review stamp")];
+  // Stamped (so no reviewer sweep adds units of its own) unless said otherwise.
+  const pr = (number, key, extra = {}) => {
+    const sha = extra.headRefOid ?? fake(String(number % 10));
+    return { number, headRefOid: sha, headRefName: `b/${key}-x`, baseRefName: "main", body: `Reviewed: ${sha} — /review`,
+      author: { login: "kkreative" }, isDraft: false, labels: [], isCrossRepository: false, mergeable: "MERGEABLE", checks: red, ...extra };
+  };
+  const fixture = join(t, "prs.json");
+  const listed = () => [
+    pr(21, "cat-8", { headRefOid: head, body: "" }),                       // fixed (and its card reviewer waits)
+    pr(22, "cat-9", { checks: [pass("lint, typecheck, test, build"), fail("Review Stamp")] }), // only the stamp is red
+    pr(23, "cat-10", { labels: [{ name: "needs-ci-call" }] }),             // a person is deciding
+    pr(24, "cat-11", { isDraft: true }),                                   // draft
+    pr(25, "cat-12"),                                                      // builder still running
+    pr(26, "cat-13"),                                                      // card reviewer running
+    pr(27, "cat-14"),                                                      // conflict session running
+    pr(28, "cat-15", { checks: [fail("lint, typecheck, test, build"), { name: "e2e", bucket: "pending", link: "" }] }),
+    pr(29, "cat-16", { checks: [pass("lint, typecheck, test, build"), pass("review stamp")] }), // green
+    pr(30, "x", { headRefName: "b/30" }),                                  // not launched here: out of scope
+    pr(31, "cat-17", { headRefName: "b/x;y" }),                            // not a plain branch name
+    pr(32, "cat-18", { labels: [{ name: "no-factory-review" }] }),         // opted out
+    pr(33, "cat-19", { labels: [{ name: "needs-conflict-call" }] }),       // a person is resolving a conflict
+    pr(34, "cat-20", { mergeable: "CONFLICTING" }),                        // the conflict sweep goes first
+    pr(35, "cat-21", { isCrossRepository: true }),                         // a fork reusing a launched branch name
+    pr(36, "cat-22", { checks: "no required checks reported on the 'b/cat-22-x' branch" }), // not red: no line
+    pr(37, "cat-23", { checks: "HTTP 502: Bad Gateway" }),                // gh failed: said, not taken for green
+  ];
+  const save = (prs) => writeFileSync(fixture, JSON.stringify(prs));
+  const edit = (n, f) => { const prs = JSON.parse(read(fixture)); f(prs.find((p) => p.number === n)); save(prs); };
+  save(listed());
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+echo "$*" >>"${ghlog}"
+[ "$1 $2" = "api user" ] && { echo kkreative; exit 0; }
+case "$1 $2" in "label create"|"pr edit"|"pr comment") exit 0;; esac
+sub="$1 $2"; shift 2; n=; h=; q=.
+case $sub in "pr view"|"pr checks") n=$1; shift;; esac
+while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --jq) q=$2; shift;; esac; shift; done
+if [ "$sub" = "pr checks" ]; then jq -r ".[] | select(.number == $n) | .checks | $q" "${fixture}"
+elif [ -n "$n" ]; then jq -r ".[] | select(.number == $n) | $q" "${fixture}"
+elif [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "${fixture}"
+else jq -r "$q" "${fixture}"; fi
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+for a; do case $a in --unit=*) u=\${a#--unit=}; echo "$u.service" >>"${units}";; --working-directory=*) w=\${a#--working-directory=};; esac; done
+printf '%s' "\${!#}" >"${units}.$u"; printf '%s' "$w" >"${units}.$u.wd"; printf '%s\\n' "$@" >"${units}.$u.args"
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in
+  *list-units*) cat "${units}";;
+  *is-active*) grep -qxF "\${!#}" "${units}";;
+esac
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "claude"), "#!/bin/sh\necho NONE\n", { mode: 0o755 });
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"), `label kevin-omarchy\n${repo} proj\n`);
+  writeFileSync(join(state, "launched"),
+    [8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23].map((n) => `${repo} b/cat-${n}-x cat-${n}`).join("\n") + `\n${repo} b/x;y cat-17\n`);
+  const tick = (cap) => spawnSync("bash", [DISPATCH], {
+    encoding: "utf8",
+    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap), ...gitEnv },
+  });
+  const started = () => read(units).trim().split("\n").filter(Boolean).map((u) => u.replace(/\.service$/, ""));
+  const ciUnits = () => started().filter((u) => u.startsWith("factory-ci-"));
+  const tried = () => (existsSync(join(state, "ci", "my-repo")) ? readdirSync(join(state, "ci", "my-repo")).sort() : []);
+  const name = "factory-ci-my-repo-pr-21";
+  const wt = join(repo, ".claude/worktrees", name);
+  const push = (msg) => {
+    sh(`cd ${work} && echo x >>doc.md && git commit -q -am "${msg}" && git push -q origin HEAD:b/cat-8-x`);
+    head = sh(`git -C ${work} rev-parse HEAD`);
+    edit(21, (p) => { p.headRefOid = head; p.body = `Reviewed: ${head} — /review`; });
+  };
+  const running = "factory-cat-12.service\nfactory-review-cat-13.service\nfactory-conflict-my-repo-pr-27.service\n";
+  const set = "lint, typecheck, test, build";
+  // The step runs right after the conflict sweep, before any reviewer starts.
+  assert.match(read(DISPATCH), /^conflicts\nci_fixes\nreviews\n/m);
+
+  try {
+    writeFileSync(units, running);
+    let r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(ciUnits(), [name], r.stdout);
+    // Its card reviewer waits for the head the CI session pushes.
+    assert.ok(!started().includes("factory-review-cat-8"), started().join(" "));
+    assert.equal(tried().length, 1);
+    assert.match(tried()[0], new RegExp(`^21-${head}-[0-9a-f]{12}$`));
+    assert.ok(r.stdout.includes(`started CI session for PR #21 (${set}) at ${head.slice(0, 12)} in ${repo} (unit ${name}, model claude-opus-5-5`), r.stdout);
+    // Each red PR it passes over says why.
+    assert.ok(r.stdout.includes(`PR #23 in ${repo} fails CI (${set}); labelled needs-ci-call, so it waits for a person`), r.stdout);
+    assert.ok(r.stdout.includes(`PR #24 in ${repo} fails CI (${set}); it is a draft`), r.stdout);
+    assert.ok(r.stdout.includes(`PR #25 in ${repo} fails CI (${set}); its builder factory-cat-12 is still running`), r.stdout);
+    assert.ok(r.stdout.includes(`PR #26 in ${repo} fails CI (${set}); its reviewer factory-review-cat-13 is running`), r.stdout);
+    assert.ok(r.stdout.includes(`PR #27 in ${repo} fails CI (${set}); its conflict session factory-conflict-my-repo-pr-27 is running`), r.stdout);
+    assert.ok(r.stdout.includes(`PR #28 in ${repo} fails CI (${set}); 1 required check(s) still running, so it waits for CI to finish`), r.stdout);
+    assert.match(r.stdout, /PR #31 in \S+ fails CI .*not plain/);
+    assert.ok(r.stdout.includes(`PR #32 in ${repo} fails CI (${set}); labelled no-factory-review, so not fixing it`), r.stdout);
+    assert.ok(r.stdout.includes(`PR #33 in ${repo} fails CI (${set}); labelled needs-conflict-call, so a person has it`), r.stdout);
+    assert.ok(r.stdout.includes(`PR #34 in ${repo} fails CI (${set}); it conflicts with its base, so the conflict sweep goes first`), r.stdout);
+    assert.ok(r.stdout.includes(`PR #37 in ${repo}: could not read its required checks, so no CI session this tick`), r.stdout);
+    // A review stamp failure alone, a green PR, a PR this machine didn't launch, a fork
+    // and a repo with no required checks: no session, no line.
+    assert.doesNotMatch(r.stdout, /PR #(22|29|30|35|36) in \S+ (fails CI|: could not read)/);
+    // The worktree is detached at the PR head.
+    assert.equal(read(`${units}.${name}.wd`), wt);
+    assert.equal(sh(`git -C ${wt} rev-parse HEAD`), head);
+    assert.equal(sh(`git -C ${wt} rev-parse --abbrev-ref HEAD`), "HEAD");
+    // The prompt (checklist 2).
+    const prompt = read(`${units}.${name}`);
+    assert.ok(prompt.includes(`- ${set}: https://ci/lint-typecheck-test-build`), prompt);
+    assert.doesNotMatch(prompt, /- review stamp:/);
+    assert.match(prompt, /for card CAT-8/);
+    assert.match(prompt, /Reproduce the failing job locally first\..*before you change anything/);
+    assert.match(prompt, /Root-cause it, then make the smallest fix/);
+    assert.match(prompt, /Run every check this repo's CLAUDE\.md and its CI run before a push/);
+    assert.match(prompt, /push only normal commits on top of .*Never rebase, never amend, never force-push/);
+    assert.match(prompt, /git push origin 'HEAD:b\/cat-8-x'/);
+    assert.match(prompt, /post exactly one PR comment: each failing check's name, its cause, the fix, and the checks that passed/);
+    assert.match(prompt, /If they fail on main the same way, the failure is not the PR's: post one PR comment .*push nothing/);
+    assert.match(prompt, /Never skip, disable, quarantine or delete a test/);
+    assert.match(prompt, /never weaken CI/);
+    assert.match(prompt, /'Factory-CI-Fix: PR #21'/);
+    assert.match(prompt, /--add-label needs-ci-call/);
+    assert.ok(prompt.includes(`git reset --hard ${head}`));
+    assert.match(prompt, /Never merge the PR, never turn on auto-merge, never edit the PR body/);
+    assert.doesNotMatch(prompt, /--auto|--admin/);
+    const argv = read(`${units}.${name}.args`).split("\n");
+    assert.ok(argv.includes("-p"));
+    assert.equal(argv[argv.indexOf("--permission-mode") + 1], "auto");
+    assert.equal(argv[argv.indexOf("--model") + 1], "claude-opus-5-5");
+    // Its scratch checkout of the base is outside its worktree, so it is added.
+    const basewt = join(repo, ".claude/worktrees/ci-base-my-repo-pr-21");
+    assert.equal(argv[argv.indexOf("--add-dir") + 1], basewt);
+    assert.ok(existsSync(basewt), "the --add-dir path exists (empty) before the session starts");
+    assert.ok(prompt.includes(`git worktree add --detach ${basewt} origin/main`), prompt);
+    const args = argv.join("\n");
+    for (const d of ["Bash(git push --force*)", "Bash(git push -f*)", "Bash(git push *--delete*)", "Bash(git push *:main)",
+      "Bash(git -* push*)", "Bash(git pull*)", "Bash(git rebase*)", "Bash(git commit --amend*)", "Bash(gh pr merge*)", "Bash(gh api*)"]) {
+      assert.ok(args.includes(d), `missing ${d} in --disallowedTools`);
+    }
+
+    // From here on #21 is stamped at its head, so its card reviewer stays out of the way.
+    const stamp = () => edit(21, (p) => { p.body = `Reviewed: ${head} — /review`; });
+    stamp();
+
+    // Still running: nothing new, and it says so.
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(ciUnits(), [name]);
+    assert.ok(r.stdout.includes(`PR #21 in ${repo} fails CI (${set}); its CI session ${name} is already running`), r.stdout);
+
+    // Finished without pushing: its worktree goes, and the same (head, set) is not tried again.
+    writeFileSync(units, running);
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /removed finished worktree .*factory-ci-my-repo-pr-21/);
+    assert.deepEqual(ciUnits(), []);
+    assert.ok(r.stdout.includes(`PR #21 in ${repo} fails CI (${set}); already tried at head ${head.slice(0, 12)} for these checks, so it waits for a push`), r.stdout);
+
+    // Another check fails at the same head: a new failing set, so a new try.
+    edit(21, (p) => { p.checks = [...red, fail("e2e")]; });
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(ciUnits(), [name], r.stdout);
+    assert.equal(tried().length, 2);
+    assert.ok(r.stdout.includes(`started CI session for PR #21 (e2e; ${set})`), r.stdout);
+
+    // Someone else pushes (no trailer) and it is still red: a new try, not an escalation.
+    writeFileSync(units, running);
+    push("builder fix");
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(ciUnits(), [name], r.stdout);
+    assert.doesNotMatch(read(ghlog), /^(pr edit 21 --add-label|label create) needs-ci-call/m);
+
+    // Within the cap: a full cap names the free slot it waits for, and starts nothing.
+    writeFileSync(units, running);
+    edit(21, (p) => { p.checks = [...p.checks, fail("unit")]; });
+    writeFileSync(units, running + "factory-a.service\nfactory-b.service\n");
+    r = tick(5);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(ciUnits(), []);
+    assert.ok(r.stdout.includes(`PR #21 in ${repo} fails CI (e2e; ${set}; unit); waiting for a free slot (5/5)`), r.stdout);
+    r = tick(9);
+    assert.deepEqual(ciUnits(), [name], r.stdout);
+
+    // Its fix goes green, then someone pushes on top of it and that head is
+    // red: a fresh try, not "its own fix failed again".
+    writeFileSync(units, running);
+    push("fix lint\n\nFactory-CI-Fix: PR #21");
+    const redChecks = JSON.parse(read(fixture)).find((p) => p.number === 21).checks;
+    edit(21, (p) => { p.checks = [pass(set), fail("review stamp")]; });
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stdout, /PR #21 in/);
+    push("a person's change");
+    edit(21, (p) => { p.checks = redChecks; });
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(ciUnits(), [name], r.stdout);
+    assert.doesNotMatch(r.stdout, /after the factory's own fix/);
+    assert.doesNotMatch(read(ghlog), /^(pr edit 21 --add-label|label create) needs-ci-call/m);
+
+    // The CI session's own fix (its trailer, at the head) is red again:
+    // the PR is labelled needs-ci-call, once, and no session starts.
+    writeFileSync(units, running);
+    const before = tried().length;
+    push("fix lint again\n\nFactory-CI-Fix: PR #21");
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(ciUnits(), [], r.stdout);
+    assert.ok(r.stdout.includes(`PR #21 in ${repo} fails CI (e2e; ${set}; unit) again at head ${head.slice(0, 12)}, after the factory's own fix; labelled needs-ci-call`), r.stdout);
+    assert.match(read(ghlog), /^pr edit 21 --add-label needs-ci-call$/m);
+    assert.match(read(ghlog), /^label create needs-ci-call /m);
+    assert.match(read(ghlog), /^pr comment 21 --body .*after the factory's own fix\. Labelled needs-ci-call/m);
+    // Labelling forgets its tries at once, so a label removed before the next tick still means one more try.
+    assert.ok(before > 0 && !tried().some((f) => f.startsWith("21-")), tried().join(" "));
+
+    // The label is on now: it waits for a person, and its tries are forgotten,
+    // so taking the label off lets the factory try once more.
+    edit(21, (p) => { p.labels = [{ name: "needs-ci-call" }]; });
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(r.stdout.includes(`PR #21 in ${repo} fails CI (e2e; ${set}; unit); labelled needs-ci-call, so it waits for a person`), r.stdout);
+    assert.ok(!tried().some((f) => f.startsWith("21-")), tried().join(" "));
+    edit(21, (p) => { p.labels = []; });
+    r = tick(9);
+    assert.deepEqual(ciUnits(), [name], r.stdout);
+
+    // The label clears tries even while the PR is green (a person re-ran CI,
+    // or fixed it and left the label on), so removing it later still works.
+    writeFileSync(units, running);
+    assert.ok(tried().some((f) => f.startsWith("21-")), tried().join(" "));
+    edit(21, (p) => { p.labels = [{ name: "needs-ci-call" }]; p.checks = [pass(set)]; });
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stdout, /PR #21 in/);
+    assert.ok(!tried().some((f) => f.startsWith("21-")), tried().join(" "));
+    edit(21, (p) => { p.labels = []; p.checks = redChecks; });
+
+    // A worktree left over with unpushed work is not overwritten.
+    mkdirSync(wt, { recursive: true });
+    writeFileSync(join(wt, "scratch"), "x");
+    r = tick(9);
+    assert.ok(r.stdout.includes(`PR #21 in ${repo} fails CI (e2e; ${set}; unit), but ${wt} is left over with unpushed work; not starting one`), r.stdout);
+    assert.deepEqual(ciUnits(), []);
+    rmSync(wt, { recursive: true, force: true });
+
+    // A head GitHub lists that origin doesn't have (it moved, or the fetch failed): no try, no marker.
+    edit(21, (p) => { p.headRefOid = fake("e"); });
+    r = tick(9);
+    assert.ok(r.stdout.includes(`PR #21 in ${repo} fails CI (e2e; ${set}; unit); could not fetch b/cat-8-x at ${fake("e")} and main, trying again next tick`), r.stdout);
+    assert.ok(!tried().some((f) => f.startsWith("21-")), tried().join(" "));
+    edit(21, (p) => { p.headRefOid = head; });
+
+    // A conflict never starts on a PR whose CI session is running (and vice versa, above).
+    edit(34, (p) => { p.headRefName = "b/cat-20-x"; });
+    writeFileSync(units, running + "factory-ci-my-repo-pr-34.service\n");
+    r = tick(9);
+    assert.ok(r.stdout.includes(`PR #34 in ${repo} conflicts; its CI session factory-ci-my-repo-pr-34 is running`), r.stdout);
+    assert.ok(!started().includes("factory-conflict-my-repo-pr-34"), started().join(" "));
+
+    // A unit that fails to start leaves no marker, so the next tick tries again.
+    writeFileSync(units, running);
+    rmSync(join(state, "ci", "my-repo"), { recursive: true });
+    const goodRun = read(join(bin, "systemd-run"));
+    writeFileSync(join(bin, "systemd-run"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    r = tick(9);
+    assert.match(r.stdout, /PR #21 in \S+: could not start unit factory-ci-my-repo-pr-21/);
+    assert.ok(!tried().some((f) => f.startsWith("21-")), tried().join(" "));
+    writeFileSync(join(bin, "systemd-run"), goodRun, { mode: 0o755 });
+    r = tick(9);
+    assert.deepEqual(ciUnits(), [name], r.stdout);
+
+    // The session's scratch base checkout stays while it runs, and goes once it doesn't.
+    const scratch = join(repo, ".claude/worktrees/ci-base-my-repo-pr-21");
+    sh(`git -C ${repo} worktree add -q --detach ${scratch} origin/main && echo dep >${scratch}/node_modules.txt`);
+    r = tick(9);
+    assert.ok(existsSync(scratch), r.stdout);
+    writeFileSync(units, running);
+    r = tick(9);
+    assert.ok(r.stdout.includes(`removed scratch base worktree ${scratch}`), r.stdout);
+    assert.equal(existsSync(scratch), false);
+
+    // A cap on tries, whatever the trailer says: other pushes keep it red, and
+    // after tries at 3 earlier heads of this branch, the next red head is labelled.
+    rmSync(join(state, "ci", "my-repo"), { recursive: true });
+    const labels = () => (read(ghlog).match(/^pr edit 21 --add-label needs-ci-call$/gm) || []).length;
+    const labelled = labels();
+    for (let i = 1; i <= 3; i++) {
+      writeFileSync(units, running);
+      if (i > 1) push(`try ${i}`);
+      r = tick(9);
+      assert.deepEqual(ciUnits(), [name], `try ${i}: ${r.stdout}`);
+    }
+    writeFileSync(units, running);
+    push("try 4");
+    r = tick(9);
+    assert.deepEqual(ciUnits(), [], r.stdout);
+    assert.ok(r.stdout.includes(`at head ${head.slice(0, 12)}, after 3 factory tries on this branch; labelled needs-ci-call`), r.stdout);
+    assert.equal(labels(), labelled + 1);
   } finally {
     rmSync(t, { recursive: true, force: true });
   }

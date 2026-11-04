@@ -126,7 +126,7 @@ guard against a push to it.
 Skipped: Dependabot PRs, PRs from forks, PRs labelled `no-factory-review`
 (that opt-out covers conflict sessions too) or `needs-conflict-call`, PRs whose
 head is the default branch or another open PR's base (a push there would land
-on a shared branch), PRs with a builder or reviewer running on them, and PRs
+on a shared branch), PRs with a builder, reviewer or CI session running on them, and PRs
 that are neither from a branch this machine launched nor by one of its review
 authors. Conflict sessions share the cap and show in
 `claude-factory-dispatch status`; no reviewer starts on a PR while its conflict
@@ -137,6 +137,53 @@ Each conflicting PR the sweep passes over gets one journal line per tick
 saying why (`PR #<n> in <repo> conflicts; …`, including `waiting for a free
 slot (<running>/<cap>)`), and PRs whose mergeability GitHub still shows as
 `UNKNOWN` are listed per repo and never resolved (CAT-1478).
+
+**Red CI (CAT-1479):** each tick, right after the conflict sweep, any open PR
+from a branch this machine's factory launched whose required checks (`gh pr
+checks --required`, which reads the branch ruleset) have a failing conclusion
+at its head gets a CI session in its own worktree (`factory-ci-<repo>-pr-<n>`),
+detached at the PR head, on the `build-medium` model. It reads the failing
+job's log, reproduces the failure locally before changing anything, checks
+whether the base branch fails the same way, root-causes it, makes the smallest
+fix, runs every check the repo's CLAUDE.md and CI run, and pushes a normal
+commit to the PR's own branch (never a rebase, amend or force-push), ending its
+message with `Factory-CI-Fix: PR #<n>`, then posts one PR comment naming the
+failing check, the cause and the checks that passed. A failure that is red on
+the base too gets one comment saying so and no push. One it can't reproduce or
+fix without guessing, or whose checks still fail after the fix, gets one
+comment and the label `needs-ci-call`, and no push. It never skips, disables
+or quarantines a test, never loosens a rule or weakens CI, never merges, never
+edits the PR body and never touches a card; the same push patterns as conflict
+sessions, plus `git commit --amend`, are denied by `--disallowedTools`.
+A `review stamp` failure alone starts nothing (the review sweeps handle
+stamps), and a PR with no required checks is never red. Each PR is tried once
+per (head sha, failing check set), recorded in
+`~/.local/state/claude-factory/ci/<repo>/<pr>-<head>-<set hash>`, and logs to
+`ci-<repo>-pr-<n>.log`. If the PR is red again and its head is the session's
+own `Factory-CI-Fix` commit, on top of a head the factory already tried, the
+dispatcher labels it `needs-ci-call` and comments once instead of starting
+another session; anything pushed on top of that fix (by a person, a reviewer
+or a conflict merge) is a fresh try, up to a limit: whatever the trailer says,
+once the factory has tried a PR at 3 earlier heads of its branch, the next red
+head is labelled instead (`CI_TRIES` in the dispatcher), so no PR can start
+sessions without end. A PR labelled `needs-ci-call` waits for
+a person, and its tries are forgotten when the dispatcher labels it and
+whenever a tick sees the label (red or green),
+so removing the label lets the next tick try once more. One `gh pr list` per
+repo finds the PRs, not one call per launched branch. Each red PR the sweep
+passes over gets one journal line per tick saying why (`PR #<n> in <repo>
+fails CI (<checks>); …`): labelled `needs-ci-call`, `no-factory-review` (the
+opt-out covers CI sessions too) or `needs-conflict-call`, conflicting with its
+base (the conflict sweep goes first), a draft, a branch name that isn't plain,
+a builder, reviewer, conflict or CI session running on it, a required check
+still running, already tried at this head, or `waiting for a free slot
+(<running>/<cap>)`. CI sessions share the cap; no reviewer or conflict
+session starts on a PR while its CI session runs. The session checks the base
+in a scratch worktree, `.claude/worktrees/ci-base-<repo>-pr-<n>` (passed with
+`--add-dir`); the next tick after the session ends removes it if the session
+didn't. A failure to read a PR's required checks gets its own journal line
+(`could not read its required checks`); a repo with no required checks gets
+none. PRs the factory didn't build, and forks, are out of scope.
 
 **Waiting on you to merge (CAT-1336):** when a PR from a branch this machine's
 factory launched is open, stamped at its head (`Reviewed: <head sha>`) and its
@@ -158,8 +205,8 @@ new push after the label went on doesn't take it off; the merge or close
 does. PRs the factory didn't build are never labelled, and nothing happens
 while the factory is paused.
 
-**Caps (per machine):** at most 2 sessions run at once (builders, reviewers and
-conflict sessions together), and no new card is picked up while 3 or more PRs from branches this
+**Caps (per machine):** at most 2 sessions run at once (builders, reviewers,
+conflict and CI sessions together), and no new card is picked up while 3 or more PRs from branches this
 machine's factory launched are open (those waiting on you to merge count too).
 Reviews still run while that cap holds; they are how PRs get unstuck. To change
 either cap on one machine, add a drop-in with `systemctl --user edit
@@ -181,7 +228,7 @@ line runs on its default:
 | Job | Runs | Default |
 |---|---|---|
 | `build-high` | builder for a card whose Risk is High, missing or unclear | `claude-opus-5-5` |
-| `build-medium` | builder for a Medium-risk card | `claude-opus-5-5` |
+| `build-medium` | builder for a Medium-risk card, and every CI session (CAT-1479) | `claude-opus-5-5` |
 | `build-low` | builder for a Low-risk card | `claude-sonnet-5-5` |
 | `review` | the card reviewer and the reviewer of other PRs | `claude-sonnet-5-5` |
 | `dep-review` | the Dependabot dependency reviewer | `claude-haiku-5-5` |
