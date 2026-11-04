@@ -21,6 +21,23 @@
 # that reviewer comments and never pushes or merges:
 # review-authors kkreative keithcatalyst dependabot
 #
+# The model each job runs on: "model <job> <model>", one line per job you
+# change; a job with no line runs on its default (letters, digits, dots and
+# dashes only). Builders follow the card's Risk section: build-low for Low,
+# build-medium for Medium, build-high for High or a missing or unclear Risk.
+# review is every PR reviewer except Dependabot's (dep-review); housekeeping is
+# the Linear pick, settle and needs-merge calls. The defaults:
+# model build-high claude-opus-5-5
+# model build-medium claude-opus-5-5
+# model build-low claude-sonnet-5-5
+# model review claude-sonnet-5-5
+# model dep-review claude-haiku-5-5
+# model housekeeping haiku
+# To put builders and reviewers back on Opus, uncomment and use these three:
+# model build-low claude-opus-5-5
+# model review claude-opus-5-5
+# model dep-review claude-opus-5-5
+#
 # ~/Projects/catalyst-shift catalyst-shift-site
 # ~/Projects/lbl-nextjs lbl-nextjs
 # ~/Projects/nourish-enablement nourish-rep-enablement

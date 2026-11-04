@@ -145,7 +145,7 @@ other open PRs. When the PR merges, the card moves to Done (if it isn't
 already) and loses `needs-merge`. When it is closed without merging, the label
 comes off and the status stays. The label is an existing workspace label, so
 it works in every team; the dispatcher never creates it. Each change is one
-cheap `claude -p --model haiku` call allowed only `get_issue` and `save_issue`,
+cheap `claude -p` call on the `housekeeping` model (Haiku; see Models) allowed only `get_issue` and `save_issue`,
 recorded in `~/.local/state/claude-factory/merge/<card key>-<pr number>`
 (`labelled`, `done` or `closed`, then the PR number) only once Linear confirms it, so
 nothing repeats and a failed call is retried next tick; each call's output goes
@@ -169,6 +169,37 @@ Environment=CLAUDE_FACTORY_WAITING_CAP=5
 The next tick picks it up (each tick is a fresh run). `claude-factory-dispatch
 status` run from a shell doesn't read the drop-in, so the cap it prints is the
 default unless you set the same variable there.
+
+**Models (CAT-1476):** each kind of session runs on the model set for its job
+in repos.conf, one `model <job> <model>` line per job you change. A job with no
+line runs on its default:
+
+| Job | Runs | Default |
+|---|---|---|
+| `build-high` | builder for a card whose Risk is High, missing or unclear | `claude-opus-5-5` |
+| `build-medium` | builder for a Medium-risk card | `claude-opus-5-5` |
+| `build-low` | builder for a Low-risk card | `claude-sonnet-5-5` |
+| `review` | the card reviewer and the reviewer of other PRs | `claude-sonnet-5-5` |
+| `dep-review` | the Dependabot dependency reviewer | `claude-haiku-5-5` |
+| `housekeeping` | the Linear pick, settle and needs-merge calls | `haiku` |
+
+```
+model build-low claude-opus-5-5
+model review claude-opus-5-5
+```
+
+The pick reads the card's Risk section and ends with `PICK <card> <branch>
+<Low|Medium|High|Unknown>`; anything but Low or Medium (or an older PICK line
+with no risk) builds on `build-high`. A model is letters, digits, dots and
+dashes; a value that isn't, or a job name that doesn't exist, is ignored with a
+line in the dispatcher's log. Every session's `--model` is on its unit's
+command line, in the dispatcher's `started …` line, and next to each running
+unit in `claude-factory-dispatch status`. The next tick picks a change up.
+**Back on Opus:** builders and reviewers ran on the account default (Opus)
+before this; to go back, add `model build-low claude-opus-5-5`,
+`model review claude-opus-5-5` and `model dep-review claude-opus-5-5`
+(housekeeping was already Haiku; add `model housekeeping claude-opus-5-5` too
+for every job on Opus).
 
 ## Streaming to the board
 
@@ -272,7 +303,7 @@ file) until the board's control endpoint is read (CAT-1441).
    - `repos.conf.example` to `~/.config/claude-factory/repos.conf`, only if
      that file doesn't exist. It never overwrites it.
 3. Edit `~/.config/claude-factory/repos.conf`: one `<repo folder> <Linear project>`
-   line per repo this machine works on.
+   line per repo this machine works on. The `model` lines are optional (see Models).
 4. Run the commands install.sh printed:
    ```bash
    loginctl enable-linger "$USER"                       # keep running while logged out
@@ -323,19 +354,19 @@ units; gstack goes back to its bundled Chromium.
 
 ## How a card flows
 
-1. **Pick.** A cheap `claude -p --model haiku` call, allowed only the Linear MCP
-   tools (`mcp__claude_ai_Linear__*`), takes the top Ready For Factory card in
-   the project (priority, then oldest), moves it to In Progress, assigns it to
-   you, and comments.
-2. **Build.** Unit `factory-cat-NNN` runs `claude -p --permission-mode auto -w
-   factory-cat-NNN` in the repo. It follows the repo's CLAUDE.md, opens the PR,
+1. **Pick.** A cheap `claude -p` call on the `housekeeping` model (Haiku),
+   allowed only the Linear MCP tools (`mcp__claude_ai_Linear__*`), takes the top
+   Ready For Factory card in the project (priority, then oldest), moves it to
+   In Progress, assigns it to you, comments, and reads the card's Risk.
+2. **Build.** Unit `factory-cat-NNN` runs `claude -p --model <model for the
+   card's Risk> --permission-mode auto -w factory-cat-NNN` in the repo (see Models). It follows the repo's CLAUDE.md, opens the PR,
    never merges or turns on auto-merge, and moves the card to Blocked on a hard
    stop. It does not stamp its own PR.
 3. **Review.** On a later tick, when `factory-cat-NNN` has finished, its branch
    has an open PR, and the PR body has no `Reviewed: <current head sha>` line,
    the dispatcher adds a worktree `.claude/worktrees/factory-review-cat-NNN`
    detached at the PR head and starts unit `factory-review-cat-NNN`: a fresh
-   `claude -p --permission-mode auto` session that didn't write the code. It runs
+   `claude -p --model <review model> --permission-mode auto` session that didn't write the code. It runs
    gstack `/review` (plus `/cso` if the diff touches a path in
    `.github/CODEOWNERS`), fixes or answers each finding, and writes one line
    `Reviewed: <40-char head sha> — /review[, /cso]` in the PR body. It never

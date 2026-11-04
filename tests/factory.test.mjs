@@ -59,7 +59,7 @@ test("a shared list both cards only add to (nav link, feature-map row) is not ov
 test("every claude and systemd-run call in the dispatcher reads stdin from /dev/null", () => {
   const s = read(DISPATCH);
   // pick(): the claude -p call ends its prompt with </dev/null
-  assert.match(s, /PICK <identifier> <gitBranchName>" <\/dev\/null/);
+  assert.match(s, /PICK <identifier> <gitBranchName> <risk>, [^"]*" <\/dev\/null/);
   // run_unit(): every builder and reviewer start goes through it (claude, or
   // claude under claude-factory-stream, CAT-1442)
   assert.match(s, /local -a cmd=\("\$CLAUDE" "\$@"\)/);
@@ -267,8 +267,146 @@ echo "\${PICK:-NONE}"
   assert.match(read(join(state, "launched")), /keith\/lum-45-some-title lum-45$/m);
 });
 
-test("install.sh skips label, offset and review-authors lines like the dispatcher does", () => {
-  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\)'/;
+// CAT-1476: each job's model comes from "model <job> <model>" lines in
+// repos.conf, else the default. Builders follow the Risk the pick read (a
+// missing field is Unknown, which is build-high); the card reviewer runs on
+// review; Linear calls on housekeeping. Every session's --model reaches its
+// unit, the "started" line and status. gh applies the dispatcher's own --jq to
+// a fixture (needs jq); systemd-run and systemctl share a file of running units.
+test("models per job: defaults, config overrides, builder risk mapping, and status shows the model", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-models-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
+  const repo = join(t, "repo"), units = join(t, "units"), calls = join(t, "calls");
+  for (const d of [bin, state, repo, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  const sha = "9".repeat(40);
+  const fixture = join(t, "prs.json");
+  writeFileSync(fixture, JSON.stringify([{ number: 9, headRefOid: sha, headRefName: "b/cat-9-x", body: "", author: { login: "kkreative" },
+    isDraft: false, labels: [], isCrossRepository: false, mergeable: "MERGEABLE" }]));
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+[ "$1 $2" = "api user" ] && { echo kkreative; exit 0; }
+sub="$1 $2"; shift 2; n=; h=; q=.
+[ "$sub" = "pr view" ] && { n=$1; shift; }
+while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --jq) q=$2; shift;; esac; shift; done
+if [ -n "$n" ]; then jq -r ".[] | select(.number == $n) | $q" "${fixture}"
+elif [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "${fixture}"
+else jq -r "$q" "${fixture}"; fi
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+for a; do case $a in --unit=*) u=\${a#--unit=};; --description=*) d=\${a#--description=};; esac; done
+echo "$u.service" >>"${units}"; printf '%s' "$d" >"${units}.$u.desc"; printf '%s\\n' "$@" >"${units}.$u.args"
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in
+  *list-units*) cat "${units}";;
+  *is-active*) grep -qxF "\${!#}" "${units}";;
+  *Description*) u=$3; cat "${units}.\${u%.service}.desc";;
+  *show*) echo then;;
+esac
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "git"), `#!/usr/bin/env bash
+case "$*" in
+  *"worktree add"*) mkdir -p "\${@: -2:1}";;
+  *"worktree remove"*) rm -rf "\${!#}";;
+esac
+exit 0
+`, { mode: 0o755 });
+  // claude here is only the Linear calls (pick, settle): it logs the model it got.
+  writeFileSync(join(bin, "claude"), `#!/usr/bin/env bash
+for a; do [ "$prev" = --model ] && m=$a; prev=$a; done
+case \${!#} in *"Ready For Factory"*) echo "pick $m" >>"${calls}"; echo "\${PICK:-NONE}";; *) echo "linear $m" >>"${calls}";; esac
+`, { mode: 0o755 });
+  const conf = join(home, ".config/claude-factory/repos.conf");
+  const tick = (models, pick) => {
+    writeFileSync(conf, `label kevin-omarchy\n${models}${repo} proj\n`);
+    writeFileSync(units, "");
+    writeFileSync(calls, "");
+    return spawnSync("bash", [DISPATCH], {
+      encoding: "utf8",
+      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "9", CLAUDE_FACTORY_WAITING_CAP: "99", ...(pick ? { PICK: pick } : {}) },
+    });
+  };
+  const modelOf = (unit) => read(`${units}.${unit}.args`).match(/\n-p\n--model\n([^\n]+)\n/)[1];
+  const opus = "claude-opus-5-5", sonnet = "claude-sonnet-5-5";
+
+  // Defaults. The card reviewer for cat-9 starts on the first tick.
+  writeFileSync(join(state, "launched"), `${repo} b/cat-9-x cat-9\n`);
+  let r = tick("", "PICK CAT-1 b/cat-1-x Low");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(modelOf("factory-review-cat-9"), sonnet);
+  assert.match(r.stdout, /started review of CAT-9 .*model claude-sonnet-5-5,/);
+  assert.equal(modelOf("factory-cat-1"), sonnet);
+  assert.match(r.stdout, /started CAT-1 .*model claude-sonnet-5-5 for risk Low,/);
+  assert.match(read(calls), /^pick haiku$/m);
+  assert.doesNotMatch(read(calls), /^(pick|linear) (?!haiku$)/m, "a Linear call left housekeeping");
+
+  // Risk to builder model: Medium and High are Opus, and so is anything unclear,
+  // including a PICK line from before the risk field (missing 4th field).
+  for (const [line, model, risk] of [
+    ["PICK CAT-2 b/cat-2-x Medium", opus, "Medium"],
+    ["PICK CAT-3 b/cat-3-x High", opus, "High"],
+    ["PICK CAT-4 b/cat-4-x", opus, "Unknown"],
+    ["PICK CAT-5 b/cat-5-x Unknown", opus, "Unknown"],
+    ["PICK CAT-6 b/cat-6-x low", sonnet, "low"],
+  ]) {
+    r = tick("", line);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(modelOf(`factory-${line.split(" ")[1].toLowerCase()}`), model, line);
+    assert.match(r.stdout, new RegExp(`model ${model} for risk ${risk},`), line);
+  }
+
+  // Overrides: model lines are config, not repos (still one pick), a bad value
+  // or an unknown job is ignored with a warning, and the rest take effect.
+  rmSync(join(state, "reviewed"), { recursive: true });
+  r = tick("model build-low claude-opus-5-5\nmodel review claude-opus-5-5\nmodel housekeeping claude-haiku-5-5\nmodel build-high bad;value\nmodel reviw x\n", "PICK CAT-7 b/cat-7-x Low");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(read(calls).split("\n").filter((l) => l.startsWith("pick ")).length, 1, read(calls));
+  assert.match(read(calls), /^pick claude-haiku-5-5$/m);
+  assert.doesNotMatch(read(calls), /^(pick|linear) (?!claude-haiku-5-5$)/m);
+  assert.equal(modelOf("factory-cat-7"), opus);
+  assert.equal(modelOf("factory-review-cat-9"), opus);
+  assert.match(r.stderr, /ignoring 'model build-high bad;value' .*using claude-opus-5-5/);
+  assert.match(r.stderr, /ignoring 'model reviw'/);
+  r = tick("model build-high bad;value\n", "PICK CAT-8 b/cat-8-x High");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(modelOf("factory-cat-8"), opus);
+  // A value that starts with a dash would read as a claude flag: ignored too.
+  r = tick("model build-high --dangerously-skip-permissions\n", "PICK CAT-8 b/cat-8-x High");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(modelOf("factory-cat-8"), opus);
+  assert.match(r.stderr, /ignoring 'model build-high --dangerously-skip-permissions'/);
+  // The risk word only picks among the configured models: a pick line with
+  // anything else after the branch (a flag, a second word) is not a pick.
+  for (const line of ["PICK CAT-11 b/cat-11-x --model", "PICK CAT-11 b/cat-11-x Low extra", "PICK CAT-11 b/cat-11-x Low-risk"]) {
+    r = tick("", line);
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(read(units), /factory-cat-11/, line);
+  }
+
+  // Everything back on Opus: one line per job that isn't Opus by default.
+  r = tick(["build-low", "review", "dep-review", "housekeeping"].map((j) => `model ${j} claude-opus-5-5\n`).join(""), "PICK CAT-10 b/cat-10-x Low");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(modelOf("factory-cat-10"), opus);
+  assert.match(read(calls), /^pick claude-opus-5-5$/m);
+
+  // status shows each running unit's model.
+  writeFileSync(units, "factory-cat-10.service\n");
+  r = spawnSync("bash", [DISPATCH, "status"], { encoding: "utf8", env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude") } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ {2}factory-cat-10 {2}model claude-opus-5-5 {2}since then$/m);
+});
+
+test("every builder and reviewer session passes --model, and Linear calls use the housekeeping model", () => {
+  const s = read(DISPATCH);
+  for (const fn of ["launch() {", "review() {", "review_pr() {"]) {
+    const body = s.slice(s.indexOf(fn), s.indexOf("\n}\n", s.indexOf(fn)));
+    assert.match(body, /-p --model "\$/, fn);
+  }
+  assert.doesNotMatch(s, /--model haiku/);
+  assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 3);
+});
+
+test("install.sh skips label, offset, review-authors and model lines like the dispatcher does", () => {
+  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\)'/;
   assert.match(read(INSTALL), skip);
   assert.match(read(DISPATCH), skip);
 });
@@ -564,7 +702,7 @@ exit 0
   // The other-PR reviewer is unchanged: it may push a one-line fix and has no tool denials.
   assert.match(read(`${units}.factory-review-repo-pr-1`), /git push origin 'HEAD:b\/1'/);
   assert.doesNotMatch(read(`${units}.factory-review-repo-pr-1.args`), /disallowedTools/);
-  assert.match(read(`${units}.factory-review-repo-pr-1.args`), /\/claude\n-p\n--permission-mode\nauto\n--output-format\ntext\n$/);
+  assert.match(read(`${units}.factory-review-repo-pr-1.args`), /\/claude\n-p\n--model\nclaude-sonnet-5-5\n--permission-mode\nauto\n--output-format\ntext\n$/);
 
   // The Dependabot PR counts toward the cap: PR #1's reviewer still runs, cap 1.
   r = tick("kkreative dependabot", 1);
@@ -588,7 +726,8 @@ exit 0
     // Enforced, not just asked: dontAsk with an allowlist, no repo settings or
     // MCP servers, push/merge/gh api denied, and nothing that installs or runs code.
     const args = read(`${units}.factory-review-repo-pr-3.args`);
-    assert.match(args, /^--permission-mode\ndontAsk$/m);
+    assert.match(args, /\/claude\n-p\n--model\nclaude-haiku-5-5\n--permission-mode\ndontAsk$/m);
+    assert.match(r.stdout, /started dependency review of PR #3 .*model claude-haiku-5-5\)/);
     assert.doesNotMatch(args, /^auto$/m);
     assert.match(args, /^--setting-sources\nuser$/m);
     assert.match(args, /^--strict-mcp-config$/m);
