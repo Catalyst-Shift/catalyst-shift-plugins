@@ -805,3 +805,97 @@ test("the spool is replaced whole: a failed rewrite leaves the old spool, never 
   assert.equal(read(spool), before);
   await b.down();
 });
+
+// Fresh-review findings on PR #23: shapes that slipped past the trust boundary.
+const resultOf = (name, input, content) => {
+  const ctx = { tools: new Map() };
+  S.sanitizeEvent({ type: "assistant", message: { content: [{ type: "tool_use", id: "r", name, input }] } }, ctx);
+  return JSON.stringify(S.sanitizeEvent({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "r", content }] } }, ctx));
+};
+
+test("text past the 8 KB masking window is never sent, even when masking shrinks what came before it", () => {
+  const key = "-----BEGIN RSA PRIVATE KEY-----\n" + ("A".repeat(64) + "\n").repeat(150) + "-----END RSA PRIVATE KEY-----\n";
+  const tail = "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123";
+  for (const s of [
+    resultOf("Bash", { command: "openssl genrsa" }, "openssl output:\n" + key),
+    JSON.stringify(S.sanitizeEvent({ type: "assistant", message: { content: [{ type: "text", text: "k:\n" + key + tail }] } })),
+  ]) {
+    assert.doesNotMatch(s, /A{64}/, "key body was sent");
+    assert.doesNotMatch(s, /ghp_/);
+  }
+  assert.match(resultOf("Bash", { command: "ls" }, "x".repeat(20_000)), /more bytes not sent/);
+});
+
+test("env dumps run through bash -c, sudo, a path or a container are not sent", () => {
+  for (const command of ['bash -c "env"', "/usr/bin/env", "sudo env", "docker exec app env", "sudo printenv", 'bash -c "env -u A -i"']) {
+    assert.match(resultOf("Bash", { command }, "FOO_ROLE=abcdefghijkl"), /not sent/, command);
+  }
+  // env as a prefix that runs another command is not a dump.
+  assert.match(resultOf("Bash", { command: "env FOO=1 make test" }, "ok 12 tests"), /ok 12 tests/);
+});
+
+test("file prints on a later line, after a pipe, in $( ) or via sudo / git -C are not sent", () => {
+  for (const command of ["cd x\ncat src/config.ts", "ls | xargs cat", "echo $(cat f)", "(cat f)", "sudo cat f", "time cat f", "git -C dir show HEAD:f", "xargs -0 -n1 cat"]) {
+    assert.match(resultOf("Bash", { command }, "const secretSauce = 1"), /file contents not sent/, command);
+  }
+  for (const command of ["npm test", "npm test 2>&1 | tail -20", "git log | head -5"]) {
+    assert.match(resultOf("Bash", { command }, "const secretSauce = 1"), /secretSauce/, command);
+  }
+});
+
+test("MCP tools that return files, query results or logs are sent as a size only", () => {
+  for (const name of ["mcp__claude_ai_Gmail__get_thread", "mcp__claude_ai_Gmail__get_message", "mcp__claude_ai_HubSpot__search_crm_objects", "mcp__claude_ai_Vercel__get_runtime_errors", "mcp__supabase__execute_sql", "mcp__claude_ai_Vercel__get_deployment_file_contents", "mcp__claude_ai_Neon__run_sql", "mcp__claude_ai_Vercel__get_runtime_logs", "mcp__claude_ai_Google_Drive__read_file_content", "mcp__x__download_file"]) {
+    assert.match(resultOf(name, { q: "a" }, "someone@example.com"), /not sent/, name);
+  }
+  for (const name of ["mcp__claude_ai_Linear__get_issue", "mcp__playwright__browser_snapshot", "mcp__airtable__list_bases"]) {
+    assert.match(resultOf(name, { id: "CAT-1" }, "Factory machines stream"), /Factory machines stream/, name);
+  }
+});
+
+test("a tool result's non-text blocks count against its 4 KB too", () => {
+  const blocks = Array.from({ length: 10 }, () => ({ type: "resource", resource: { text: "z".repeat(5000) } }));
+  const s = resultOf("mcp__x__thing", { q: "a" }, blocks);
+  assert.ok(s.length < 2 * S.MAX_FIELD_BYTES, `sent ${s.length} bytes`);
+});
+
+test("lower-case bearer values and JSON escaped inside a string are masked", () => {
+  for (const h of ["authorization: bearer abcdefghijklmnop123", '"authorization":"bearer abcdefghijklmnop123"']) assert.doesNotMatch(S.scrub(h), /abcdefghijklmnop123/, h);
+  assert.doesNotMatch(S.scrub('log: {\\"password\\":\\"hunter2hunter2\\"}'), /hunter2/);
+});
+
+test("SHELL_READER stays linear on blank-line runs; heredocs into cat and prose descriptions are not withheld", () => {
+  // Commands are not windowed: each ~100 KB shape that was quadratic at first, timed on its own.
+  for (const command of ["echo a" + "\n".repeat(100_000) + "b", "x" + "\n \n".repeat(30_000), "env -u ".repeat(14_000) + "!", " env -a".repeat(14_000), "sudo " + "-;sudo ".repeat(14_000) + "X", "sudo " + "-`time ".repeat(14_000) + "X"]) {
+    const t0 = performance.now();
+    resultOf("Bash", { command }, "ok");
+    const ms = performance.now() - t0;
+    // gstack-timing-ok: the card's own bound (under 50 ms per batch on the session's side); quadratic backtracking is the regression under test.
+    assert.ok(ms < 50, `${command.slice(0, 8)}… took ${ms.toFixed(0)} ms`);
+  }
+  for (const command of [`git commit -m "$(cat <<'EOF'\nfix it\nEOF\n)"`, "cat > notes.txt <<EOF\nx\nEOF"]) {
+    assert.match(resultOf("Bash", { command }, "[main abc123] fix it"), /abc123/, command);
+  }
+  assert.match(resultOf("Bash", { command: "ls -la", description: "Show env folder" }, "total 8"), /total 8/);
+  assert.match(resultOf("Bash", { command: "env -u PATH" }, "FOO_ROLE=abcdefghijkl"), /not sent/);
+});
+
+test("secrets as JSON keys, in non-string secret fields, quoted --password values and escaped UPPER names are masked; prose is not", () => {
+  const tok = "zq".repeat(20);
+  const s = JSON.stringify(S.sanitizeEvent({ type: "assistant", message: { content: [{ type: "tool_use", id: "k", name: "X", input: { payload: { [tok]: "v" }, password: 123456, token: ["not-in-env-zzz"] } }] } }, { tools: new Map() }, [tok]));
+  for (const v of [tok, "123456", "not-in-env-zzz"]) assert.ok(!s.includes(v), `${v} was sent`);
+  assert.doesNotMatch(S.scrub('client --password "not-an-env-value-123"'), /not-an-env-value/);
+  assert.doesNotMatch(S.scrub('{\\"DB_PASS\\": \\"hunter2xyz\\"}'), /hunter2xyz/);
+  const prose = "a basic implementation of tokenization; the bearer verification_service uses bearer authentication-v2 scheme";
+  assert.equal(S.scrub(prose), prose);
+  // Usage counts stay.
+  const u = S.sanitizeEvent({ type: "result", usage: { input_tokens: 12, output_tokens: 34 } });
+  assert.deepEqual(u.usage, { input_tokens: 12, output_tokens: 34 });
+});
+
+test("a tool result has one 4 KB budget in all: images, objects and the blocks past it", () => {
+  const imgs = resultOf("X", {}, Array.from({ length: 2000 }, () => ({ type: "image", source: {} })));
+  const links = resultOf("X", {}, Array.from({ length: 20_000 }, () => ({ type: "resource_link", uri: "file:///x" })));
+  const obj = resultOf("X", {}, { rows: Array.from({ length: 1000 }, () => "r".repeat(400)) });
+  for (const x of [imgs, links, obj]) assert.ok(x.length < 2 * S.MAX_FIELD_BYTES, `sent ${x.length} bytes`);
+  assert.match(links, /more blocks not sent/);
+});

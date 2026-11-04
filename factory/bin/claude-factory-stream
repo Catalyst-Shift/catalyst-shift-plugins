@@ -49,6 +49,8 @@ const SENSITIVE = new RegExp(
     String.raw`\.dev\.vars\b`,
     String.raw`environment\.d\b`,
     String.raw`\bprintenv\b`,
+    // env with nothing after it but options: bash -c "env", /usr/bin/env, sudo env, docker exec x env.
+    String.raw`(^|[\s"'/]|\$\()env([ \t]+-[-\w]+([ \t]+[A-Za-z_]\w*)?){0,4}[ \t]*($|[;&|)\x60<>"'])`,
     // A bare env, set or export as a command: at the start or after ; & | ( $( or a backquote.
     String.raw`(^|[;&|(\x60]\s*|\$\(\s*)(env|set|export|typeset|declare)(\s+-[-\w]+)*\s*($|[;&|)\x60<>])`,
     String.raw`\bcompgen\s+-e\b|\bps\s+[a-z]*e[a-z]*w|\bps\s+[a-z]*w[a-z]*e`,
@@ -70,8 +72,16 @@ const NAMING_INPUT = ["file_path", "path", "pattern", "glob", "command", "descri
 const EDITORS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 // Tools whose result is a file's contents: never sent, only its size.
 const FILE_READERS = new Set(["Read", "NotebookRead"]);
+// MCP tools whose result is a file, query rows, messages or logs (customer data): only its size, like Read.
+// Judged on whole _/- separated words of the tool's own name (after the last __), so browser_* or airtable stay.
+const MCP_READER_WORD = /(?:^|[_-])(?:sql|query|files?|contents?|download|read|logs?|export|fetch|documents?|attachments?|transcripts?|records?|rows?|messages?|emails?|mail|threads?|crm|contacts?|errors?)(?=$|[_-])/i;
+const isMcpReader = (name) => /^mcp__/.test(String(name ?? "")) && MCP_READER_WORD.test(String(name).split("__").pop());
 // A shell command that prints files (cat x, head -n 5 x, sed -n 1,9p x, git show x:f), at the start or after && ; |.
-const SHELL_READER = /(?:^|&&|;|\|\|)\s*(?:cd\s+\S+\s*&&\s*)?(?:cat|head|tail|less|more|bat|nl|tac|xxd|od|strings|sed\s+-n|awk\s+'?\{?\s*print|git\s+show\s+\S*:)/;
+// Repeats are bounded ({0,8}, {0,4}): commands are not windowed, and an open * here is quadratic.
+// Any line of the command counts, as does a print inside ( ) or $( ), behind sudo or time, or fed files by
+// xargs. After a plain pipe, head or tail reads the output before it (npm test | tail), so that stays.
+// [ \t]* (not \s*) after the boundary keeps it linear on runs of blank lines; cat <<EOF / cat > f write, not print.
+const SHELL_READER = /(?:^|&&|;|\|\||\(|\$\(|\x60|\|[ \t]*(?=xargs\b))[ \t]*(?:cd[ \t]+\S+[ \t]*&&[ \t]*)?(?:(?:xargs|sudo|time|nice|command)[ \t]+(?:-\S+[ \t]+){0,8}){0,4}(?:cat(?![ \t]*[<>])|head|tail|less|more|bat|nl|tac|xxd|od|strings|sed\s+-n|awk\s+'?\{?\s*print|git\s+(?:-C\s+\S+\s+)?show\s+\S*:)\b/m;
 
 // name=value where a segment of the name (split on _ or -) says it holds a
 // secret: GITHUB_TOKEN=, db_password:, "apiKey": "...", accessToken = ... .
@@ -81,18 +91,18 @@ const SHELL_READER = /(?:^|&&|;|\|\|)\s*(?:cd\s+\S+\s*&&\s*)?(?:cat|head|tail|le
 const SECRET_SEGMENT = String.raw`(?:[a-z]{0,20}(?:token|secret|password|passwd|passphrase|apikey|api[_-]key|privatekey|private[_-]key|accesskey|access[_-]key|credentials?)|pgpassword|database[_-]?url|dsn|cookie|salt)`;
 const VALUE = String.raw`("[^"\n]{0,4096}"?|'[^'\n]{0,4096}'?|[^\s"',;]{1,4096})`; // closing quote optional: an unterminated value is masked too
 const SECRET_ASSIGN = new RegExp(
-  String.raw`(\b(?:[A-Za-z0-9]{1,64}[_-]){0,6}${SECRET_SEGMENT}(?:[_-][A-Za-z0-9]{1,64}){0,6}["']?\s*[=:]\s*)${VALUE}`,
+  String.raw`(\b(?:[A-Za-z0-9]{1,64}[_-]){0,6}${SECRET_SEGMENT}(?:[_-][A-Za-z0-9]{1,64}){0,6}\\?["']?\s*[=:]\s*\\?)${VALUE}`,
   "gi",
 );
 const SECRET_ASSIGN_UPPER = new RegExp(
-  String.raw`(\b(?:[A-Z0-9]{1,64}_){0,6}(?:KEY|PASS|AUTH|PAT)(?:_[A-Z0-9]{1,64}){0,6}["']?\s*[=:]\s*)${VALUE}`,
+  String.raw`(\b(?:[A-Z0-9]{1,64}_){0,6}(?:KEY|PASS|AUTH|PAT)(?:_[A-Z0-9]{1,64}){0,6}\\?["']?\s*[=:]\s*\\?)${VALUE}`,
   "g",
 );
 // Passwords given as command-line options: curl -u user:pw, mysql -pPW, --password X, sshpass -p X.
 const SECRET_FLAGS = [
   /(\s-u\s+[^\s:]{1,128}:)[^\s"']{1,512}/g,
   /(\bmysql(?:dump)?\b[^\n]{0,200}?\s-p)[^\s-][^\s]{0,512}/g,
-  /(--(?:password|passwd|token|secret|api-key)[=\s]+)[^\s"']{1,512}/gi,
+  /(--(?:password|passwd|token|secret|api-key)[=\s]+)(?:"[^"\n]{1,512}"?|'[^'\n]{1,512}'?|[^\s"']{1,512})/gi,
   /(\bsshpass\s+-p\s*)[^\s]{1,512}/g,
 ];
 // Distinctive prefixes match anywhere, even glued to other text; the short
@@ -116,6 +126,8 @@ const SECRET_VALUES = [
 // scheme://user:password@ and scheme://:password@
 const URL_PASSWORD = /\b([a-z][a-z0-9+.-]{0,20}:\/\/[^\s:/@]{0,256}:)[^\s@/]{1,512}@/gi;
 const BEARER = /\b((?:Bearer|Basic|Token)\s+)[A-Za-z0-9._~+/=-]{12,}/g;
+// Lower-case bearer only in a header (authorization: bearer …), so prose about bearer auth stays.
+const BEARER_ANY_CASE = /(\bauthorization["']?\s*[:=]\s*["']?bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi;
 // A field whose name says it holds a secret ({"token": "..."}); usage counts like output_tokens are numbers and stay.
 const SECRET_KEY = /^(?:.*[_-])?(?:[a-z]{0,20}(?:token|secret|password|passwd|apikey|api_key|privatekey|private_key|accesskey|access_key)|authorization|cookie)$/i;
 // Env names whose values are never sent: a whole segment says secret. SSH_AUTH_SOCK, GIT_AUTHOR_*, *_SESSION_* are not.
@@ -130,29 +142,40 @@ function secretValues(env = process.env) {
   return [...out].sort((a, b) => b.length - a.length);
 }
 
-/** Cuts a string to at most `max` bytes, the note saying how much was left out included. */
-function clip(s, max = MAX_FIELD_BYTES) {
+/**
+ * Cuts a string to at most `max` bytes, the note saying how much was left out
+ * included; `unsent` bytes were already dropped before it (past the masking window).
+ */
+function clip(s, max = MAX_FIELD_BYTES, unsent = 0) {
   const b = Buffer.from(s, "utf8");
-  if (b.length <= max) return s;
+  if (b.length <= max && !unsent) return s;
   // Room for the note, so a clipped string is never clipped again.
-  const keep = Math.max(0, max - 48);
-  return `${b.subarray(0, keep).toString("utf8").replace(/\uFFFD+$/, "")}… [${b.length - keep} more bytes not sent]`;
+  const keep = Math.min(b.length, Math.max(0, max - 48));
+  return `${b.subarray(0, keep).toString("utf8").replace(/\uFFFD+$/, "")}… [${b.length - keep + unsent} more bytes not sent]`;
 }
+
+/** Bytes of `s` past the masking window: dropped by scrub(), never sent. */
+const pastWindow = (s) => (s.length > LOOK ? Buffer.byteLength(s.slice(LOOK), "utf8") : 0);
+/** One string as it may leave: masked, then cut to `max` bytes. */
+const clean = (s, known, max = MAX_FIELD_BYTES) => clip(scrub(s, known), max, pastWindow(s));
 
 /**
  * Masks secrets in one string, always followed by clip(). Only its first 8 K
  * characters are looked at: clip() keeps at most 4 KB, so the rest is never
  * sent, and a huge tool output costs the session nothing.
  */
+const LOOK = 2 * MAX_FIELD_BYTES;
 function scrub(s, known = []) {
-  const LOOK = 2 * MAX_FIELD_BYTES;
-  if (s.length > LOOK) return scrub(s.slice(0, LOOK), known) + s.slice(LOOK);
+  // Past the window is never looked at, so it is never sent: masking can
+  // shorten the head (a key block becomes [redacted]) and must not pull raw
+  // tail text into the 4 KB that goes out. clean() counts it as not sent.
+  if (s.length > LOOK) return scrub(s.slice(0, LOOK), known);
   let out = s;
   for (const v of known) if (out.includes(v)) out = out.split(v).join("[redacted]");
   out = out.replace(SECRET_ASSIGN, "$1[redacted]").replace(SECRET_ASSIGN_UPPER, "$1[redacted]");
   for (const re of SECRET_FLAGS) out = out.replace(re, "$1[redacted]");
   for (const re of SECRET_VALUES) out = out.replace(re, "[redacted]");
-  return out.replace(URL_PASSWORD, "$1[redacted]@").replace(BEARER, "$1[redacted]");
+  return out.replace(URL_PASSWORD, "$1[redacted]@").replace(BEARER, "$1[redacted]").replace(BEARER_ANY_CASE, "$1[redacted]");
 }
 
 const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
@@ -160,40 +183,65 @@ const sizeOf = (v) => Buffer.byteLength(typeof v === "string" ? v : JSON.stringi
 
 /** Every string in `v` scrubbed and clipped; keys kept. */
 function deepClean(v, known, depth = 0) {
-  if (typeof v === "string") return clip(scrub(v, known));
+  if (typeof v === "string") return clean(v, known);
   if (v === null || typeof v !== "object") return v;
   if (depth > 32) return "[too deep]";
   if (Array.isArray(v)) return v.map((x) => deepClean(x, known, depth + 1));
   const out = {};
-  for (const [k, x] of Object.entries(v)) out[k] = typeof x === "string" && SECRET_KEY.test(k) ? "[redacted]" : deepClean(x, known, depth + 1);
+  for (const [k, x] of Object.entries(v)) {
+    const key = clip(scrub(k, known), 256);
+    out[key] = x != null && typeof x !== "boolean" && SECRET_KEY.test(k) ? "[redacted]" : deepClean(x, known, depth + 1);
+  }
   return out;
 }
 
 /** A tool result's body (string or content blocks) as at most 4 KB of text, masked before it is cut. */
 function clipResult(content, known) {
-  if (typeof content === "string") return clip(scrub(content, known));
-  if (!Array.isArray(content)) return content;
-  let left = MAX_FIELD_BYTES;
+  if (typeof content === "string") return clean(content, known);
+  if (!Array.isArray(content)) {
+    const size = sizeOf(content);
+    return size <= MAX_FIELD_BYTES ? content : `[result not sent: ${size} bytes]`;
+  }
+  // Room kept for the closing "[N more blocks not sent]" note.
+  let left = MAX_FIELD_BYTES - (content.length > 1 ? 48 : 0);
+  let skipped = 0;
   const out = [];
   for (const b of content) {
+    if (left <= 0) {
+      skipped++;
+      continue;
+    }
     if (isObj(b) && b.type === "text" && typeof b.text === "string") {
-      if (left <= 0) continue;
       const masked = scrub(b.text, known);
-      const text = clip(masked, left);
+      const unsent = pastWindow(b.text);
+      const text = clip(masked, left, unsent);
       // Once a block is cut, the blocks after it are left out.
-      left = text === masked ? left - Buffer.byteLength(text, "utf8") : 0;
+      left = text === masked && !unsent ? left - Buffer.byteLength(text, "utf8") : 0;
       out.push({ ...b, text });
     } else if (isObj(b) && b.type === "image") {
       out.push({ type: "text", text: "[image not sent]" });
-    } else out.push(b);
+      left -= 40;
+    } else {
+      // Any other block (an MCP resource, a document) counts against the same 4 KB.
+      const size = sizeOf(b);
+      if (size <= left) {
+        left -= size;
+        out.push(b);
+      } else {
+        left = 0;
+        out.push({ type: "text", text: `[${isObj(b) && typeof b.type === "string" ? b.type.slice(0, 40) : "block"} not sent: ${size} bytes]` });
+      }
+    }
   }
+  if (skipped) out.push({ type: "text", text: `[${skipped} more blocks not sent]` });
   return out;
 }
 
 /** The input's string values, one per line, for the checks above. */
 function inputText(input) {
   if (!isObj(input)) return String(input ?? "");
-  return Object.values(input).filter((v) => typeof v === "string").join("\n");
+  // description is the session's own prose ("Show env"), not what runs.
+  return Object.entries(input).filter(([k, v]) => k !== "description" && typeof v === "string").map(([, v]) => v).join("\n");
 }
 
 function isSensitiveCall(name, input) {
@@ -216,7 +264,7 @@ const OUTPUT_READERS = new Set(["TaskOutput", "BashOutput"]);
 
 /** A call whose result is a file's contents: Read, a shell file print, a Grep in content mode. */
 function readsFiles(name, input) {
-  if (FILE_READERS.has(name)) return true;
+  if (FILE_READERS.has(name) || isMcpReader(name)) return true;
   if (name === "Bash" && isObj(input) && SHELL_READER.test(String(input.command ?? ""))) return true;
   return name === "Grep" && isObj(input) && input.output_mode === "content";
 }
@@ -230,7 +278,7 @@ function readsFiles(name, input) {
  * included) is dropped. Every string is then masked for secrets and cut to 4 KB.
  */
 function sanitizeEvent(ev, ctx = { tools: new Map() }, known = []) {
-  if (!isObj(ev)) return { type: "text", text: clip(scrub(String(ev), known)) };
+  if (!isObj(ev)) return { type: "text", text: clean(String(ev), known) };
   const out = JSON.parse(JSON.stringify(ev));
   delete out.tool_use_result;
   if (out.type === "system" && out.subtype === "init") {
@@ -286,7 +334,6 @@ function sanitizeEvent(ev, ctx = { tools: new Map() }, known = []) {
 
 // The station a session is at, from what it just did (the board's rail reads these).
 const SKILL_STAGE = { investigate: "investigate", review: "review", cso: "review", "code-review": "review", qa: "qa", "qa-only": "qa", ship: "ship" };
-const EDITS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
 /** The stage an event moves a session to, or null. A reviewer never moves to build. */
 function stageOf(ev, role = "build") {
@@ -301,7 +348,7 @@ function stageOf(ev, role = "build") {
       if (s) stage = s;
     } else if (b.name === "Bash" && /\bgh\s+pr\s+create\b/.test(String(input.command ?? ""))) {
       stage = "ship";
-    } else if (role === "build" && EDITS.has(b.name) && stage == null) {
+    } else if (role === "build" && EDITORS.has(b.name) && stage == null) {
       stage = "build";
     }
   }
@@ -521,7 +568,12 @@ class Outbox {
     }
     if (r.status === 400 || r.status === 413) {
       // Can never succeed: keep it aside on the machine and go on.
-      safely("write the rejected batch", () => fs.appendFileSync(this.rejected, head.line + "\n", PRIVATE));
+      if (safely("write the rejected batch", () => (fs.appendFileSync(this.rejected, head.line + "\n", PRIVATE), true)) !== true) {
+        // Not kept anywhere else: leave it at the head of the spool and try again later.
+        this.backoffUntil = Date.now() + 60_000;
+        log(`${range}: board rejected it (${r.status}) and it could not be put aside; kept in the spool`);
+        return;
+      }
       this.drop();
       this.rewriteSpool();
       log(`${range}: board rejected it (${r.status}); kept in ${this.rejected}`);
@@ -623,9 +675,9 @@ async function run(opts, rest, env = process.env) {
 
   let box;
   let lastWrite = 0;
-  const writeState = () =>
+  const writeState = (ended = false) =>
     safely("write the stream state", () =>
-      writeJson(stateFile, { unit, card, repo: opts.repo || null, sessionId, startedAt, pid: process.pid, lastSeq: box.lastSeq, spoolEvents: box.spoolEvents }),
+      writeJson(stateFile, { unit, card, repo: opts.repo || null, sessionId, startedAt, pid: ended ? null : process.pid, lastSeq: box.lastSeq, spoolEvents: box.spoolEvents }),
     );
   let stage = role === "review" ? "review" : "start";
   const status = (st, note) => box.push({ type: "status", at: new Date().toISOString(), card, stage: st, note });
@@ -713,7 +765,7 @@ async function run(opts, rest, env = process.env) {
       stop(e);
     }
   }
-  writeState();
+  writeState(true);
   if (box.queue.length) log(`${box.spoolEvents} events left in ${box.spool}; the dispatcher sends them on its next tick`);
   return exit;
 }
@@ -730,17 +782,17 @@ const alive = (pid) => {
 };
 
 /** Sends one spooled batch, split on 413. "sent" (or put aside as rejected) or "stop" (the board is not taking it now). */
-async function drainLine(url, token, line, rejected) {
+async function drainLine(url, token, line, rejected, deadline = Infinity) {
+  if (Date.now() > deadline) return "stop";
   const r = await post(url, token, line);
   if (r.status === 202) return "sent";
   const parts = r.status === 413 ? splitLine(line) : null;
   if (parts) {
-    for (const p of parts) if ((await drainLine(url, token, p, rejected)) === "stop") return "stop";
+    for (const p of parts) if ((await drainLine(url, token, p, rejected, deadline)) === "stop") return "stop";
     return "sent";
   }
   if (r.status === 400 || r.status === 413) {
-    safely("write the rejected batch", () => fs.appendFileSync(rejected, line + "\n", PRIVATE));
-    return "sent";
+    return safely("write the rejected batch", () => (fs.appendFileSync(rejected, line + "\n", PRIVATE), true)) === true ? "sent" : "stop";
   }
   log(`drain: ${r.status ? `board answered ${r.status}` : r.error}`);
   return "stop";
@@ -782,7 +834,7 @@ async function drain(env = process.env) {
     let sent = 0;
     let stopped = false;
     for (const line of lines) {
-      if (Date.now() > deadline || (await drainLine(url, token, line, path.join(dir, `${sessionId}.rejected.jsonl`))) === "stop") {
+      if (Date.now() > deadline || (await drainLine(url, token, line, path.join(dir, `${sessionId}.rejected.jsonl`), deadline)) === "stop") {
         stopped = true;
         break;
       }

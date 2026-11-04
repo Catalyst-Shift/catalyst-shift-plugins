@@ -556,7 +556,9 @@ pass_done() {
   [ "$rc" = 0 ] || result="error (exit $rc)"
   [[ $REVIEW_WAITING =~ ^[0-9]+$ ]] || REVIEW_WAITING=null
   printf '{"lastPassAt":"%s","lastPassResult":"%s","runningCap":%d,"reviewWaiting":%s,"reviewCap":%d}\n' \
-    "$(date -Is)" "$result" "$CAP" "$REVIEW_WAITING" "$WAITING_CAP" >"$STATE/pass.json.tmp" && mv "$STATE/pass.json.tmp" "$STATE/pass.json"
+    "$(date -Is)" "$result" "$CAP" "$REVIEW_WAITING" "$WAITING_CAP" >"$STATE/pass.json.tmp" && mv "$STATE/pass.json.tmp" "$STATE/pass.json" ||
+    echo "could not write $STATE/pass.json; the heartbeat keeps the last pass" >&2
+  return 0
 }
 trap pass_done EXIT
 

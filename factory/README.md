@@ -180,8 +180,12 @@ need the streamer to run as a separate user.
 (the unit's log keeps the raw lines) and posts the events to
 `POST /api/ingest/events` in batches of up to 50 every 2 seconds, with the token
 as `Authorization: Bearer`. Before sending, each event is cleaned: file
-contents (a Read, a `cat`/`head`/`tail`/`sed -n` of a file, a Grep in content
-mode) are never sent, only their size; nor is the output of a call that touches
+contents (a Read, a Grep in content mode, an MCP tool that returns files, query
+rows, messages or logs, and the common shell prints: `cat`/`head`/`tail`/`sed -n`
+of a file, `git show rev:file`) are never sent, only their size. The shell
+check is a list of known commands, not a guarantee: another way to print a file
+(`grep . f`, `bash -c "cat f"`, `sqlite3`) is sent masked and cut to 4 KB, like
+any other tool result. Nor is the output sent of a call that touches
 `.env` files, `env`/`printenv`/`set`/`export`, `process.env`, keys or
 credentials; every other tool result and every string is cut to 4 KB; secrets
 in text (`*_TOKEN=`, `password:`, `ghp_…`, `sk-…`, URL passwords, this
