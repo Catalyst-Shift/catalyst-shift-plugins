@@ -1195,7 +1195,15 @@ esac
     assert.match(r.stdout, /PR #30 .*not plain/);
     assert.match(r.stdout, /PR #31 .*could not fetch/);
     assert.match(r.stdout, /PR #32 .*another PR's base/);
-    assert.doesNotMatch(r.stdout, /PR #28 /);
+    // CAT-1478: every conflicting PR passed over says why, once.
+    assert.match(r.stdout, /PR #28 in \S+My_Repo conflicts; its builder factory-cat-8 is still running/);
+    assert.match(r.stdout, /PR #24 in \S+ conflicts; labelled needs-conflict-call, so it waits for a person/);
+    assert.match(r.stdout, /PR #25 in \S+ conflicts; it is a Dependabot PR/);
+    assert.match(r.stdout, /PR #27 in \S+ conflicts; its author keithcatalyst is not one of this machine's review authors/);
+    assert.match(r.stdout, /PR #32 in \S+ conflicts; its head release is a shared branch/);
+    assert.equal(r.stdout.match(/PR #28 /g).length, 1, r.stdout);
+    // Drafts, forks, opted-out and mergeable PRs aren't conflicted PRs it skips: no line.
+    assert.doesNotMatch(r.stdout, /PR #(22|26|29|33) in \S+ conflicts/);
     // The worktree is detached at the PR head.
     assert.equal(read(`${units}.${name}.wd`), wt);
     assert.equal(sh(`git -C ${wt} rev-parse HEAD`), head);
@@ -1223,6 +1231,7 @@ esac
     r = tick(9);
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(conflictUnits(), [name]);
+    assert.match(r.stdout, /PR #21 in \S+ conflicts; its conflict session factory-conflict-my-repo-pr-21 is already running/);
 
     // Finished without pushing: cleanup removes its clean worktree, and the same
     // (head, base) pair is not tried again. cat-8's builder finished too, so its
@@ -1234,6 +1243,7 @@ esac
     assert.deepEqual(conflictUnits(), ["factory-conflict-my-repo-pr-28"]);
     assert.ok(!started().includes("factory-review-cat-8"), started().join(" "));
     assert.deepEqual(tried(), [`21-${head}-${main}`, `28-${head}-${main}`]);
+    assert.ok(r.stdout.includes(`PR #21 in ${repo} conflicts; already tried at head ${head.slice(0, 12)} and base ${main.slice(0, 12)}`), r.stdout);
 
     // The session labelled #21 needs-conflict-call: it waits, and its try is
     // forgotten. Taking the label off tries the same pair again.
@@ -1258,6 +1268,10 @@ esac
     r = tick(1);
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(started(), ["factory-other"]);
+    assert.ok(r.stdout.includes(`PR #21 in ${repo} conflicts; waiting for a free slot (1/1)`), r.stdout);
+    // The cap is named only when a slot is all a PR waits for.
+    assert.match(r.stdout, /PR #25 in \S+ conflicts; it is a Dependabot PR/);
+    assert.doesNotMatch(r.stdout, /PR #25 .*free slot/);
     writeFileSync(units, "");
     r = tick(1);
     assert.equal(r.status, 0, r.stderr);
@@ -1295,6 +1309,121 @@ esac
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(conflictUnits(), ["factory-conflict-my-repo-pr-28"], r.stdout);
     assert.ok(tried().includes(`28-${head}-${main}`), tried().join(" "));
+
+    // CAT-1478: systemctl failing to list units (a user bus hiccup) must not end
+    // the tick under set -e at the cap check; the sweep goes on as before.
+    rmSync(join(state, "conflicts", "my-repo", `28-${head}-${main}`));
+    const goodCtl = read(join(bin, "systemctl"));
+    writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in
+  *list-units*) exit 1;;
+  *is-active*) grep -qxF "\${!#}" "${units}";;
+esac
+`, { mode: 0o755 });
+    writeFileSync(units, "");
+    r = tick(9);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.deepEqual(conflictUnits(), ["factory-conflict-my-repo-pr-28"], r.stdout);
+    writeFileSync(join(bin, "systemctl"), goodCtl, { mode: 0o755 });
+
+    // A cap that isn't a number holds conflict sessions back, as it holds back
+    // builds and reviews; a failed test must not read as "below the cap".
+    rmSync(join(state, "conflicts", "my-repo", `28-${head}-${main}`));
+    const wt28 = join(repo, ".claude/worktrees", "factory-conflict-my-repo-pr-28");
+    if (existsSync(wt28)) sh(`git -C ${repo} worktree remove --force ${wt28}`);
+    writeFileSync(units, "");
+    r = tick("two");
+    assert.deepEqual(conflictUnits(), [], r.stdout);
+    assert.match(r.stdout, /PR #28 in \S+ conflicts; waiting for a free slot \(0\/two\)/);
+  } finally {
+    rmSync(t, { recursive: true, force: true });
+  }
+});
+
+// CAT-1478: the sweep says why it passes over a conflicting PR whose card or PR
+// has a reviewer running, or when the machine has no review authors; lists PRs
+// GitHub hasn't computed mergeability for (and starts nothing for them); and a
+// tick with no conflicted PR adds no line at all.
+test("conflicts: logs reviewer-active, no-review-author and UNKNOWN skips; quiet when nothing conflicts", () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-conflict-log-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
+  const repo = join(t, "My_Repo"), units = join(t, "units");
+  for (const d of [bin, state, repo, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  const sha = (c) => c.repeat(40);
+  // Every PR is stamped at its head, so no reviewer sweep adds lines of its own.
+  const pr = (number, extra = {}) => ({
+    number, headRefOid: sha(String(number % 10)), headRefName: `b/${number}`, baseRefName: "main", mergeable: "CONFLICTING",
+    body: `Reviewed: ${sha(String(number % 10))} — /review`, author: { login: "kkreative" }, isDraft: false, labels: [],
+    isCrossRepository: false, ...extra,
+  });
+  const fixture = join(t, "prs.json");
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+[ "$1 $2" = "api user" ] && { [ -n "$NO_USER" ] && exit 1; echo kkreative; exit 0; }
+sub="$1 $2"; shift 2; n=; h=; q=.
+[ "$sub" = "pr view" ] && { n=$1; shift; }
+while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --jq) q=$2; shift;; esac; shift; done
+if [ -n "$n" ]; then jq -r ".[] | select(.number == $n) | $q" "${fixture}"
+elif [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "${fixture}"
+else jq -r "$q" "${fixture}"; fi
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+for a; do case $a in --unit=*) echo "\${a#--unit=}.service" >>"${units}";; esac; done
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in
+  *list-units*) cat "${units}";;
+  *is-active*) grep -qxF "\${!#}" "${units}";;
+esac
+`, { mode: 0o755 });
+  // A fetch that never succeeds: no PR here may get as far as resolve().
+  writeFileSync(join(bin, "git"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  writeFileSync(join(bin, "claude"), "#!/bin/sh\necho NONE\n", { mode: 0o755 });
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"), `label kevin-omarchy\n${repo} proj\n`);
+  writeFileSync(join(state, "launched"), `${repo} b/cat-9-x cat-9\n`);
+  const tick = (extra = {}) => spawnSync("bash", [DISPATCH], {
+    encoding: "utf8",
+    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "9", ...extra },
+  });
+  try {
+    writeFileSync(fixture, JSON.stringify([
+      pr(41, { headRefName: "b/cat-9-x" }),            // its card's reviewer is running
+      pr(42),                                           // a reviewer of this PR is running
+      pr(43, { mergeable: "UNKNOWN" }),
+      pr(44, { mergeable: "UNKNOWN" }),
+      pr(45, { mergeable: "UNKNOWN", isDraft: true }),  // never a candidate, so not listed
+    ]));
+    writeFileSync(units, "factory-review-cat-9.service\nfactory-review-my-repo-pr-42.service\n");
+    let r = tick();
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(r.stdout.includes(`PR #41 in ${repo} conflicts; its reviewer factory-review-cat-9 is running`), r.stdout);
+    assert.ok(r.stdout.includes(`PR #42 in ${repo} conflicts; its reviewer factory-review-my-repo-pr-42 is running`), r.stdout);
+    assert.ok(r.stdout.includes(`2 PRs (#43, #44) in ${repo}: mergeability not computed yet`), r.stdout);
+    assert.doesNotMatch(r.stdout, /#45|PR #4[345] in/);
+    // UNKNOWN PRs never reach resolve(): the doesNotMatch above would see its
+    // "could not fetch" line (git fails here). Nothing new started either.
+    assert.deepEqual(read(units).trim().split("\n"), ["factory-review-cat-9.service", "factory-review-my-repo-pr-42.service"]);
+
+    // One UNKNOWN PR reads in the singular.
+    writeFileSync(fixture, JSON.stringify([pr(43, { mergeable: "UNKNOWN" })]));
+    r = tick();
+    assert.ok(r.stdout.includes(`1 PR (#43) in ${repo}: mergeability not computed yet`), r.stdout);
+
+    // No review-authors line and gh can't say who it runs as.
+    writeFileSync(fixture, JSON.stringify([pr(42)]));
+    writeFileSync(units, "");
+    r = tick({ NO_USER: "1" });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(r.stdout.includes(`PR #42 in ${repo} conflicts; this machine has no review authors`), r.stdout);
+
+    // No conflicted or UNKNOWN PR: the sweep adds nothing to the tick's output.
+    writeFileSync(fixture, JSON.stringify([pr(46, { mergeable: "MERGEABLE" }), pr(47, { mergeable: "MERGEABLE", isDraft: true })]));
+    r = tick();
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "", r.stdout);
+    writeFileSync(fixture, "[]");
+    r = tick();
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "", r.stdout);
   } finally {
     rmSync(t, { recursive: true, force: true });
   }
