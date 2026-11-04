@@ -84,7 +84,7 @@ The templates already encode the visual system. Your job on copy:
 - **The technology is the how.** We are AI integrators, so AI may appear in a headline as the work we do; never as hype, never as the product, and never "AI-powered".
 - **Use the six services.** The templates list all six in the site's order; mark the ones this engagement uses and leave the rest muted. Never add a seventh, never rename one.
 - **Put the work on Read → Build → Land → Stay.** Read 1–2 weeks, Build 2–6, Land 2–4, Stay monthly; the teammate gives the weeks for this deal. Every engagement ends in Stay.
-- **Close on the two doors.** Where a piece ends with a call to action, it is the site's two: book a discovery session, or take the readiness check.
+- **Close on the two doors.** A piece not tied to a scoped deal ends on the site's two: book a discovery session, or take the readiness check. A deal document ends on that deal's next steps.
 - **Write to the client's world** — their company, their leadership, their systems, in their words.
 - **CMMC and CUI, every time.** Never claim to make anyone CMMC compliant — assessment is C3PAO work. Never take custody of CUI — we work inside the client's boundary. If a teammate's draft line implies either, rewrite it and say why in your hand-back.
 - **Use the locked phrases** verbatim where they fit. See `BRAND.md`.

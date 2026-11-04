@@ -8,6 +8,7 @@
     2. Replace every {{PLACEHOLDER}}. Quote the client in their own words where called for.
     3. Section structure: 01 Context · 02 What we heard · 03 Symptoms vs. root cause ·
        04 Diagnostic · 05 Recommendation preview · 06 Next step.
+    3a. Each {{AREA_n_TONE}} is one of: positive | caution | negative (the status-dot classes in doc-shell.css).
     4. The recommendation here is a PREVIEW, not a commitment. The proposal is the commitment.
     5. Print via Cmd/Ctrl+P — the page is already paper; print drops the nav and footer.
   ============================================================
@@ -58,7 +59,7 @@
     font-size: 14.5px; line-height: 1.5; color: var(--text-dim);
   }
   .vs .symptoms li::before { content: "·"; position: absolute; left: 6px; color: var(--text-mute); }
-  .vs .cause li::before { content: "·"; position: absolute; left: 6px; color: var(--signal); }
+  .vs .cause li::before { content: "·"; position: absolute; left: 6px; color: var(--link); }
   .vs .arrow-cell {
     display: flex; align-items: center; justify-content: center;
     font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;

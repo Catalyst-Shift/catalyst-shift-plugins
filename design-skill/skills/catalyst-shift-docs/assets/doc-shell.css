@@ -377,9 +377,9 @@ footer.colophon .wordmark { font-family: var(--font-display); font-size: 15px; l
   .nav, footer.colophon { display: none !important; }
   section.s, .hero { padding: 24px 0 !important; background: transparent !important; }
   .hero { padding-top: 0 !important; }
-  .ink {
-    --bg: #fff; --text: #15171B; --text-dim: #3A3D44; --text-mute: #60656E;
-    --link: #0B7C6E; --border: rgba(21,23,27,0.14); --surface: #fff;
+  .ink, [data-theme="dark"] {
+    --bg: #fff; --text: #15171B; --text-dim: #3A3D44; --text-mute: #60656E; --text-faint: #60656E;
+    --link: #0B7C6E; --positive: #0B7C6E; --caution: #60656E; --border: rgba(21,23,27,0.14); --surface: #fff;
     background: transparent !important; color: #15171B !important;
   }
   .ink::before { display: none !important; }

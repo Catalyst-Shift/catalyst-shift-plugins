@@ -47,7 +47,7 @@ Every engagement ends in Stay, so every engagement leaves a monthly behind. The 
 
 ## The two doors
 
-Every client-facing piece that ends with a call to action ends on the site's two doors, and only those: **book a discovery session**, or **take the readiness check**. Both end in a conversation with a founder.
+A client-facing piece that isn't tied to a scoped deal (a one-pager, a capabilities deck) ends on the site's two doors, and only those: **book a discovery session**, or **take the readiness check**. Both end in a conversation with a founder. A deal document (proposal, SOW, a deck for a scoped deal) ends on that deal's next steps instead.
 
 MSP-audience documents follow the site's `/msp` page and the platform connector table.
 
