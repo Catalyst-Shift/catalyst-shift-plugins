@@ -16,7 +16,8 @@ git -C ~/Projects/catalyst-shift-plugins pull && ~/Projects/catalyst-shift-plugi
 touch ~/.local/state/claude-factory/paused      # pause: no new sessions or reviews
 rm ~/.local/state/claude-factory/paused         # resume
 
-claude-factory-dispatch status                    # one screen: running, waiting on you to merge, other open PRs, paused
+claude-factory-dispatch status                    # one screen: running, waiting on you to merge, other open PRs, paused, boot check
+claude-factory-bootcheck                          # will it all come back after a reboot? (read-only; see First install)
 systemctl --user list-units 'factory-*'          # what's running
 journalctl --user -u claude-factory -n 50        # what the dispatcher did
 tail -f ~/.local/state/claude-factory/cat-123.log          # one builder
@@ -361,6 +362,15 @@ file) until the board's control endpoint is read (CAT-1441).
    systemctl --user enable --now claude-factory.timer
    systemctl --user enable --now claude-rc@lbl-nextjs.service   # one per repo folder under ~/Projects
    ```
+5. Re-run `factory/install.sh`. It ends with a **boot check** (CAT-1483) that
+   prints `ok` or `MISSING` for each thing a reboot with nobody logged in
+   needs: Linger on, `claude-factory.timer` enabled,
+   `claude-factory-heartbeat.service` enabled (only when `FACTORY_INGEST_TOKEN`
+   is set), and an enabled `claude-rc@<folder>.service` for every repo folder in
+   repos.conf. Each MISSING line ends with the command that fixes it. The check
+   is read-only (`bin/claude-factory-bootcheck`); install.sh still enables
+   nothing itself. `claude-factory-dispatch status` repeats it in one line:
+   `boot: ok`, or `boot: 2 missing (run install.sh)`.
 
 `claude-rc@<folder>.service` runs `claude remote-control --spawn worktree` in
 `~/Projects/<folder>`, so you can start and steer sessions from Claude desktop or
@@ -449,6 +459,7 @@ units; gstack goes back to its bundled Chromium.
 |---|---|
 | `bin/claude-factory-dispatch` | `~/.local/bin/` |
 | `bin/claude-factory-stream` (node 18+) | `~/.local/bin/` |
+| `bin/claude-factory-bootcheck` | `~/.local/bin/` |
 | `systemd/claude-factory.service`, `.timer` | `~/.config/systemd/user/` |
 | `systemd/claude-factory-heartbeat.service` | `~/.config/systemd/user/` |
 | `systemd/claude-rc@.service` | `~/.config/systemd/user/` |

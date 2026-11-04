@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Boot check (CAT-1483): does this machine bring the factory back after a
+# reboot without anyone logging in? Read-only: it asks loginctl and systemctl
+# and changes nothing. It checks:
+#   - Linger is on for this user (user units start at boot, with no login);
+#   - claude-factory.timer is enabled;
+#   - claude-factory-heartbeat.service is enabled, when FACTORY_INGEST_TOKEN is
+#     set in the user manager's environment (without it the heartbeat sends nothing);
+#   - claude-rc@<folder>.service is enabled for every repo folder in repos.conf.
+#
+#   claude-factory-bootcheck             one "ok:" or "MISSING:" line per check; a
+#                                        MISSING line ends with the command that fixes it
+#   claude-factory-bootcheck --summary   one line: "boot: ok" or "boot: <n> missing (run install.sh)"
+# Exits 1 when anything is missing.
+set -uo pipefail
+
+CONF=${CLAUDE_FACTORY_CONF:-$HOME/.config/claude-factory/repos.conf}
+ME=${USER:-$(id -un)}
+summary=0
+[ "${1:-}" = "--summary" ] && summary=1
+missing=0
+
+ok() { [ "$summary" = 1 ] || echo "  ok: $*"; }
+miss() { missing=$((missing + 1)); [ "$summary" = 1 ] || echo "  MISSING: $1  ->  $2"; }
+enabled() { [ "$(systemctl --user is-enabled "$1" 2>/dev/null </dev/null)" = enabled ]; }
+
+if [ "$(loginctl show-user "$ME" -p Linger --value 2>/dev/null </dev/null)" = yes ]; then
+  ok "Linger on: user units start at boot with no login"
+else
+  miss "Linger off: nothing starts after a reboot until $ME logs in" "loginctl enable-linger $ME"
+fi
+
+if enabled claude-factory.timer; then
+  ok "claude-factory.timer enabled"
+else
+  miss "claude-factory.timer not enabled" "systemctl --user enable --now claude-factory.timer"
+fi
+
+# Only whether the token is set, never its value.
+if systemctl --user show-environment 2>/dev/null </dev/null | grep -q '^FACTORY_INGEST_TOKEN=.'; then
+  if enabled claude-factory-heartbeat.service; then
+    ok "claude-factory-heartbeat.service enabled"
+  else
+    miss "claude-factory-heartbeat.service not enabled (FACTORY_INGEST_TOKEN is set)" "systemctl --user enable --now claude-factory-heartbeat.service"
+  fi
+fi
+
+# Every repo the dispatcher works on gets Remote Control, so a session started
+# there by hand from Claude desktop or mobile comes back after a reboot.
+if [ -f "$CONF" ]; then
+  while read -r dir _; do
+    unit=claude-rc@$(basename "$dir").service
+    if enabled "$unit"; then
+      ok "$unit enabled"
+    else
+      miss "$unit not enabled" "systemctl --user enable --now $unit"
+    fi
+  done < <(grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]])' "$CONF" || true)
+fi
+
+if [ "$summary" = 1 ]; then
+  if [ "$missing" = 0 ]; then echo "boot: ok"; else echo "boot: $missing missing (run install.sh)"; fi
+fi
+[ "$missing" = 0 ]
