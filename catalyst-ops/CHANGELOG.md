@@ -1,5 +1,10 @@
 # Changelog — catalyst-ops
 
+## 0.8.0 — 2026-11-04 (CAT-1459)
+
+- A screen card carries a Design section. `/card` adds `## Design` to the format, for cards that build or change a screen only: the design source path and frame (for catalyst_os, `docs/design/factory/README.md`), the regions in order, and the exact copy. A screen card's checklist has at least one line a reviewer can tick from the PR's screenshot, and anything the builder changed from the frame goes under *Decisions made* in the PR. Cards with no screen leave it out.
+- `/next` reads the Design section and the design source before writing UI, and puts the verify-board screenshot of each changed page in the PR body (uploaded to the card through Linear, since `gh` can't upload images).
+
 ## 0.7.0 — 2026-10-24 (CAT-1324)
 
 - New `card` skill (`/card`): writes or fixes a Linear card in the factory format — why, 3–8 executable checklist lines, risk class, rollback line, blocked-by relations — and strips the retired pre-factory wording (data-fence paste blocks, steps addressed to bots, pstack, Cursor settings). It rewrites an existing card's description only when asked to fix that card; otherwise it posts the draft as a comment.
