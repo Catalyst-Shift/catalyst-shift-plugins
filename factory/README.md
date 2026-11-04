@@ -233,7 +233,8 @@ line runs on its default:
 | `build-low` | builder for a Low-risk card | `claude-sonnet-5-5` |
 | `review` | the card reviewer and the reviewer of other PRs | `claude-sonnet-5-5` |
 | `dep-review` | the Dependabot dependency reviewer | `claude-haiku-5-5` |
-| `housekeeping` | the Linear pick, settle and needs-merge calls | `haiku` |
+| `housekeeping` | the Linear pick, settle, needs-merge, retro-clean, touch and report calls | `haiku` |
+| `retro` | the `/reflect` session after a merged PR that had friction (CAT-1433) | `claude-sonnet-5-5` |
 
 ```
 model build-low claude-opus-5-5
@@ -452,6 +453,42 @@ units; gstack goes back to its bundled Chromium.
    `factory-review-<repo>-pr-<n>` (see "Every PR gets reviewed" above).
 4. **Clean up.** Each tick removes a finished builder or reviewer worktree once
    it has no uncommitted changes and nothing unpushed.
+5. **Retro (CAT-1433).** The pass after a factory PR merges looks at it once
+   (`~/.local/state/claude-factory/retro/cat-NNN-<pr>`), from the PR alone, with
+   no model: review comments or a `Factory-Review-Fix:` commit, a
+   `Factory-CI-Fix:` commit or a `Merge … into …` commit, a commit without the
+   Claude co-author trailer, a PR comment from anyone but the deploy bots in
+   `CLAUDE_FACTORY_RETRO_IGNORE` (default `vercel|github-actions|dependabot|codecov|supabase|linear|sentry|neon-database|socket-security`),
+   a `needs-ci-call` / `needs-conflict-call` label, or a later merged PR that
+   reverts it. None of those: the card gets `retro: clean` and no session starts.
+   Any of them: unit `factory-retro-cat-NNN` (job `retro` in Models, default
+   Sonnet; counts toward the running cap) runs `/reflect` in a worktree on the
+   default branch. It judges each lesson (durable, decision-changing, not a
+   one-off, not already covered, routed to a skill the session used), comments
+   `retro: <n> accepted, <n> rejected` on the card with each rejection's reason,
+   and batches accepted skill and CLAUDE.md edits into the repo's one open
+   `factory-reflect` PR. Anything a lint, type, test or script could enforce, or
+   a repeat of a mistake in the rules table, goes to `/correct`: a
+   `factory-correct/cat-NNN` PR with the check proven against the commit that had
+   the mistake, merged under the repo's normal stage. The `factory-reflect` PR
+   is never self-merged; Kevin or Keith approve it from the Retros page's
+   **Review release** or on GitHub. `validate` fails any `factory-reflect*` or
+   `factory-correct*` PR that touches `.github/`, a ruleset, CODEOWNERS, the
+   required-checks list, the hard-stop list (the Ways of Working block) or the
+   ways-of-working skill (`scripts/retro-guard.mjs`). A retro never adds a gate.
+   A retro whose unit fails to start is retried next tick; one that ran and left
+   no `retro:` comment is not (look at `retro-cat-NNN.log`).
+6. **Touches.** A card with an open PR is checked (at most every 15 minutes) for
+   a person pulling it back out of In Review to In Progress, Ready For Factory or
+   Todo; each such move gets one `touch: <who> <reason> [<time>]` comment.
+   Moves to Done, Canceled and Blocked don't count (the factory's own reviewer
+   and settle pass move cards to Blocked).
+
+`claude-factory-dispatch retro --since 7d` (`--since <N>d`, default 7d) prints
+one line per repo with the counts of clean retros, accepted, rejected and
+structural (sent to `/correct`) lessons and touches, read from those `retro:`
+and `touch:` comments with one housekeeping call per repo. It takes no lock and
+changes nothing.
 
 ## Files
 

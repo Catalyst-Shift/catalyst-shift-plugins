@@ -398,12 +398,12 @@ case \${!#} in *"Ready For Factory"*) echo "pick $m" >>"${calls}"; echo "\${PICK
 
 test("every builder and reviewer session passes --model, and Linear calls use the housekeeping model", () => {
   const s = read(DISPATCH);
-  for (const fn of ["launch() {", "review() {", "review_pr() {"]) {
+  for (const fn of ["launch() {", "review() {", "review_pr() {", "reflect() {"]) {
     const body = s.slice(s.indexOf(fn), s.indexOf("\n}\n", s.indexOf(fn)));
     assert.match(body, /-p --model "\$/, fn);
   }
   assert.doesNotMatch(s, /--model haiku/);
-  assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 3);
+  assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 4); // pick, settle, linear_issue and the retro report
 });
 
 test("install.sh's boot check skips label, offset, review-authors and model lines like the dispatcher does", () => {
@@ -953,6 +953,7 @@ esac
 for a; do case $a in --allowedTools=*) tools=\${a#--allowedTools=};; esac; done
 p=\${!#}
 case $p in
+  *"stateHistory"*|*"retro:"*) echo "not a needs-merge call"; exit 0;; # the retro and touch passes (CAT-1433) are tested apart
   *"Get Linear issue "*) ;;
   *) echo NONE; exit 0;;
 esac
