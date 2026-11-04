@@ -363,12 +363,40 @@ claude-factory-dispatch status --json   # per running card: last seq the board s
 ```
 
 **Heartbeat:** `claude-factory-heartbeat.service` posts
-`{machine, dispatcher, lastPassAt, lastPassResult, runningCap, running[], reviewWaiting, reviewCap, control}`
+`{machine, dispatcher, pausedUntil, lastPassAt, lastPassResult, runningCap, running[], reviewWaiting, reviewCap, control, controlVersion}`
 every 60 seconds and within 5 seconds of a change. The dispatcher writes the
-pass fields to `state/pass.json` at the end of every tick. The heartbeat starts
+pass fields to `state/pass.json` at the end of every tick (and right after it
+reads the board's control, so a pause shows without waiting for the pass to end).
+The heartbeat starts
 and stops with `claude-factory.timer`, so a stopped dispatcher goes silent and
-the board flags the machine after 15 minutes. `control` is `local` (the paused
-file) until the board's control endpoint is read (CAT-1441).
+the board flags the machine after 15 minutes. `control` is `live` (the board
+answered on the last tick), `stale` (it did not; the last settings stay in
+force) or `local` (no token).
+
+**Control from the board (CAT-1441):** with the token set, each tick starts with
+`GET https://os.catalystshift.ai/api/machines/<machine>/control`
+(`<machine>` is the `label` in repos.conf), which answers
+`{"paused_until":null,"runningCap":null,"reviewCap":null,"stop":[],"version":n}`.
+The last good answer is kept in `state/control.json`.
+
+- `paused_until` in the future: no new card is claimed (reviews, conflict and CI
+  sessions still run), the heartbeat shows `"dispatcher":"paused"` with
+  `pausedUntil`. The `paused` file still pauses everything, as before.
+- `runningCap` and `reviewCap` replace `CLAUDE_FACTORY_CAP` and
+  `CLAUDE_FACTORY_WAITING_CAP` when they are whole numbers from 1 to 8; anything
+  else is ignored and logged.
+- A card id in `stop[]`: its builder or reviewer unit is stopped, the card moves
+  to Blocked with the comment `stopped via Factory Board`, and the machine posts
+  `{version, stopped:[...]}` to `.../control/ack` so the board clears the id.
+  Each step is recorded in `state/stopped/<card key>` and retried next tick if
+  it fails.
+- Board unreachable (or any answer but a valid 200): the last settings stay and
+  the heartbeat says `stale`. A failed fetch never starts a pause or a stop.
+- `claude-factory-dispatch status --json` has a `control` object: `state`, the
+  settings and `version` as last read, and the `effective` caps.
+
+Rollback: remove `FACTORY_INGEST_TOKEN` from the machine (see above); the
+dispatcher ignores control and the usual caps apply.
 
 ---
 

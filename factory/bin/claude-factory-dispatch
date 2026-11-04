@@ -52,6 +52,13 @@
 # claude-factory-stream, which sends its stream-json events to the board; each
 # tick first sends what ended sessions left in the spool, and ends by writing
 # state/pass.json for the heartbeat (claude-factory-heartbeat.service).
+# With the token set, each tick also pulls this machine's control settings from
+# the board (CAT-1441): GET /api/machines/<machine>/control gives paused_until,
+# runningCap, reviewCap and stop[]. A pause means no new card is claimed, the
+# caps override CAP and WAITING_CAP when they are 1 to 8, a card id in stop[]
+# has its session stopped and its card moved to Blocked, and the machine tells
+# the board with POST .../control/ack. When the board can't be reached the last
+# settings stay in force and the heartbeat says control is stale.
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
 #   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...", "model <job> <model>")
@@ -1028,6 +1035,107 @@ merges() {
   done < <(launched)
 }
 
+# CAT-1441: the board's control settings for this machine. The last good answer
+# is state/control.json; control_load reads it (no network) into CTL_* and
+# applies its caps. CONTROL says where it came from: off (no token), live (this
+# tick's fetch worked) or stale (the fetch failed; the last answer stays).
+CONTROL=off
+CTL_VERSION=null
+CTL_PAUSED_UNTIL=
+CTL_RUNNING_CAP=null
+CTL_REVIEW_CAP=null
+MACHINE=${FACTORY_MACHINE:-${MACHINE_LABEL:-$(printf '%s' "$HOST" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9\n-' '-')}}
+CONTROL_URL=${CLAUDE_FACTORY_CONTROL_URL:-https://os.catalystshift.ai/api/machines}/$MACHINE/control
+control_load() {
+  local loud=${1:-} v pu rc vc ts
+  CTL_VERSION=null CTL_PAUSED_UNTIL= CTL_RUNNING_CAP=null CTL_REVIEW_CAP=null
+  [ -s "$STATE/control.json" ] || return 0
+  IFS=$'\t' read -r v pu rc vc < <(jq -r '[(.version | if type == "number" then tostring else "null" end),
+      (.paused_until | if type == "string" and . != "" then . else "-" end), (.runningCap | tojson), (.reviewCap | tojson)] | @tsv' \
+      "$STATE/control.json" 2>/dev/null) || return 0
+  if [[ $v =~ ^[0-9]+$ ]]; then CTL_VERSION=$v; fi
+  if [ "$pu" != "-" ]; then
+    if [[ $pu =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+(Z|[+-][0-9:]+)$ ]] && ts=$(date -d "$pu" +%s 2>/dev/null); then
+      if [ "$ts" -gt "$(date +%s)" ]; then CTL_PAUSED_UNTIL=$pu; fi
+    elif [ -n "$loud" ]; then
+      echo "ignoring paused_until '$pu' from the board: not a time" >&2
+    fi
+  fi
+  if [[ $rc =~ ^[1-8]$ ]]; then CTL_RUNNING_CAP=$rc; CAP=$rc
+  elif [ "$rc" != null ] && [ -n "$loud" ]; then echo "ignoring runningCap $rc from the board: it must be a whole number from 1 to 8" >&2; fi
+  if [[ $vc =~ ^[1-8]$ ]]; then CTL_REVIEW_CAP=$vc; WAITING_CAP=$vc
+  elif [ "$vc" != null ] && [ -n "$loud" ]; then echo "ignoring reviewCap $vc from the board: it must be a whole number from 1 to 8" >&2; fi
+  return 0
+}
+
+# One authenticated call to the board. The token goes to curl on stdin as a
+# config line, so it is never in a command line or the process list.
+control_call() {
+  local out=$1; shift
+  printf 'header = "Authorization: Bearer %s"\n' "$INGEST_TOKEN" |
+    curl -sS --max-time 20 -K - -o "$out" -w '%{http_code}' "$@" 2>/dev/null || true
+}
+
+control_fetch() {
+  local code
+  if [ -z "$INGEST_TOKEN" ]; then CONTROL=off; control_load; return 0; fi
+  code=$(control_call "$STATE/control.new" "$CONTROL_URL")
+  if [ "$code" = 200 ] && jq -e 'type == "object" and (.version | type) == "number"' "$STATE/control.new" >/dev/null 2>&1; then
+    mv "$STATE/control.new" "$STATE/control.json"
+    CONTROL=live
+  else
+    rm -f "$STATE/control.new"
+    CONTROL=stale
+    echo "the board's control endpoint did not answer (${code:-no response}); keeping the last settings"
+  fi
+  control_load loud
+}
+
+# A card id in stop[]: stop its session, move the card to Blocked with the
+# comment, then tell the board. state/stopped/<card key> holds how far each got
+# ("stopped", then "blocked"), so a failed step is retried on the next tick.
+control_stop() {
+  [ "$CONTROL" = live ] || return 0
+  local ids id key unit rec out n
+  local -a cleared=()
+  ids=$(jq -r '.stop // [] | if type == "array" then .[] | select(type == "string") else empty end' "$STATE/control.json" 2>/dev/null) || return 0
+  [ -n "$ids" ] || return 0
+  mkdir -p "$STATE/stopped"
+  while read -r id; do
+    if ! [[ $id =~ ^[A-Za-z]+-[0-9]+$ ]]; then echo "ignoring stop entry '$id' from the board: not a card id"; continue; fi
+    key=${id,,}; id=${id^^}; rec=$STATE/stopped/$key
+    for unit in "factory-$key" "factory-review-$key"; do
+      if active "$unit"; then
+        if systemctl --user stop "$unit.service" </dev/null; then
+          echo "$id: stopped $unit (stop from the board)"; echo stopped >"$rec"
+        else
+          echo "$id: could not stop $unit; the next tick tries again" >&2; continue 2
+        fi
+      fi
+    done
+    if [ "$(cat "$rec" 2>/dev/null || true)" = stopped ]; then
+      out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model "$MODEL_HOUSEKEEPING" --output-format text \
+        --allowedTools="${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment,${LINEAR}__list_comments" \
+        "Get Linear issue $id. If its status is 'In Progress' and it is assigned to me, move it to 'Blocked'. If it has no comment that is exactly 'stopped via Factory Board', add that comment. Change nothing else.
+Then print exactly one final line: STOPPED <the status it ends in>" </dev/null 2>&1) || true)
+      printf '%s %s\n%s\n' "$(date -Is)" "$id" "$out" >>"$STATE/stop.log"
+      if grep -qE '^STOPPED [A-Za-z]' <<<"$out"; then echo blocked >"$rec"; else echo "$id: card not confirmed Blocked; the next tick tries again" >&2; fi
+    fi
+    # Nothing running for it (it ended already), or the card is Blocked: the board can clear it.
+    if [ "$(cat "$rec" 2>/dev/null || true)" != stopped ]; then cleared+=("$id"); fi
+  done <<<"$ids"
+  [ "${#cleared[@]}" -gt 0 ] || return 0
+  printf '{"version":%s,"stopped":%s}' "$CTL_VERSION" "$(printf '%s\n' "${cleared[@]}" | jq -R . | jq -sc .)" >"$STATE/control.ack"
+  n=$(control_call /dev/null -X POST -H 'Content-Type: application/json' --data-binary "@$STATE/control.ack" "$CONTROL_URL/ack")
+  rm -f "$STATE/control.ack"
+  if [[ $n =~ ^2 ]]; then
+    for id in "${cleared[@]}"; do rm -f "$STATE/stopped/${id,,}"; done
+    echo "told the board ${cleared[*]} stopped"
+  else
+    echo "the board did not take the stop acknowledgement (${n:-no response}); the next tick sends it again"
+  fi
+}
+
 # CAT-1433: what a merged factory PR cost beyond its first pass, as a comma
 # list, empty when it was clean. Read from the PR alone, no model: review
 # comments, commits a reviewer / CI session / conflict session pushed (their
@@ -1197,7 +1305,8 @@ retro_report() {
 # waiting on review, and whether it's paused.
 status() {
   local unit since model dir branch key pr number state stamped url merge='' open=''
-  echo "Running (cap $CAP):"
+  control_load
+  echo "Running (cap $CAP$([ "$CTL_RUNNING_CAP" = null ] || echo ', set by the board')):"
   systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' |
     while read -r unit _; do
       since=$(systemctl --user show "$unit" -p ActiveEnterTimestamp --value)
@@ -1222,6 +1331,7 @@ status() {
   echo "Other open factory PRs (no new pickups at $WAITING_CAP open in all):"
   printf '%s' "$open"
   if [ -e "$STATE/paused" ]; then echo "Paused: yes (rm $STATE/paused to resume)"; else echo "Paused: no"; fi
+  if [ -n "$CTL_PAUSED_UNTIL" ]; then echo "Paused by the board until $CTL_PAUSED_UNTIL (control version $CTL_VERSION)"; fi
   # CAT-1483: will it all come back after a reboot? Read-only, one line.
   if [ -x "$BOOTCHECK" ]; then "$BOOTCHECK" --summary || true; else echo "boot: unknown (run install.sh)"; fi
 }
@@ -1240,8 +1350,14 @@ unitcard() {
 # how many events wait in its spool (from claude-factory-stream's state file;
 # null when the session is not streaming).
 status_json() {
-  local unit since f paused=false
+  local unit since f paused=false control
   [ -e "$STATE/paused" ] && paused=true
+  # CAT-1441: the control settings in effect, as the last tick left them (no network call here).
+  control_load
+  control=$(jq -c --arg c "$(jq -r '.control // "off"' "$STATE/pass.json" 2>/dev/null || echo off)" -n \
+    --argjson v "$CTL_VERSION" --arg until "$CTL_PAUSED_UNTIL" --argjson rc "$CTL_RUNNING_CAP" --argjson vc "$CTL_REVIEW_CAP" --argjson cap "$CAP" --argjson wcap "$WAITING_CAP" \
+    '{state: $c, version: $v, pausedUntil: (if $until == "" then null else $until end), runningCap: $rc, reviewCap: $vc,
+      effective: {runningCap: $cap, reviewCap: $wcap}}')
   systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' |
     while read -r unit _; do
       unit=${unit%.service}
@@ -1251,8 +1367,8 @@ status_json() {
       jq -c --arg unit "$unit" --arg since "$since" --arg card "$(unitcard "$unit")" -n \
         '(input? // {}) as $s | {unit: $unit, card: ($s.card // (if $card == "" then null else $card end)), repo: ($s.repo // null),
           since: $since, sessionId: ($s.sessionId // null), lastSeq: ($s.lastSeq // null), spool: ($s.spoolEvents // null)}' "$f"
-    done | jq -s --argjson cap "$CAP" --argjson paused "$paused" --argjson streaming "$(streaming && echo true || echo false)" \
-      '{paused: $paused, cap: $cap, streaming: $streaming, running: .}'
+    done | jq -s --argjson cap "$CAP" --argjson paused "$paused" --argjson streaming "$(streaming && echo true || echo false)" --argjson control "$control" \
+      '{paused: $paused, cap: $cap, streaming: $streaming, control: $control, running: .}'
 }
 
 if [ "${1:-}" = "status" ]; then
@@ -1273,14 +1389,21 @@ flock -n 9 || exit 0
 # after the lock, an error included.
 PASS_RESULT=ok
 REVIEW_WAITING=null
+write_pass() {
+  local result=$1 until=null
+  [[ $REVIEW_WAITING =~ ^[0-9]+$ ]] || REVIEW_WAITING=null
+  # CAT-1441: control says where the settings came from (off, live, stale);
+  # pausedUntil is the board's pause while it is still in the future.
+  [ -z "$CTL_PAUSED_UNTIL" ] || until=\"$CTL_PAUSED_UNTIL\"
+  printf '{"lastPassAt":"%s","lastPassResult":"%s","runningCap":%d,"reviewWaiting":%s,"reviewCap":%d,"control":"%s","controlVersion":%s,"pausedUntil":%s}\n' \
+    "$(date -Is)" "$result" "$CAP" "$REVIEW_WAITING" "$WAITING_CAP" "$CONTROL" "$CTL_VERSION" "$until" >"$STATE/pass.json.tmp" && mv "$STATE/pass.json.tmp" "$STATE/pass.json" ||
+    echo "could not write $STATE/pass.json; the heartbeat keeps the last pass" >&2
+  return 0
+}
 pass_done() {
   local rc=$? result=$PASS_RESULT
   [ "$rc" = 0 ] || result="error (exit $rc)"
-  [[ $REVIEW_WAITING =~ ^[0-9]+$ ]] || REVIEW_WAITING=null
-  printf '{"lastPassAt":"%s","lastPassResult":"%s","runningCap":%d,"reviewWaiting":%s,"reviewCap":%d}\n' \
-    "$(date -Is)" "$result" "$CAP" "$REVIEW_WAITING" "$WAITING_CAP" >"$STATE/pass.json.tmp" && mv "$STATE/pass.json.tmp" "$STATE/pass.json" ||
-    echo "could not write $STATE/pass.json; the heartbeat keeps the last pass" >&2
-  return 0
+  write_pass "$result"
 }
 trap pass_done EXIT
 
@@ -1290,6 +1413,17 @@ while read -r dir project; do cleanup "$dir"; done < <(repos)
 if streaming; then
   FACTORY_INGEST_TOKEN=$INGEST_TOKEN timeout 90 "$NODE" "$STREAM" drain </dev/null || echo "spool drain did not finish; the next tick tries again"
 fi
+
+# CAT-1441: the board's control settings for this machine (pause, caps, stop).
+# A failed fetch keeps the last settings and never starts a pause or a stop.
+control_fetch
+if [ -n "$CTL_PAUSED_UNTIL" ]; then
+  echo "paused by the board until $CTL_PAUSED_UNTIL (control version $CTL_VERSION): no new cards"
+  PASS_RESULT="paused until $CTL_PAUSED_UNTIL"
+fi
+# The heartbeat shows the pause and the control state without waiting for the end of the pass.
+write_pass "${PASS_RESULT/#ok/running}"
+control_stop
 
 if [ -e "$STATE/paused" ]; then
   echo "paused ($STATE/paused exists)"
@@ -1308,6 +1442,8 @@ touches
 
 waiting_now=$(waiting)
 REVIEW_WAITING=$waiting_now
+# Paused from the board: reviews, conflict and CI sessions above still ran; nothing new is claimed.
+if [ -n "$CTL_PAUSED_UNTIL" ]; then exit 0; fi
 if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
   echo "$waiting_now factory PRs waiting on review (cap $WAITING_CAP); no new pickups"
   PASS_RESULT="holding: $waiting_now PRs waiting on review"

@@ -977,9 +977,13 @@ function heartbeatSnapshot(env = process.env) {
   });
   const n = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const str = (v) => (typeof v === "string" ? v.slice(0, 200) : null);
+  // The board's pause (CAT-1441): the dispatcher writes it to pass.json while it is
+  // in the future; it is checked again here so an expired pause reads as running.
+  const pausedUntil = typeof pass.pausedUntil === "string" && Date.parse(pass.pausedUntil) > Date.now() ? pass.pausedUntil.slice(0, 40) : null;
   return {
     machine: machineName(env),
-    dispatcher: fs.existsSync(path.join(st, "paused")) ? "paused" : "running",
+    dispatcher: fs.existsSync(path.join(st, "paused")) || pausedUntil ? "paused" : "running",
+    pausedUntil,
     lastPassAt: str(pass.lastPassAt),
     lastPassResult: str(pass.lastPassResult),
     runningCap: n(pass.runningCap),
@@ -988,9 +992,11 @@ function heartbeatSnapshot(env = process.env) {
     reviewCap: n(pass.reviewCap),
     // What install.sh put on this machine (CAT-1487); null on a machine that has not run it.
     installed: installedInfo(env),
-    // Pause comes from the local paused file only until the board's control
-    // endpoint is read (CAT-1441).
-    control: "local",
+    // Where the dispatcher's settings came from (CAT-1441): "live" (the board
+    // answered on the last tick), "stale" (it did not; the last settings stay in
+    // force) or "local" (no token, or no pass yet).
+    control: pass.control === "live" || pass.control === "stale" ? pass.control : "local",
+    controlVersion: Number.isInteger(pass.controlVersion) ? pass.controlVersion : null,
   };
 }
 
