@@ -1,9 +1,13 @@
 # Changelog — catalyst-ops
 
-## 0.8.0 — 2026-11-04 (CAT-1459)
+## 0.9.0 — 2026-11-04 (CAT-1459)
 
 - A screen card carries a Design section. `/card` adds `## Design` to the format, for cards that build or change a screen only: the design source path and frame (for catalyst_os, `docs/design/factory/README.md`), the regions in order, and the exact copy. A screen card's checklist has at least one line a reviewer can tick from the PR's screenshot, and anything the builder changed from the frame goes under *Decisions made* in the PR. Cards with no screen leave it out.
-- `/next` reads the Design section and the design source before writing UI, and takes the verify-board screenshot (or a `/qa` screenshot) of each changed page. The screenshots go in one comment on the card, not in the PR: they can show live card titles, and Linear upload links don't render on GitHub. The PR body names each file next to the checklist line it proves and links that comment.
+- The dispatcher's builder prompt (it replaced `/next` in 0.8.0) reads the Design section and the design source before writing UI, and takes the verify-board screenshot (or a `/qa` screenshot) of each changed page. The screenshots go in one comment on the card, not in the PR: they can show live card titles, and Linear upload links don't render on GitHub. The PR body names each file next to the checklist line it proves and links that comment.
+
+## 0.8.0 — 2026-11-04
+
+- Removed the `next` skill (`/next`, the by-hand way to build one card). Canon (catalyst-brain `strategy/2026-10-23-claude-dev-factory.md`) says `/next` stays retired and the dispatcher does the pickup. Its deep-path entry and CODEOWNERS line are gone with it, and `card` no longer mentions it. To build a card by hand, start a session on it through Remote Control and follow the Ways of Working block.
 
 ## 0.7.0 — 2026-10-24 (CAT-1324)
 

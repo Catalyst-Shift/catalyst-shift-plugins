@@ -1,6 +1,6 @@
 ---
 name: card
-description: Write or fix a Linear card in the Claude dev factory format so the factory can build it — why, 3–8 executable checklist lines, risk class, rollback line, and "blocked by" links set as Linear relations. Use when Kevin or Keith types /card, says "write a card for…", "make this factory-ready", "fix this card", or before moving a card to Ready For Factory. Also used by /next when a card has no checklist. Code work only: a Linear issue for a call, an email, a decision or a document doesn't need this format. Canon: catalyst-brain strategy/2026-10-23-claude-dev-factory.md.
+description: Write or fix a Linear card in the Claude dev factory format so the factory can build it — why, 3–8 executable checklist lines, risk class, rollback line, and "blocked by" links set as Linear relations. Use when Kevin or Keith types /card, says "write a card for…", "make this factory-ready", "fix this card", or before moving a card to Ready For Factory. Code work only: a Linear issue for a call, an email, a decision or a document doesn't need this format. Canon: catalyst-brain strategy/2026-10-23-claude-dev-factory.md.
 user-invocable: true
 ---
 
@@ -73,8 +73,7 @@ Optional: what's out of scope, the test target (a non-production database only),
    description. On an existing card, the description changes only when the
    person running `/card` asked for that card to be fixed: then rewrite it
    into the format, keep their why, intent and links, and drop only the
-   wording under Never write. Otherwise (including when `/next` drafts a
-   missing checklist) post the draft as a comment headed
+   wording under Never write. Otherwise post the draft as a comment headed
    `Checklist drafted by Claude — edit if wrong` and leave the description
    alone.
 7. **Ready For Factory is Kevin's or Keith's call.** Move the card there only if
