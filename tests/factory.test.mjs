@@ -369,6 +369,18 @@ case \${!#} in *"Ready For Factory"*) echo "pick $m" >>"${calls}"; echo "\${PICK
   r = tick("model build-high bad;value\n", "PICK CAT-8 b/cat-8-x High");
   assert.equal(r.status, 0, r.stderr);
   assert.equal(modelOf("factory-cat-8"), opus);
+  // A value that starts with a dash would read as a claude flag: ignored too.
+  r = tick("model build-high --dangerously-skip-permissions\n", "PICK CAT-8 b/cat-8-x High");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(modelOf("factory-cat-8"), opus);
+  assert.match(r.stderr, /ignoring 'model build-high --dangerously-skip-permissions'/);
+  // The risk word only picks among the configured models: a pick line with
+  // anything else after the branch (a flag, a second word) is not a pick.
+  for (const line of ["PICK CAT-11 b/cat-11-x --model", "PICK CAT-11 b/cat-11-x Low extra", "PICK CAT-11 b/cat-11-x Low-risk"]) {
+    r = tick("", line);
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(read(units), /factory-cat-11/, line);
+  }
 
   // Everything back on Opus: one line per job that isn't Opus by default.
   r = tick(["build-low", "review", "dep-review", "housekeeping"].map((j) => `model ${j} claude-opus-5-5\n`).join(""), "PICK CAT-10 b/cat-10-x Low");

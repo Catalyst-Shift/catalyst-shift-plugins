@@ -92,8 +92,8 @@ done < <(awk '$1 == "model"' "$CONF")
 conf_model() {
   local m
   m=$(awk -v j="$1" '$1 == "model" && $2 == j { print $3; exit }' "$CONF")
-  if [[ -n $m && ! $m =~ ^[A-Za-z0-9.-]+$ ]]; then
-    echo "ignoring 'model $1 $m' in $CONF: a model is letters, digits, dots and dashes; using $2" >&2
+  if [[ -n $m && ! $m =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; then
+    echo "ignoring 'model $1 $m' in $CONF: a model is letters, digits, dots and dashes and does not start with a dash; using $2" >&2
     m=
   fi
   printf '%s' "${m:-$2}"
