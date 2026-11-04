@@ -43,6 +43,13 @@ test("the haiku pick keeps --allowedTools= with the = form, Linear tools only", 
   assert.match(s, /^LINEAR=mcp__claude_ai_Linear$/m);
 });
 
+test("the pick skips parent issues (cards with sub-issues), so an epic never takes a slot", () => {
+  const s = read(DISPATCH);
+  assert.match(s, /Also skip any parent issue: list issues with parentId set to its identifier/);
+  // list_issues is the tool that check uses, and it is already allowed.
+  assert.match(s, /--allowedTools="\$\{LINEAR\}__list_issues,/);
+});
+
 test("every claude and systemd-run call in the dispatcher reads stdin from /dev/null", () => {
   const s = read(DISPATCH);
   // pick(): the claude -p call ends its prompt with </dev/null
