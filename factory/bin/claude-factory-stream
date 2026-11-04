@@ -13,9 +13,10 @@
 //       order when it is back. The session never waits on the network.
 //   claude-factory-stream drain
 //       Sends the spools of sessions that have ended (the dispatcher, each tick).
-//   claude-factory-stream heartbeat [--once]
+//   claude-factory-stream heartbeat [--once | --print]
 //       Posts the machine's heartbeat every 60 seconds and within 5 seconds of
-//       a change, while claude-factory.timer is active.
+//       a change, while claude-factory.timer is active. --print shows the body
+//       it would send (including `installed`) and sends nothing.
 //
 // With FACTORY_INGEST_TOKEN unset, run just runs the session and nothing is
 // sent (the dispatcher does not use this script at all then). The token is
@@ -355,6 +356,19 @@ function stageOf(ev, role = "build") {
   return stage;
 }
 
+/** Names of the Skill tool calls in an assistant event (CAT-1487), so the board counts uses per week. */
+function skillsUsed(ev) {
+  const content = isObj(ev) && isObj(ev.message) && Array.isArray(ev.message.content) ? ev.message.content : [];
+  if (ev?.type !== "assistant") return [];
+  const names = [];
+  for (const b of content) {
+    if (!isObj(b) || b.type !== "tool_use" || b.name !== "Skill") continue;
+    const name = isObj(b.input) && typeof b.input.skill === "string" ? b.input.skill.trim().replace(/^\//, "").slice(0, 100) : "";
+    if (/^[\w:.-]+$/.test(name)) names.push(name);
+  }
+  return names;
+}
+
 /**
  * The claude command line with stream-json output and a known session id.
  * The output format is changed where it stands, never moved or removed: an
@@ -616,6 +630,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "--") return { opts, rest: argv.slice(i + 1) };
     if (a === "--once") opts.once = true;
+    else if (a === "--print") opts.print = true;
     else if (a.startsWith("--")) opts[a.slice(2)] = argv[++i];
   }
   return { opts, rest: [] };
@@ -732,6 +747,7 @@ async function run(opts, rest, env = process.env) {
       const clean = sanitizeEvent(ev, ctx, known);
       if (!clean.at) clean.at = new Date().toISOString();
       box.push(clean, performance.now() - t0);
+      for (const name of skillsUsed(ev)) box.push({ type: "skill", at: clean.at, card, name });
       if (next && next !== stage) {
         stage = next;
         status(stage);
@@ -856,6 +872,21 @@ function systemctl(args) {
   return { ok: r.status === 0, out: r.stdout || "" };
 }
 
+/** installed.json as install.sh wrote it, or null if it is missing or unreadable. */
+function installedInfo(env = process.env) {
+  try {
+    const v = JSON.parse(fs.readFileSync(path.join(stateDir(env), "installed.json"), "utf8"));
+    if (!isObj(v)) return null;
+    // Only the known fields, as short strings: the heartbeat sends an allowlist.
+    const s = (x) => (typeof x === "string" ? x.slice(0, 100) : null);
+    const plugins = {};
+    if (isObj(v.plugins)) for (const k of ["catalyst-ops", "design-skill", "gstack"]) plugins[k] = s(v.plugins[k]);
+    return { factorySha: s(v.factorySha), installedAt: s(v.installedAt), plugins };
+  } catch {
+    return null;
+  }
+}
+
 /** What the heartbeat says, without its time. Only allowlisted fields: no env values or tokens. */
 function heartbeatSnapshot(env = process.env) {
   const st = stateDir(env);
@@ -886,6 +917,8 @@ function heartbeatSnapshot(env = process.env) {
     running,
     reviewWaiting: n(pass.reviewWaiting),
     reviewCap: n(pass.reviewCap),
+    // What install.sh put on this machine (CAT-1487); null on a machine that has not run it.
+    installed: installedInfo(env),
     // Pause comes from the local paused file only until the board's control
     // endpoint is read (CAT-1441).
     control: "local",
@@ -905,6 +938,10 @@ async function heartbeat(opts, env = process.env) {
   const tick = num(env.FACTORY_HEARTBEAT_TICK_MS, 5_000);
   const every = num(env.FACTORY_HEARTBEAT_EVERY_MS, 60_000);
   const restartAfter = num(env.FACTORY_HEARTBEAT_RESTART_MS, 60_000);
+  if (opts.print) {
+    process.stdout.write(JSON.stringify({ type: "heartbeat", at: new Date().toISOString(), ...heartbeatSnapshot(env) }, null, 2) + "\n");
+    return 0;
+  }
   const token = env[TOKEN_VAR];
   if (!token) {
     if (!opts.once) await sleep(restartAfter);
@@ -953,7 +990,7 @@ async function main(argv) {
   return 2;
 }
 
-module.exports = { sanitizeEvent, scrub, clip, stageOf, childArgs, secretValues, heartbeatSnapshot, unitCard, machineName, Outbox, MAX_FIELD_BYTES };
+module.exports = { sanitizeEvent, scrub, clip, stageOf, skillsUsed, installedInfo, childArgs, secretValues, heartbeatSnapshot, unitCard, machineName, Outbox, MAX_FIELD_BYTES };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(

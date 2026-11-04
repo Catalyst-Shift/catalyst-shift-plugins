@@ -123,6 +123,24 @@ for old in "$UNITS"/claude-rc-*.service; do
   echo "  old unit $name: systemctl --user disable --now $name && rm $old, then enable claude-rc@${name#claude-rc-}.service"
 done
 
+# CAT-1487: what this machine runs, for the heartbeat (the board's Plugin page and Fleet versions).
+if command -v jq >/dev/null; then
+  REPO=$(dirname "$SRC")
+  pv() { jq -r '.version // empty' "$REPO/$1/.claude-plugin/plugin.json" 2>/dev/null || true; }
+  GSTACK_DIR=${GSTACK_DIR:-$HOME/.claude/skills/gstack}
+  jq -n \
+    --arg factorySha "$(git -C "$REPO" rev-parse HEAD 2>/dev/null || true)" \
+    --arg installedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg ops "$(pv catalyst-ops)" --arg design "$(pv design-skill)" \
+    --arg gstack "$(git -C "$GSTACK_DIR" rev-parse HEAD 2>/dev/null || true)" \
+    '{factorySha: ($factorySha | if . == "" then null else . end), installedAt: $installedAt,
+      plugins: {"catalyst-ops": ($ops | if . == "" then null else . end), "design-skill": ($design | if . == "" then null else . end), gstack: ($gstack | if . == "" then null else . end)}}' \
+    > "$STATE/installed.json.tmp" && mv "$STATE/installed.json.tmp" "$STATE/installed.json"
+  ok "$STATE/installed.json written"
+else
+  miss "jq, so installed.json (plugin versions for the heartbeat) was not written"
+fi
+
 # CAT-1483: does it all come back after a reboot with nobody logged in? Read-only;
 # each MISSING line names the command to run (install.sh never runs it itself).
 echo "== Boot check (comes back after a reboot with no login; install.sh never turns these on itself)"
