@@ -370,7 +370,7 @@ test("the heartbeat carries the machine's state and no env values or tokens", as
       type: "heartbeat", at: undefined, machine: "kevin-omarchy", dispatcher: "running", pausedUntil: null,
       lastPassAt: "2026-11-03T10:05:00-05:00", lastPassResult: "ok", runningCap: 2,
       running: [{ card: "CAT-7", repo: "lbl-nextjs", startedAt: "2026-11-03T10:00:00Z" }, { card: null, repo: null, startedAt: null }],
-      reviewWaiting: 1, reviewCap: 3, control: "local", controlVersion: null,
+      reviewWaiting: 1, reviewCap: 3, installed: null, control: "local", controlVersion: null,
     },
   );
   const s = JSON.stringify(body);
@@ -900,6 +900,45 @@ test("a tool result has one 4 KB budget in all: images, objects and the blocks p
   const obj = resultOf("X", {}, { rows: Array.from({ length: 1000 }, () => "r".repeat(400)) });
   for (const x of [imgs, links, obj]) assert.ok(x.length < 2 * S.MAX_FIELD_BYTES, `sent ${x.length} bytes`);
   assert.match(links, /more blocks not sent/);
+});
+
+// ---- CAT-1487: installed versions in the heartbeat, skill events.
+
+test("the heartbeat carries installed.json, and --print shows it without sending", () => {
+  const home = mkdtempSync(join(tmpdir(), "hb-installed-"));
+  const state = join(home, ".local/state/claude-factory");
+  mkdirSync(state, { recursive: true });
+  const env = { HOME: home, PATH: process.env.PATH, FACTORY_MACHINE: "m1" };
+  assert.equal(S.heartbeatSnapshot(env).installed, null);
+  const installed = { factorySha: "abc", installedAt: "2026-11-04T00:00:00Z", plugins: { "catalyst-ops": "1.2.3", "design-skill": "0.4.0", gstack: "def" } };
+  writeFileSync(join(state, "installed.json"), JSON.stringify(installed));
+  assert.deepEqual(S.heartbeatSnapshot(env).installed, installed);
+  writeFileSync(join(state, "installed.json"), "{not json");
+  assert.equal(S.heartbeatSnapshot(env).installed, null);
+  writeFileSync(join(state, "installed.json"), JSON.stringify(installed));
+  const r = spawnSync(process.execPath, [STREAM, "heartbeat", "--print"], { env, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.type, "heartbeat");
+  assert.deepEqual(out.installed, installed);
+});
+
+test("a Skill tool call becomes a skill event with the skill's name", () => {
+  const ev = (...blocks) => ({ type: "assistant", message: { content: blocks } });
+  const skill = (s) => ({ type: "tool_use", id: "t", name: "Skill", input: { skill: s } });
+  assert.deepEqual(S.skillsUsed(ev(skill("review"), { type: "text", text: "x" }, skill("catalyst-ops:next"))), ["review", "catalyst-ops:next"]);
+  assert.deepEqual(S.skillsUsed(ev(skill("/qa"))), ["qa"]);
+  assert.deepEqual(S.skillsUsed(ev({ type: "tool_use", name: "Bash", input: { skill: "review" } })), []);
+  assert.deepEqual(S.skillsUsed(ev(skill("a b; rm"))), []);
+  assert.deepEqual(S.skillsUsed({ type: "user", message: { content: [skill("review")] } }), []);
+  assert.deepEqual(S.skillsUsed(null), []);
+});
+
+test("install.sh writes installed.json from the repo, the plugin manifests and gstack", () => {
+  const s = read(join(FACTORY, "install.sh"));
+  assert.match(s, /installed\.json/);
+  assert.match(s, /\.claude-plugin\/plugin\.json/);
+  assert.match(s, /rev-parse HEAD/);
 });
 
 // ---- CAT-1484: a session cut off by a reboot is shown as ended.
