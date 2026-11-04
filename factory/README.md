@@ -59,6 +59,9 @@ same files or tables puts its own card back in Ready For Factory, blocked by
 that card. Only the card that went In Progress later waits, so two cards never
 block each other.
 
+**Parent issues** (cards with sub-issues, like a Factory v2 epic) are never
+picked, even in Ready For Factory: they track other cards and are not built.
+
 **Every PR gets reviewed, not only factory cards:** any open, non-draft PR
 in a repo listed in repos.conf whose head has no current `Reviewed:` stamp gets
 a fresh reviewer session, however it was opened (a cloud thread, Remote
