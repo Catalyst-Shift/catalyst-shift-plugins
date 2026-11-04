@@ -1,5 +1,9 @@
 # Changelog — catalyst-ops
 
+## 0.8.0 — 2026-11-04
+
+- Removed the `next` skill (`/next`, the by-hand way to build one card). Canon (catalyst-brain `strategy/2026-10-23-claude-dev-factory.md`) says `/next` stays retired and the dispatcher does the pickup. Its deep-path entry and CODEOWNERS line are gone with it, and `card` no longer mentions it. To build a card by hand, start a session on it through Remote Control and follow the Ways of Working block.
+
 ## 0.7.0 — 2026-10-24 (CAT-1324)
 
 - New `card` skill (`/card`): writes or fixes a Linear card in the factory format — why, 3–8 executable checklist lines, risk class, rollback line, blocked-by relations — and strips the retired pre-factory wording (data-fence paste blocks, steps addressed to bots, pstack, Cursor settings). It rewrites an existing card's description only when asked to fix that card; otherwise it posts the draft as a comment.

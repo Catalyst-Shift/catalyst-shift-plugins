@@ -5,7 +5,7 @@ Internal Catalyst Shift plugins for **Claude Cowork** (desktop) and Claude Code 
 Currently ships:
 
 - **`design-skill`** — branded document generation (proposals, SOWs, decks, discovery reports, client deliverables, case studies, one-pagers, internal docs).
-- **`catalyst-ops`** — how we operate: `next` (build one card by hand — the named card or the top Ready For Factory card → gstack → `/ship` opens a PR that carries the evidence; never auto-merges, Kevin or Keith merges), `ways-of-working` (the canon block: three homes + the Claude dev factory), `decision-governance` (proposed-vs-decided labelling, ratification rules). Normal pickup is the factory's dispatcher on Kevin's and Keith's machines, not `/next` (2026-10-23, CAT-1297).
+- **`catalyst-ops`** — how we operate: `card` (write a card the factory can build), `ways-of-working` (the canon block: three homes + the Claude dev factory), `decision-governance` (proposed-vs-decided labelling, ratification rules). Pickup is the factory's dispatcher on Kevin's and Keith's machines; `/next` is retired (canon 2026-10-23, CAT-1297) and was removed in 0.8.0.
 
 Also here, outside any plugin: **[`factory/`](factory/README.md)**, the Claude dev factory dispatcher and its systemd units, installed on Kevin's and Keith's Omarchy machines with `factory/install.sh`.
 

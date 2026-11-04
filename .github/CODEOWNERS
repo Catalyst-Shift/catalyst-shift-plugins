@@ -5,7 +5,6 @@ CLAUDE.md                                 @kkreative @keithcatalyst
 **/.claude-plugin/                        @kkreative @keithcatalyst
 **/hooks/                                 @kkreative @keithcatalyst
 /catalyst-ops/skills/ways-of-working/     @kkreative @keithcatalyst
-/catalyst-ops/skills/next/                @kkreative @keithcatalyst
 /scripts/protected-paths*                 @kkreative @keithcatalyst
 /tests/protected-paths*                   @kkreative @keithcatalyst
 **/.env*                                  @kkreative @keithcatalyst
