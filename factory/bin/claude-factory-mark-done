@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ExecStopPost of a factory reviewer, conflict or CI unit (CAT-1481). systemd
+# ExecStopPost of a factory reviewer, conflict, CI or (CAT-1485) builder unit (CAT-1481). systemd
 # sets EXIT_CODE and EXIT_STATUS. The dispatcher wrote the session's attempt
 # record as "started <date> <boot id>[ retry]" just before the unit started:
 #   - the session exited 0: it becomes "done <date>[ retry]";
@@ -22,7 +22,18 @@ read -r w _ b a <"$f" 2>/dev/null || [ -n "$w" ] || exit 0
 case "${EXIT_CODE:-}.${EXIT_STATUS:-}" in
   exited.0) line="done $(date -Is)${a:+ $a}" ;;
   killed.TERM|exited.143) line="stopped $(date -Is) $b${a:+ $a}" ;;
-  *) exit 0 ;;
+  # A builder's launch record (CAT-1485) keeps how its unit ended, since the
+  # collected unit can't be asked later: "ended <date> <boot id> <result>",
+  # where systemd's SERVICE_RESULT is signal, timeout, oom-kill, exit-code...
+  *)
+    case $f in "$STATE"/launched-boot/*) ;; *) exit 0 ;; esac
+    r=${SERVICE_RESULT:-unknown}
+    case $r in *[!a-z-]*) r=unknown ;; esac
+    # Under claude-factory-stream a SIGKILLed claude (a kill, the OOM killer)
+    # shows as the streamer's exit 137.
+    [ "${EXIT_CODE:-}.${EXIT_STATUS:-}" != exited.137 ] || r=signal
+    line="ended $(date -Is) $b $r"
+    ;;
 esac
 printf '%s\n' "$line" >"$f.tmp" && mv "$f.tmp" "$f"
 exit 0

@@ -38,7 +38,16 @@ session ends. *In Review with a PR*: review and merge, and the merge moves it
 to Done (the dispatcher does this; see "Waiting on you to merge" below). *In Review with no PR* (an investigation): read the findings and close
 it, or approve the proposed follow-up card. *Blocked*: the card says what it
 needs. If a session dies without moving its card, the next dispatcher tick
-moves it to Blocked with a pointer to the log.
+moves it to Blocked with a pointer to the log. One cut off from outside (a
+power cut, crash or reboot in an earlier boot, or a unit that ended by a
+signal, a timeout or the OOM killer, as `claude-factory-mark-done` records in
+`launched-boot/<card key>` when the unit stops) goes back to Ready For Factory instead, once
+per card: after clean-up has salvaged its worktree, the card gets the comment
+`The factory session on <host> was cut off (<reason>) before it opened a PR.
+Re-queued once; a second cut-off goes to Blocked.`, naming the salvage ref and
+the branch if it is already on origin. A second cut-off, a stop from the
+board, or a worktree still not salvaged after 30 minutes goes to Blocked
+(CAT-1485; `requeued/<card key>` records it).
 
 **Two machines, same projects:** Kevin's and Keith's machines can both list
 every project. Each picks Ready For Factory cards that are assigned to its
@@ -213,8 +222,8 @@ tried, so upgrading starts nothing new. Nothing is retried while `systemctl
 --user` can't reach the user bus. A cut-off session that left uncommitted
 work in its worktree waits (`left over with unpushed work`) until the next
 clean-up salvages it (see "Clean up" below), and one waiting for a free slot
-waits too: neither logs a retry until it starts. Builders are not covered: `settle` already handles a builder that ends
-without a PR. A machine-wide failure (the subscription's usage limit, an
+waits too: neither logs a retry until it starts. Builders are not covered: `settle` handles a builder that ends
+without a PR, re-queueing its card once when it was cut off (see "Where a card ends up"). A machine-wide failure (the subscription's usage limit, an
 expired login, no network) fails the retry too, so each PR it hit gets the
 "cut off twice" comment.
 
@@ -583,7 +592,8 @@ changes nothing.
 | `repos.conf.example` | `~/.config/claude-factory/repos.conf` (first install only) |
 
 State and logs live in `~/.local/state/claude-factory/`: `launched` (the branches
-it started), `reviewed/`, `settled/`, `merge/`, `pick-<project>.log`, `settle.log`,
+it started), `launched-boot/` (the boot each builder started in), `reviewed/`,
+`settled/`, `requeued/`, `settle-wait/`, `merge/`, `pick-<project>.log`, `settle.log`,
 `merge.log`, `cat-NNN.log`, `review-cat-NNN.log`, `review-<repo>-pr-<n>.log`,
 `pass.json` (how the last tick ended), and with streaming on, `spool/` and
 `stream/<unit>.json`.
