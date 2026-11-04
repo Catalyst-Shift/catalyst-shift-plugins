@@ -79,7 +79,8 @@ test("each tick fetches the board's settings with the token on stdin; no pause m
   try {
     const r = run();
     assert.equal(r.status, 0, r.stderr);
-    assert.deepEqual(took(), [`GET ${url}`, "pick"]);
+    // CAT-1486: the stages fetch follows the control fetch, with the same token on stdin.
+    assert.deepEqual(took(), [`GET ${url}`, "GET https://os.catalystshift.ai/api/factory/stages", "pick"]);
     assert.deepEqual({ ...pass(), lastPassAt: 0 }, { lastPassAt: 0, lastPassResult: "ok", runningCap: 2, reviewWaiting: 0, reviewCap: 3, control: "live", controlVersion: 1, pausedUntil: null });
   } finally { rmSync(t, { recursive: true, force: true }); }
 });

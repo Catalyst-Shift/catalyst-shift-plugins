@@ -446,7 +446,9 @@ test("with a token, the dispatcher runs each session under claude-factory-stream
   const tick = (extra) => spawnSync("bash", [DISPATCH], {
     encoding: "utf8",
     // The stub streamer is a bash script, so "node" here is bash.
-    env: { HOME: x.home, PATH: `${x.bin}:${NODE_DIR}:/usr/bin:/bin`, CLAUDE_BIN: join(x.bin, "claude"), CLAUDE_FACTORY_STREAM: join(x.bin, "stream"), CLAUDE_FACTORY_NODE: "/bin/bash", PICK: "PICK CAT-3 kevin/cat-3-x", ...extra },
+    env: { HOME: x.home, PATH: `${x.bin}:${NODE_DIR}:/usr/bin:/bin`, CLAUDE_BIN: join(x.bin, "claude"), CLAUDE_FACTORY_STREAM: join(x.bin, "stream"), CLAUDE_FACTORY_NODE: "/bin/bash", PICK: "PICK CAT-3 kevin/cat-3-x",
+      // The board's control and stages calls go nowhere (a closed local port), never to the real board.
+      CLAUDE_FACTORY_CONTROL_URL: "http://127.0.0.1:9/api/machines", CLAUDE_FACTORY_STAGES_URL: "http://127.0.0.1:9/api/factory/stages", ...extra },
   });
   let r = tick({ FACTORY_INGEST_TOKEN: TOKEN });
   assert.equal(r.status, 0, r.stderr);
