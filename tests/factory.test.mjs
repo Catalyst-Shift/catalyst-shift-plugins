@@ -402,7 +402,8 @@ test("every builder and reviewer session passes --model, and Linear calls use th
     assert.match(body, /-p --model "\$/, fn);
   }
   assert.doesNotMatch(s, /--model haiku/);
-  assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 3);
+  // The pick, settle, linear_issue, and (CAT-1441) the stop step's Blocked move.
+  assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 4);
 });
 
 test("install.sh skips label, offset, review-authors and model lines like the dispatcher does", () => {

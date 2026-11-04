@@ -367,10 +367,10 @@ test("the heartbeat carries the machine's state and no env values or tokens", as
   assert.deepEqual(
     { ...hb, at: undefined },
     {
-      type: "heartbeat", at: undefined, machine: "kevin-omarchy", dispatcher: "running",
+      type: "heartbeat", at: undefined, machine: "kevin-omarchy", dispatcher: "running", pausedUntil: null,
       lastPassAt: "2026-11-03T10:05:00-05:00", lastPassResult: "ok", runningCap: 2,
       running: [{ card: "CAT-7", repo: "lbl-nextjs", startedAt: "2026-11-03T10:00:00Z" }, { card: null, repo: null, startedAt: null }],
-      reviewWaiting: 1, reviewCap: 3, control: "local",
+      reviewWaiting: 1, reviewCap: 3, control: "local", controlVersion: null,
     },
   );
   const s = JSON.stringify(body);
