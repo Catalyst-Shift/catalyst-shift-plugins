@@ -27,7 +27,9 @@
 #      review-authors lists dependabot, with a dependency reviewer that never
 #      pushes or merges (CAT-1327), once their required CI has finished (CAT-1337);
 #   6. settles each finished builder that left no PR: if its card is still
-#      In Progress, moves it to Blocked (once per launch; state/settled/<card key>);
+#      In Progress, moves it to Blocked (once per launch; state/settled/<card key>),
+#      or, when a reboot, kill, timeout or OOM cut it off, puts it back in Ready
+#      For Factory once per card after its worktree is salvaged (CAT-1485);
 #   7. keeps each launched card's Linear label in step with its PR (CAT-1336):
 #      stamped at its head with CI green adds `needs-merge`; merged moves the
 #      card to Done and drops the label; closed unmerged drops the label (once
@@ -548,7 +550,18 @@ launch() {
   local dir=$1 id=$2 branch=$3 risk=${4:-Unknown} key model
   key=$(cardkey "$id")
   model=$(builder_model "$risk")
-  run_unit "factory-$key" "$dir" "$STATE/$key.log" "$id" "$(basename "$dir")" "" \
+  # CAT-1485: the builder's launch record, "started <date> <boot id>". Its
+  # unit's ExecStopPost (claude-factory-mark-done) rewrites it to "done",
+  # "stopped" or "ended <date> <boot id> <systemd result>" when the session
+  # ends; a power cut leaves "started" from an earlier boot. settle reads it to
+  # tell a cut-off from a builder that ended on its own (the unit itself is
+  # collected, so systemd no longer knows by then).
+  local launched=$STATE/launched-boot/$key
+  { mkdir -p "$STATE/launched-boot" && mark_started "$launched"; } || {
+    echo "could not record $id's launch; a cut-off will send it to Blocked" >&2
+    launched=
+  }
+  run_unit "factory-$key" "$dir" "$STATE/$key.log" "$id" "$(basename "$dir")" "$launched" \
     -p --model "$model" --permission-mode auto -w "factory-$key" --output-format text \
     "You are an unattended factory session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
@@ -568,7 +581,9 @@ Card: $id in Linear. It is already In Progress and assigned to the person who ru
    Never leave it In Progress."
   echo "$dir $branch $key" >>"$LAUNCHED"
   # A card can come back (Blocked, then Ready For Factory again): settle it again.
-  rm -f "$STATE/settled/$key"
+  rm -f "$STATE/settled/$key" "$STATE/settle-wait/$key"
+  # Picked up while settle's re-queue answer was lost: the move did happen.
+  if [ "$(cat "$STATE/requeued/$key" 2>/dev/null || true)" = pending ]; then put_marker "$STATE/requeued/$key" requeued || true; fi
   echo "started $id in $dir (unit factory-$key, model $model for risk $risk, log $STATE/$key.log)"
 }
 
@@ -1135,18 +1150,75 @@ pr_reviews() {
 # A finished builder must leave its card In Review, Blocked or Done. If the
 # card is still In Progress with no PR (the session crashed, timed out or
 # forgot), move it to Blocked with a pointer to the log, once per launch.
+# CAT-1485: a builder cut off from outside (a reboot, a kill, a timeout, the
+# OOM killer) is put back in Ready For Factory instead, once per card, after
+# cleanup has salvaged its worktree (CAT-1482); the comment names the salvage
+# ref and the branch if it is already on origin. A second cut-off, or one whose
+# worktree can't be salvaged within SETTLE_WAIT_MIN, goes to Blocked as before.
+# state/requeued/<card key> records the re-queue until the card ends otherwise.
+SETTLE_WAIT_MIN=30
 settle() {
-  local dir branch key id pr out
-  mkdir -p "$STATE/settled"
+  local dir branch key id pr out reason wt wait prev
+  mkdir -p "$STATE/settled" "$STATE/requeued" "$STATE/settle-wait"
+  # The user bus must answer: a failed is-active must not read as "the session ended".
+  if ! systemctl --user show-environment >/dev/null 2>&1 </dev/null; then
+    echo "the user bus did not answer; settling finished builders next tick"
+    return 0
+  fi
   while read -r dir branch key; do
     key=${key:-$(cardkey "$branch")}
     [ -n "$key" ] || continue
     [ -e "$STATE/settled/$key" ] && continue
-    active "factory-$key" && continue
+    unit_running "factory-$key" && continue
     active "factory-review-$key" && continue
     pr=$(cd "$dir" && gh pr list --head "$branch" --state all --json number --jq length </dev/null 2>/dev/null) || continue
     id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
     if [ "$pr" = "0" ]; then
+      reason=$(cut_off "$key")
+      wt=$dir/.claude/worktrees/factory-$key wait=$STATE/settle-wait/$key
+      # "pending" is a re-queue whose answer was lost: it is asked again below.
+      if [ -n "$reason" ] && [ "$(cat "$STATE/requeued/$key" 2>/dev/null || true)" = requeued ]; then
+        echo "$id: its builder was cut off again ($reason); moving it to Blocked"
+        reason=
+      fi
+      # Its work is salvaged by cleanup once the worktree has been left a full
+      # tick; until then it waits (a salvage that got stuck goes to a person).
+      if [ -n "$reason" ] && [ -d "$wt" ]; then
+        if [ -e "$STATE/salvage-stuck/factory-$key" ]; then
+          echo "$id: its builder was cut off ($reason) but its worktree could not be salvaged; moving it to Blocked"
+          reason=
+        else
+          [ -e "$wait" ] || date -Is >"$wait"
+          if [ -z "$(find "$wait" -mmin "+$SETTLE_WAIT_MIN" 2>/dev/null)" ]; then
+            echo "$id: its builder was cut off ($reason); re-queueing it once its worktree is salvaged"
+            continue
+          fi
+          echo "$id: its builder was cut off ($reason) but $wt is still there after $SETTLE_WAIT_MIN minutes; moving it to Blocked"
+          reason=
+        fi
+      fi
+      if [ -n "$reason" ]; then
+        # Recorded as pending before the call, so a move whose answer is lost
+        # still counts as this card's one re-queue (launch turns it into requeued).
+        # Already in Ready For Factory counts as this re-queue only when an
+        # earlier call's answer was lost (pending); otherwise someone else moved it.
+        prev=$(cat "$STATE/requeued/$key" 2>/dev/null || true)
+        put_marker "$STATE/requeued/$key" pending || continue
+        out=$(requeue "$dir" "$branch" "$key" "$id" "$reason")
+        printf '%s %s\n%s\n' "$(date -Is)" "$id" "$out" >>"$STATE/settle.log"
+        if grep -qxF REQUEUED <<<"$out" || { [ "$prev" = pending ] && grep -qxF 'SETTLED Ready For Factory' <<<"$out"; }; then
+          put_marker "$STATE/requeued/$key" requeued
+          echo "$id: its builder was cut off ($reason) before a PR; re-queued it in Ready For Factory"
+        elif grep -qE '^SETTLED [A-Za-z]' <<<"$out"; then
+          rm -f "$STATE/requeued/$key"
+        else
+          echo "$id: re-queueing it was not confirmed; trying again next tick"
+          continue
+        fi
+        rm -f "$wait"
+        date -Is >"$STATE/settled/$key"
+        continue
+      fi
       # Recorded only when haiku confirms the status it read or set: a Linear
       # outage or a missing connector is retried next tick, not recorded.
       out=$( (cd "$STATE" && timeout 300 "$CLAUDE" -p --model "$MODEL_HOUSEKEEPING" --output-format text \
@@ -1156,8 +1228,60 @@ Then print exactly one final line: SETTLED <the status it ends in>" </dev/null 2
       printf '%s %s\n%s\n' "$(date -Is)" "$id" "$out" >>"$STATE/settle.log"
       grep -qE '^SETTLED [A-Za-z]' <<<"$out" || continue
     fi
+    # Ended another way (a PR, or Blocked): a later cut-off of this card gets its one re-queue again.
+    rm -f "$STATE/requeued/$key" "$STATE/settle-wait/$key"
     date -Is >"$STATE/settled/$key"
   done < <(launched)
+}
+
+# Why a finished builder that left no PR was cut off from outside, or nothing,
+# from its launch record (see launch): still "started", or "stopped" by a
+# shutdown, from an earlier boot (a power cut, a crash, a reboot); or "ended"
+# with a systemd result of signal, timeout or oom-kill. "done", an end of its
+# own, a person's stop in this boot, or no record (launched before CAT-1485)
+# is not. Nor is a card the board asked to stop (CAT-1441), whether or not
+# its session was still running then.
+cut_off() {
+  local key=$1 word= boot= result=
+  [ -e "$STATE/stopped/$key" ] && [ "$STATE/stopped/$key" -nt "$STATE/launched-boot/$key" ] && return 0
+  jq -e --arg id "${key^^}" '.stop // [] | if type == "array" then any(.[]; type == "string" and ascii_upcase == $id) else false end' \
+    "$STATE/control.json" >/dev/null 2>&1 && return 0
+  read -r word _ boot result <"$STATE/launched-boot/$key" 2>/dev/null || true
+  case $word in
+    started|stopped)
+      if [ -n "$BOOT_ID" ] && [ -n "$boot" ] && [ "$boot" != unknown ] && [ "$boot" != "$BOOT_ID" ]; then
+        echo "the machine restarted"
+      fi
+      ;;
+    ended)
+      case $result in
+        signal|timeout|oom-kill) echo "unit result $result" ;;
+      esac
+      ;;
+  esac
+  return 0
+}
+
+# Puts a cut-off builder's card back in Ready For Factory (assignee kept) with
+# one comment naming what was kept: each salvage ref of its worktree made since
+# its launch, and its branch if it is on origin. Prints the haiku call's output.
+requeue() {
+  local dir=$1 branch=$2 key=$3 id=$4 reason=$5 since= ref stamp body
+  body="The factory session on $HOST was cut off ($reason) before it opened a PR. Re-queued once; a second cut-off goes to Blocked."
+  [ -e "$STATE/launched-boot/$key" ] && since=$(date -r "$STATE/launched-boot/$key" +%Y%m%dT%H%M%S 2>/dev/null || true)
+  while read -r ref; do
+    stamp=${ref##*-}
+    [[ $stamp =~ ^[0-9]{8}T[0-9]{6}$ ]] || continue
+    [[ -z $since || ! $stamp < $since ]] || continue
+    body+=" Its unpushed work was saved as the ref $ref in $(basename "$dir") on $HOST (see it with: git log -p $ref)."
+  done < <(git -C "$dir" for-each-ref --format='%(refname)' "refs/factory/salvage/factory-$key-*" 2>/dev/null || true)
+  if (cd "$dir" && timeout 60 git ls-remote --exit-code --heads origin "refs/heads/$branch" </dev/null >/dev/null 2>&1); then
+    body+=" Its branch $branch is already on origin, so the next session carries on from it."
+  fi
+  (cd "$STATE" && timeout 300 "$CLAUDE" -p --model "$MODEL_HOUSEKEEPING" --output-format text \
+    --allowedTools="${LINEAR}__get_issue,${LINEAR}__save_issue,${LINEAR}__save_comment" \
+    "Get Linear issue $id. If its status is 'In Progress' and it is assigned to me, move it to 'Ready For Factory' (keep its assignee and labels) and add this comment: '$body' Then print exactly one final line: REQUEUED
+Otherwise change nothing, and print exactly one final line: SETTLED <the status it is in>" </dev/null 2>&1) || true
 }
 
 # The newest PR from a launched branch, as "<number> <state> <stamped> <url>":

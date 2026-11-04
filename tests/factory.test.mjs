@@ -224,6 +224,211 @@ esac
   assert.ok(!existsSync(join(state, "settled", "cat-3")), "relaunch kept the old settled record");
 });
 
+// CAT-1485: a builder cut off from outside goes back to Ready For Factory once,
+// after its worktree is salvaged; anything else, or a second cut-off, goes to
+// Blocked. state/launched-boot/<key> is the builder's launch record: "started
+// <date> <boot id>" at launch, rewritten by its unit's ExecStopPost
+// (claude-factory-mark-done) to "done", "stopped" or "ended <date> <boot id>
+// <systemd result>". One real tick per step against a real repo with an origin;
+// gh, systemctl, systemd-run and claude stubbed. The systemd-run stub runs the
+// unit's ExecStopPost as systemd would after a SIGKILL.
+test("settle: a cut-off builder is re-queued once after salvage; a second cut-off or a plain end goes to Blocked", { skip: !existsSync("/proc/sys/kernel/random/boot_id") && "no boot id here" }, () => {
+  const t = mkdtempSync(join(tmpdir(), "factory-requeue-"));
+  const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory"), repo = join(t, "repo");
+  for (const d of [bin, state, join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  const calls = join(t, "calls");
+  writeFileSync(calls, "");
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+q='.'
+while [ $# -gt 0 ]; do case $1 in --jq) q=$2; shift;; esac; shift; done
+printf '[]' | jq -r "$q" 2>/dev/null || true
+`, { mode: 0o755 });
+  // A collected unit: systemd no longer knows its Result.
+  writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
+case "$*" in
+  *show-environment*) [ ! -e "${t}/nobus" ];;
+  *"-p Result"*) echo success;;
+  *ActiveState*) echo inactive;;
+  *is-active*) exit 3;;
+  *) exit 0;;
+esac
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "claude"), `#!/usr/bin/env bash
+p=\${!#}
+printf '%s\\n' "$p" | tr '\\n' ' ' >>"${calls}"; echo >>"${calls}"
+case $p in
+  "In Linear, list issues"*) echo "\${PICK:-NONE}";;
+  "Get Linear issue CAT-6."*"'Ready For Factory'"*) printf 'It is Done.\\nSETTLED Done\\n';;
+  "Get Linear issue CAT-11."*"'Ready For Factory'"*) if [ -e "${t}/linearfail" ]; then echo "Linear did not answer."; else printf 'It is Ready For Factory.\\nSETTLED Ready For Factory\\n'; fi;;
+  "Get Linear issue CAT-"*"'Ready For Factory'"*) printf 'Moved it.\\nREQUEUED\\n';;
+  *"Add this comment to Linear issue"*) echo TOLD;;
+  *"issue CAT-"*) printf 'Moved it.\\nSETTLED Blocked\\n';;
+  *) echo "\${PICK:-NONE}";;
+esac
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemd-run"), `#!/usr/bin/env bash
+for a; do case $a in --property=ExecStopPost=*) EXIT_CODE=killed EXIT_STATUS=KILL SERVICE_RESULT=signal bash -c "\${a#--property=ExecStopPost=}";; esac; done
+`, { mode: 0o755 });
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"), `${repo} proj\n`);
+  const env = { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+  const sh = (cmd) => {
+    const r = spawnSync("bash", ["-c", cmd], { encoding: "utf8", env });
+    assert.equal(r.status, 0, `${cmd}\n${r.stderr}`);
+    return r.stdout;
+  };
+  const tick = (extra = {}) => {
+    const r = spawnSync("bash", [DISPATCH], { encoding: "utf8", env: { ...env, ...extra } });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout + r.stderr;
+  };
+  const wt = (n) => join(repo, ".claude/worktrees", `factory-cat-${n}`);
+  const age = (n) => sh(`g=$(git -C ${wt(n)} rev-parse --absolute-git-dir)
+find ${wt(n)} "$g/HEAD" "$g/logs/HEAD" -exec touch -h -d '10 minutes ago' {} + 2>/dev/null || true`);
+  const took = () => { const c = read(calls); writeFileSync(calls, ""); return c.trim().split("\n").filter(Boolean); };
+  const about = (c, n) => c.filter((l) => l.includes(`issue CAT-${n}.`) || l.includes(`issue CAT-${n} `));
+  const record = (n, line) => {
+    writeFileSync(join(state, "launched-boot", `cat-${n}`), `${line}\n`);
+    sh(`touch -d '60 minutes ago' ${join(state, "launched-boot", `cat-${n}`)}`);
+  };
+
+  sh(`git init -q --bare ${t}/origin.git && git clone -q ${t}/origin.git ${repo} 2>/dev/null
+cd ${repo} && echo one >doc.md && git add . && git commit -q -m base && git push -q origin HEAD:main
+git update-ref refs/factory/salvage/factory-cat-1-$(date -d '-2 days' +%Y%m%dT%H%M%S) HEAD
+git worktree add -q -b b/cat-1-x .claude/worktrees/factory-cat-1 origin/main
+git -C .claude/worktrees/factory-cat-1 commit -q --allow-empty -m pushed && git -C .claude/worktrees/factory-cat-1 push -q origin b/cat-1-x
+git -C .claude/worktrees/factory-cat-1 commit -q --allow-empty -m unpushed
+git worktree add -q -b b/cat-5-x .claude/worktrees/factory-cat-5 origin/main && echo wip >.claude/worktrees/factory-cat-5/doc.md
+git worktree add -q -b b/cat-9-x .claude/worktrees/factory-cat-9 origin/main && echo wip >.claude/worktrees/factory-cat-9/doc.md
+git worktree lock --reason "kept by hand" .claude/worktrees/factory-cat-9
+git worktree add -q -b b/cat-10-x .claude/worktrees/factory-cat-10 origin/main && echo wip >.claude/worktrees/factory-cat-10/doc.md`);
+  age(1);
+  age(9);
+  const keys = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+  writeFileSync(join(state, "launched"), keys.map((n) => `${repo} b/cat-${n}-x cat-${n}`).join("\n") + "\n");
+  for (const d of ["launched-boot", "requeued", "stopped", "settle-wait", "salvage-stuck"]) mkdirSync(join(state, d));
+  const OLD = "an-earlier-boot", D = "2026-11-04T10:00:00-05:00";
+  // 1: power cut (still "started" from another boot), salvaged unpushed work, branch on origin.
+  // 2: killed by a signal. 3: ended on its own (exit-code). 4: power cut, re-queued once already.
+  // 5: power cut, worktree written to just now (waits for salvage). 6: timed out, card no longer In Progress.
+  // 7: power cut, but stopped from the board since launch. 8: OOM-killed.
+  // 9: power cut, worktree locked by hand, waited out SETTLE_WAIT_MIN. 10: power cut, salvage stuck.
+  // 11: killed by a signal, Linear doesn't answer the first time. 12: power cut, on the board's stop list
+  // (its session was already gone, so the stop step wrote nothing). 13: "done" before a reboot.
+  // 14: a person's systemctl stop in this boot.
+  for (const n of [1, 4, 5, 7, 9, 10, 12]) record(n, `started ${D} ${OLD}`);
+  record(2, `ended ${D} ${BOOT} signal`);
+  record(3, `ended ${D} ${BOOT} exit-code`);
+  record(6, `ended ${D} ${BOOT} timeout`);
+  record(8, `ended ${D} ${BOOT} oom-kill`);
+  record(11, `ended ${D} ${BOOT} signal`);
+  record(13, `done ${D}`);
+  record(14, `stopped ${D} ${BOOT}`);
+  writeFileSync(join(state, "requeued", "cat-4"), "requeued\n");
+  writeFileSync(join(state, "stopped", "cat-7"), "blocked\n");
+  writeFileSync(join(state, "settle-wait", "cat-9"), "earlier\n");
+  sh(`touch -d '31 minutes ago' ${join(state, "settle-wait", "cat-9")}`);
+  writeFileSync(join(state, "salvage-stuck", "factory-cat-10"), "refs/factory/salvage/factory-cat-10-20261104T100000\n");
+  writeFileSync(join(state, "control.json"), JSON.stringify({ version: 1, stop: ["cat-12"] }));
+  writeFileSync(join(t, "linearfail"), "");
+
+  // The bus doesn't answer: nothing is settled.
+  writeFileSync(join(t, "nobus"), "");
+  let out = tick();
+  assert.match(out, /the user bus did not answer; settling finished builders next tick/);
+  assert.deepEqual(readdirSync(join(state, "settled")), []);
+  rmSync(join(t, "nobus"));
+  took();
+
+  out = tick();
+  let c = took();
+  const requeues = c.filter((l) => l.startsWith("Get Linear issue") && l.includes("'Ready For Factory'"));
+  assert.deepEqual(requeues.map((l) => l.match(/issue (CAT-\d+)\./)[1]).sort(), ["CAT-1", "CAT-11", "CAT-2", "CAT-6", "CAT-8"]);
+  const say = (n) => requeues.find((l) => l.includes(`issue CAT-${n}.`));
+  // The comment, word for word, with the reason; assignee kept.
+  assert.match(say(1), /keep its assignee/);
+  assert.ok(say(1).includes(`'The factory session on `), say(1));
+  assert.match(say(1), / was cut off \(the machine restarted\) before it opened a PR\. Re-queued once; a second cut-off goes to Blocked\./);
+  assert.match(say(2), /was cut off \(unit result signal\) before it opened a PR\. Re-queued once; a second cut-off goes to Blocked\.'/);
+  assert.match(say(8), /cut off \(unit result oom-kill\)/);
+  assert.match(say(6), /cut off \(unit result timeout\)/);
+  // cat-1's work was salvaged first, and the comment names that ref (not the older one) and its pushed branch.
+  const salvaged = sh(`git -C ${repo} for-each-ref --format='%(refname)' 'refs/factory/salvage/factory-cat-1-*'`).trim().split("\n");
+  assert.equal(salvaged.length, 2);
+  const named = salvaged.filter((r) => say(1).includes(r));
+  assert.equal(named.length, 1, `${say(1)}\n${salvaged}`);
+  const fresh = named[0];
+  assert.ok(say(1).includes(`git log -p ${fresh}`), say(1));
+  assert.match(say(1), /Its branch b\/cat-1-x is already on origin/);
+  assert.equal(sh(`git -C ${repo} log -1 --format=%s ${fresh}`).trim(), "unpushed");
+  assert.ok(!existsSync(wt(1)));
+  assert.doesNotMatch(say(2), /salvage|already on origin/);
+  // Blocked as today: 3 (a plain end), 4 (a second cut-off), 7 and 12 (stopped from the board),
+  // 9 (worktree never salvaged), 10 (salvage stuck), 13 (done before the reboot), 14 (a person's stop).
+  const blocked = c.filter((l) => l.includes("move it to 'Blocked'")).map((l) => l.match(/issue (CAT-\d+)\./)[1]).sort();
+  assert.deepEqual(blocked, ["CAT-10", "CAT-12", "CAT-13", "CAT-14", "CAT-3", "CAT-4", "CAT-7", "CAT-9"]);
+  assert.match(out, /CAT-4: its builder was cut off again \(the machine restarted\); moving it to Blocked/);
+  assert.match(out, /CAT-9: its builder was cut off \(the machine restarted\) but \S+factory-cat-9 is still there after 30 minutes; moving it to Blocked/);
+  assert.match(out, /CAT-10: its builder was cut off \(the machine restarted\) but its worktree could not be salvaged; moving it to Blocked/);
+  assert.ok(!existsSync(join(state, "settle-wait", "cat-10")), "waited on a stuck salvage");
+  // 5 waits for its worktree: no Linear call, not settled.
+  assert.deepEqual(about(c, 5), []);
+  assert.match(out, /CAT-5: its builder was cut off \(the machine restarted\); re-queueing it once its worktree is salvaged/);
+  // 11's re-queue wasn't confirmed: not settled, and recorded as pending, not as a used re-queue.
+  assert.match(out, /CAT-11: re-queueing it was not confirmed; trying again next tick/);
+  assert.deepEqual(readdirSync(join(state, "settled")).sort(), ["cat-1", "cat-10", "cat-12", "cat-13", "cat-14", "cat-2", "cat-3", "cat-4", "cat-6", "cat-7", "cat-8", "cat-9"]);
+  // Re-queued ones are recorded; a card that ended another way (6 was Done) is not; Blocked clears the record.
+  assert.deepEqual(readdirSync(join(state, "requeued")).sort(), ["cat-1", "cat-11", "cat-2", "cat-8"]);
+  assert.equal(read(join(state, "requeued", "cat-11")).trim(), "pending");
+  assert.equal(read(join(state, "requeued", "cat-1")).trim(), "requeued");
+  assert.match(out, /CAT-1: its builder was cut off \(the machine restarted\) before a PR; re-queued it in Ready For Factory/);
+
+  // A tick later 5 is still waiting, and 11 is asked again: it was moved after all, so it counts as re-queued.
+  rmSync(join(t, "linearfail"));
+  out = tick();
+  c = took();
+  assert.deepEqual(about(c, 5), []);
+  assert.equal(about(c, 11).length, 1, c.join("\n"));
+  assert.equal(read(join(state, "requeued", "cat-11")).trim(), "requeued");
+  assert.ok(existsSync(join(state, "settled", "cat-11")));
+  // Once 5 has been left a full tick, it is salvaged and re-queued.
+  age(5);
+  out = tick();
+  c = took();
+  const r5 = c.filter((l) => l.includes("issue CAT-5.") && l.includes("'Ready For Factory'"));
+  assert.equal(r5.length, 1, c.join("\n"));
+  assert.match(r5[0], /saved as the ref refs\/factory\/salvage\/factory-cat-5-\d{8}T\d{6} /);
+  assert.doesNotMatch(r5[0], /already on origin/);
+  assert.ok(!existsSync(join(state, "settle-wait", "cat-5")));
+
+  // The factory picks cat-2 up again. Its launch record starts in this boot, and the unit's
+  // ExecStopPost (here: a SIGKILL) rewrites it through claude-factory-mark-done.
+  out = tick({ PICK: "PICK CAT-2 b/cat-2-x" });
+  assert.match(out, /started CAT-2/);
+  assert.match(read(join(state, "launched-boot", "cat-2")), new RegExp(`^ended ${DATE} ${BOOT} signal\\n$`));
+  assert.ok(!existsSync(join(state, "settled", "cat-2")));
+  // Cut off again: Blocked, and the record clears so a person's re-queue starts over.
+  took();
+  out = tick();
+  c = took();
+  assert.equal(about(c, 2).filter((l) => l.includes("move it to 'Blocked'")).length, 1, c.join("\n"));
+  assert.ok(!c.some((l) => l.includes("issue CAT-2.") && l.includes("'Ready For Factory'")));
+  assert.ok(!existsSync(join(state, "requeued", "cat-2")));
+
+  // mark-done on a builder's launch record: the streamer's exit 137 (its claude was
+  // SIGKILLed) is a signal; systemd's own result is kept; exit 0 is done.
+  const rec = join(state, "launched-boot", "cat-99");
+  for (const [code, status, result, want] of [
+    ["exited", "137", "exit-code", "signal"], ["killed", "KILL", "oom-kill", "oom-kill"], ["exited", "1", "exit-code", "exit-code"],
+  ]) {
+    writeFileSync(rec, `started ${D} ${BOOT}\n`);
+    sh(`EXIT_CODE=${code} EXIT_STATUS=${status} SERVICE_RESULT=${result} bash ${MARK_DONE} ${rec}`);
+    assert.match(read(rec), new RegExp(`^ended ${DATE} ${BOOT} ${want}\\n$`), `${code}.${status}`);
+  }
+  writeFileSync(rec, `started ${D} ${BOOT}\n`);
+  sh(`EXIT_CODE=exited EXIT_STATUS=0 bash ${MARK_DONE} ${rec}`);
+  assert.match(read(rec), new RegExp(`^done ${DATE}\\n$`));
+});
+
 // CAT-1318: card keys from any Linear team, read from an identifier or from
 // where Linear puts it in a branch name.
 test("cardkey reads CAT- and LUM- keys from identifiers and Linear branch names", () => {
@@ -413,8 +618,9 @@ test("every builder and reviewer session passes --model, and Linear calls use th
     assert.match(body, /-p --model "\$/, fn);
   }
   assert.doesNotMatch(s, /--model haiku/);
-  // The pick, settle, linear_issue, the retro report, and (CAT-1441) the stop step's Blocked move.
-  assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 5);
+  // The pick, settle, linear_issue, the retro report, (CAT-1441) the stop step's
+  // Blocked move, and (CAT-1485) settle's re-queue of a cut-off builder.
+  assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 6);
 });
 
 test("install.sh's boot check skips label, offset, review-authors, model and stages lines like the dispatcher does", () => {
@@ -2263,11 +2469,14 @@ test("interrupted sessions: each kind is retried once; a second cut-off comments
       assert.ok(hook?.endsWith(`bash" "${MARK_DONE}" "${f}"`), args);
     }
 
-    // Still running: no retry, no line about it. A builder picked now gets no hook: it has no marker.
+    // Still running: no retry, no line about it. A builder picked now gets a hook
+    // on its launch record (CAT-1485), never on a reviewer's attempt record.
     r = tick({ PICK: "PICK CAT-50 b/cat-50-x Low" });
     assert.deepEqual(started(), [...ALL_KINDS, "factory-cat-50"].sort());
     assert.doesNotMatch(r.stdout, /interrupted/);
-    assert.doesNotMatch(read(`${units}.factory-cat-50.args`), /ExecStopPost/);
+    const hooks50 = read(`${units}.factory-cat-50.args`).split("\n").filter((l) => l.includes("ExecStopPost"));
+    assert.equal(hooks50.length, 1, hooks50.join("\n"));
+    assert.match(hooks50[0], /claude-factory-mark-done" "[^"]*\/launched-boot\/cat-50"$/);
     writeFileSync(units, ALL_KINDS.map((u) => `${u}.service\n`).join(""));
 
     // A unit that is stopping (its ExecStopPost may still be writing) is not cut off.
