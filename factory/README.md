@@ -486,16 +486,22 @@ units; gstack goes back to its bundled Chromium.
    `factory-review-<repo>-pr-<n>` (see "Every PR gets reviewed" above).
 4. **Clean up.** Each tick removes a finished builder or reviewer worktree once
    it has no uncommitted changes and nothing unpushed. One that still holds
-   work (CAT-1482) is salvaged once it has been left for a full tick (nothing
-   in its top folder changed for 5 minutes), no unit runs in it, `systemctl
-   --user` reaches the user bus and the factory isn't paused. Its HEAD, plus a
+   work (CAT-1482) is salvaged once it has been left for a full tick (no file
+   in it, nor its HEAD or reflog, changed for 5 minutes; `node_modules` and
+   `.next` aside), no unit is running, starting or stopping in it, no process
+   of yours has its working directory in it, `systemctl --user` reaches the
+   user bus and the factory isn't paused. Its HEAD, plus a
    `factory salvage: <name>` commit of any uncommitted files (ignored files
    such as `.env.local` are left out), is kept as
    `refs/factory/salvage/<name>-<YYYYMMDDTHHMMSS>` in the repo, the worktree
    is force-removed, the journal says `salvaged <wt> to <ref>`, and the PR (or,
    for a builder with no PR, the card) gets one comment naming the ref and
-   `git log -p <ref>`. A worktree locked by a live process or by hand is left
-   alone. Salvage refs are deleted after 14 days; to drop them all sooner:
+   `git log -p <ref>` (a retro tells its card; comments are retried for a day,
+   never while paused). A worktree locked by a live process or by hand is left
+   alone: after `systemctl --user stop`, lock a worktree you want to keep
+   (`git worktree lock`). One whose forced remove fails is told about once and
+   left to a person (`~/.local/state/claude-factory/salvage-stuck/<name>`;
+   delete that file to try again). Salvage refs are deleted after 14 days; to drop them all sooner:
    `git for-each-ref refs/factory/salvage --format='%(refname)' | xargs -n1 git update-ref -d`.
 5. **Retro (CAT-1433).** The pass after a factory PR merges looks at it once
    (`~/.local/state/claude-factory/retro/cat-NNN-<pr>`), from the PR alone, with

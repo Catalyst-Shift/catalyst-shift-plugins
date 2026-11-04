@@ -196,7 +196,14 @@ cleanup() {
     [ -d "$wt" ] || continue
     name=$(basename "$wt")
     active "$name" && continue
-    if [ -z "$(git -C "$wt" status --porcelain)" ] && [ -z "$(git -C "$wt" rev-list --max-count=1 HEAD --not --remotes --glob=refs/factory/*)" ]; then
+    # Salvaged, but the forced remove failed (it may have dropped the worktree's
+    # registration already): a person looks, nothing here touches it again.
+    if [ -e "$STATE/salvage-stuck/$name" ]; then
+      echo "$wt was salvaged to $(cat "$STATE/salvage-stuck/$name" 2>/dev/null) but could not be removed; a person should look (then delete $STATE/salvage-stuck/$name)"
+      continue
+    fi
+    # A salvage ref (below) is not a pushed copy: it is deleted after SALVAGE_DAYS.
+    if [ -z "$(git -C "$wt" status --porcelain)" ] && [ -z "$(git -C "$wt" rev-list --max-count=1 HEAD --not --remotes --exclude='refs/factory/salvage/*' --glob='refs/factory/*')" ]; then
       # claude -w locks its worktree ("claude session <name> (pid N)") and the lock
       # outlives the session. Unlock only when that pid is gone: a lock with no pid
       # (put there by hand) or a live pid (a session started by hand, a unit still
@@ -240,21 +247,44 @@ cleanup() {
 # CAT-1482: a factory worktree left with uncommitted or unpushed work (a session
 # cut off by a reboot or a crash, or one that never pushed) blocked every later
 # session for its PR or card, forever and silently. Once it has been left for a
-# full tick (nothing in its top folder changed for 5 minutes), with no unit
-# running in it, the user bus answering and the factory not paused, its work is
+# full tick (nothing in it, nor its HEAD or reflog, changed for SALVAGE_IDLE_MIN
+# minutes), with no unit running, starting or stopping in it, no process
+# working in it, the user bus answering and the factory not paused, its work is
 # kept as refs/factory/salvage/<name>-<YYYYMMDDTHHMMSS> in the repo: HEAD, plus
 # one commit 'factory salvage: <name>' holding the uncommitted files (made from
-# a scratch index, so the worktree's own state, a half-done merge included,
-# doesn't matter; ignored files such as .env.local and node_modules are left
-# out). Then the worktree is force-removed, and the PR (or, for a builder with
-# no PR, the card) gets one comment naming the ref. A worktree locked by a live
-# pid or by hand is a person's, and is left alone.
+# a scratch index, so the worktree's own index doesn't matter; ignored files
+# such as .env.local and node_modules are left out, and a half-done merge is
+# kept as its files, conflict markers included, without the merge parent).
+# Then the worktree is force-removed, and the PR (or, for a builder with no PR
+# or a retro, the card) gets one comment naming the ref. A worktree locked by a
+# live pid or by hand is a person's, and is left alone. One that can't be
+# removed is told about once and then left to a person
+# (state/salvage-stuck/<name>; delete it to try again).
 SALVAGE_DAYS=14
+# One tick of claude-factory.timer (OnUnitActiveSec=5min).
+SALVAGE_IDLE_MIN=5
 salvage() {
-  local dir=$1 wt=$2 name=$3 gitdir pid= head commit tmp tree ref branch= key n
+  local dir=$1 wt=$2 name=$3 gitdir pid= head commit tmp tree ref branch= key n p state=removed
   [ -e "$STATE/paused" ] && return 0
-  [ -n "$(find "$wt" -maxdepth 0 -mmin +5 2>/dev/null)" ] || return 0
+  unit_running "$name" && return 0
   gitdir=$(git -C "$wt" rev-parse --absolute-git-dir 2>/dev/null) || { echo "could not salvage $wt: not a git worktree; leaving it" >&2; return 0; }
+  # Only a registered worktree: a stray folder would resolve to the main checkout.
+  case $gitdir in
+    "$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"/worktrees/*) ;;
+    *) echo "could not salvage $wt: not a registered worktree of $dir; leaving it" >&2; return 0 ;;
+  esac
+  # Left for a full tick: no file in it (dependencies and build output aside),
+  # nor its HEAD or reflog, changed in SALVAGE_IDLE_MIN minutes.
+  [ -n "$(find "$wt" -maxdepth 0 -mmin "+$SALVAGE_IDLE_MIN" 2>/dev/null)" ] || return 0
+  [ -z "$(find "$wt" \( -name node_modules -o -name .next -o -name .git \) -prune -o -mmin "-$SALVAGE_IDLE_MIN" -print -quit 2>/dev/null)" ] || return 0
+  [ -z "$(find "$gitdir/HEAD" "$gitdir/logs/HEAD" -mmin "-$SALVAGE_IDLE_MIN" 2>/dev/null)" ] || return 0
+  # No process of this user is working in it (an editor, a shell, a resumed session).
+  for p in /proc/[0-9]*/cwd; do
+    case $(readlink "$p" 2>/dev/null) in
+      "$wt"|"$wt"/*) echo "$wt holds unpushed work but a process (${p//[^0-9]/}) is working in it; not salvaging it"; return 0 ;;
+    esac
+  done
+  mkdir -p "$STATE/salvage" "$STATE/salvage-stuck" 2>/dev/null || { echo "could not salvage $wt: $STATE is not writable; leaving it" >&2; return 0; }
   if [ -e "$gitdir/locked" ]; then
     pid=$(sed -n 's/.*(pid \([0-9][0-9]*\).*/\1/p' "$gitdir/locked" 2>/dev/null || true)
     if [ -z "$pid" ] || kill -0 "$pid" 2>/dev/null; then
@@ -265,7 +295,7 @@ salvage() {
   head=$(git -C "$wt" rev-parse --verify -q HEAD) || { echo "could not salvage $wt: no HEAD; leaving it" >&2; return 0; }
   commit=$head
   if [ -n "$(git -C "$wt" status --porcelain)" ]; then
-    tmp=$(mktemp -d)
+    tmp=$(mktemp -d 2>/dev/null) || { echo "could not salvage $wt: no temporary folder; leaving it" >&2; return 0; }
     if GIT_INDEX_FILE=$tmp/index git -C "$wt" read-tree "$head" &&
       GIT_INDEX_FILE=$tmp/index git -C "$wt" add -A &&
       tree=$(GIT_INDEX_FILE=$tmp/index git -C "$wt" write-tree) &&
@@ -281,38 +311,58 @@ salvage() {
   fi
   ref=refs/factory/salvage/$name-$(date +%Y%m%dT%H%M%S)
   git -C "$dir" update-ref "$ref" "$commit" || { echo "could not salvage $wt: writing $ref failed; leaving it" >&2; return 0; }
-  # Where to tell: the branch it is on, else the card's launched branch.
-  branch=$(git -C "$wt" symbolic-ref -q --short HEAD 2>/dev/null || true)
-  if [ -z "$branch" ]; then
-    n=${name#factory-}; n=${n#review-}; n=${n#retro-}
-    key=$(cardkey "$n" || true)
-    [ -z "$key" ] || branch=$(launched | awk -v d="$dir" -v k="$key" '$1 == d && $3 == k { b = $2 } END { print b }')
-  fi
-  if [ -n "$pid" ]; then git -C "$dir" worktree unlock "$wt" || true; fi
-  if ! git -C "$dir" worktree remove --force "$wt" </dev/null; then
-    # The ref stays: a failed remove may have deleted part of the worktree.
-    echo "salvaged $wt to $ref, but could not remove it; leaving it" >&2
-    return 0
-  fi
-  echo "salvaged $wt to $ref"
+  # Where to tell: the branch it is on, else the card's launched branch. A
+  # retro's branch is the shared factory-reflect one, so a retro tells its card.
   case $name in
-    factory-review-*-pr-*) git -C "$dir" update-ref -d "refs/factory/pr/${name##*-pr-}" || true ;;
+    factory-retro-*) ;;
+    *)
+      branch=$(git -C "$wt" symbolic-ref -q --short HEAD 2>/dev/null || true)
+      if [ -z "$branch" ]; then
+        n=${name#factory-}; n=${n#review-}
+        key=$(cardkey "$n" || true)
+        [ -z "$key" ] || branch=$(launched | awk -v d="$dir" -v k="$key" '$1 == d && $3 == k { b = $2 } END { print b }')
+      fi
+      ;;
   esac
-  mkdir -p "$STATE/salvage"
-  put_marker "$STATE/salvage/${ref##*/}" "$dir $ref $name $branch"
+  if [ -n "$pid" ]; then git -C "$dir" worktree unlock "$wt" || true; fi
+  if git -C "$dir" worktree remove --force "$wt" </dev/null; then
+    echo "salvaged $wt to $ref"
+    case $name in
+      factory-review-*-pr-*) git -C "$dir" update-ref -d "refs/factory/pr/${name##*-pr-}" || true ;;
+    esac
+  else
+    # The ref stays (a failed remove may have deleted part of the worktree), and
+    # it isn't salvaged again every tick: a person looks.
+    state=stuck
+    echo "salvaged $wt to $ref, but could not remove it; leaving it to a person" >&2
+    put_marker "$STATE/salvage-stuck/$name" "$ref" || true
+  fi
+  put_marker "$STATE/salvage/${ref##*/}" "$dir $ref $name $state $branch" ||
+    echo "could not record $ref for its PR or card; the journal line above is all there is" >&2
 }
 
 # Tells the PR (or the card) about each salvaged worktree of this repo: one
-# comment each, retried every tick until it is posted (state/salvage/ holds the
-# ones not told yet).
+# comment each, retried every tick for a day until it is posted (state/salvage/
+# holds the ones not told yet). Nothing is sent while the factory is paused.
 salvage_tell() {
-  local dir=$1 f d ref name branch number n key id body
+  local dir=$1 f d ref name state branch number n key id body done_part
+  [ -e "$STATE/paused" ] && return 0
   for f in "$STATE"/salvage/*; do
     [ -f "$f" ] || continue
-    d= ref= name= branch=
-    read -r d ref name branch <"$f" || true
+    d= ref= name= state= branch=
+    read -r d ref name state branch <"$f" || true
     [ "$d" = "$dir" ] || continue
-    body="The factory on $HOST found the worktree $name left over with uncommitted or unpushed work and no session running in it, which stopped new factory sessions for this work from starting. It saved that work as the ref $ref in $(basename "$dir") on $HOST and removed the worktree. See it there with: git log -p $ref (the ref is deleted after $SALVAGE_DAYS days)."
+    if [ -n "$(find "$f" -mmin +1440 2>/dev/null)" ]; then
+      echo "gave up telling anyone about $ref after a day of failed tries; it is still in $dir"
+      rm -f "$f"
+      continue
+    fi
+    if [ "$state" = stuck ]; then
+      done_part="but could not remove the worktree, so a person should look at it there (it isn't salvaged again until $STATE/salvage-stuck/$name is deleted)"
+    else
+      done_part="and removed the worktree"
+    fi
+    body="The factory on $HOST found the worktree $name left over with uncommitted or unpushed work and no session running in it, which stopped new factory sessions for this work from starting. It saved that work as the ref $ref in $(basename "$dir") on $HOST $done_part. See it there with: git log -p $ref (the ref is deleted after $SALVAGE_DAYS days)."
     number=
     case $name in
       *-pr-[0-9]*) number=${name##*-pr-} ;;

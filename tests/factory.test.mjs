@@ -4,7 +4,7 @@
 // prompt) and claude calls reading stdin from /dev/null inside `while read`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
@@ -669,8 +669,8 @@ const cleanupScript = (state, claude = "false") => {
   return [
     `STATE=${state}`, `LAUNCHED=$STATE/launched`, "HOST=testhost", "LINEAR=mcp__claude_ai_Linear",
     `CLAUDE=${claude}`, "MODEL_HOUSEKEEPING=haiku",
-    line("active()"), line("cardkey()"), line("put_marker()"), line("SALVAGE_DAYS="),
-    fn("launched"), fn("linear_issue"), fn("cleanup"), fn("salvage"), fn("salvage_tell"), fn("salvage_prune"),
+    line("active()"), line("cardkey()"), line("put_marker()"), line("SALVAGE_DAYS="), line("SALVAGE_IDLE_MIN="),
+    fn("unit_running"), fn("launched"), fn("linear_issue"), fn("cleanup"), fn("salvage"), fn("salvage_tell"), fn("salvage_prune"),
   ].join("\n");
 };
 
@@ -743,8 +743,9 @@ git worktree lock --reason "kept by hand" .claude/worktrees/factory-cat-4`);
 // CAT-1482: a factory worktree left with uncommitted or unpushed work used to
 // block every later session for its PR or card. A rig: a real repo with an
 // origin, stub systemctl (bus answers unless $t/nobus; units in $t/active are
-// running), stub gh (pr list --head b/cat-10-x finds PR #12; a comment on PR #7
-// fails while $t/ghfail exists) and stub claude (prints TOLD). Calls go to $t/calls.
+// running), stub gh (pr list --head b/cat-10-x finds PR #12, and fails while
+// $t/listfail exists; a comment on PR #7 fails while $t/ghfail exists) and stub
+// claude (prints TOLD unless $t/linearfail exists). Calls go to $t/calls.
 function salvageRig() {
   const t = mkdtempSync(join(tmpdir(), "factory-salvage-"));
   const bin = join(t, "bin"), repo = join(t, "repo"), state = join(t, "state"), calls = join(t, "calls");
@@ -754,6 +755,7 @@ function salvageRig() {
   writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
 case "$*" in
   *show-environment*) [ ! -e "${t}/nobus" ];;
+  *ActiveState*) [ -e "${t}/activating" ] && grep -qxF "\${!#}" "${t}/activating" && echo activating; exit 0;;
   *is-active*) [ -e "${t}/active" ] && grep -qxF "\${!#}" "${t}/active";;
   *) exit 3;;
 esac
@@ -761,13 +763,13 @@ esac
   writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
 echo "gh $*" >>"${calls}"
 case "$1 $2" in
-  "pr list") case "$*" in *"--head b/cat-10-x"*) echo 12;; esac;;
+  "pr list") [ ! -e "${t}/listfail" ] || exit 1; case "$*" in *"--head b/cat-10-x"*) echo 12;; esac;;
   "pr comment") [ "$3" != 7 ] || [ ! -e "${t}/ghfail" ];;
 esac
 `, { mode: 0o755 });
   writeFileSync(join(bin, "claude"), `#!/usr/bin/env bash
 printf 'claude %s\\n' "\${!#}" >>"${calls}"
-echo TOLD
+[ -e "${t}/linearfail" ] || echo TOLD
 `, { mode: 0o755 });
   const sh = (cmd) => {
     const r = spawnSync("bash", ["-c", cmd], {
@@ -781,8 +783,9 @@ echo TOLD
 cd ${repo} && printf '.env.local\\n' >.gitignore && echo one >doc.md && git add . && git commit -q -m base && git push -q origin HEAD:main`);
   const cleanup = () => sh(`set -euo pipefail\n${cleanupScript(state, join(bin, "claude"))}\ncleanup ${repo} 2>&1\necho tick-continues`);
   const wt = (name) => join(repo, ".claude/worktrees", name);
-  // Left for more than one tick: nothing in its top folder changed for 10 minutes.
-  const age = (name) => sh(`touch -d '10 minutes ago' ${wt(name)}`);
+  // Left for more than one tick: nothing in it, nor its HEAD or reflog, changed for 10 minutes.
+  const age = (name) => sh(`g=$(git -C ${wt(name)} rev-parse --absolute-git-dir)
+find ${wt(name)} "$g/HEAD" "$g/logs/HEAD" -exec touch -h -d '10 minutes ago' {} + 2>/dev/null || true`);
   const refs = () => sh(`git -C ${repo} for-each-ref --format='%(refname)' refs/factory/salvage/`).trim().split("\n").filter(Boolean);
   const took = () => { const c = read(calls); writeFileSync(calls, ""); return c.trim().split("\n").filter(Boolean); };
   return { t, repo, state, sh, cleanup, wt, age, refs, took };
@@ -854,15 +857,20 @@ git update-ref refs/factory/pr/7 origin/main`);
 
 test("salvage guards: not before a full tick, never under an active unit, a down user bus, a live or hand lock, or a pause", () => {
   const { t, repo, state, sh, cleanup, wt, age, refs } = salvageRig();
-  const names = ["factory-cat-1", "factory-cat-2", "factory-cat-3", "factory-cat-4", "factory-cat-5"];
+  const names = ["factory-cat-1", "factory-cat-2", "factory-cat-3", "factory-cat-4", "factory-cat-5", "factory-cat-6", "factory-cat-7"];
   sh(`cd ${repo}
-for n in 1 2 3 4 5; do git worktree add -q --detach .claude/worktrees/factory-cat-$n origin/main; echo wip >.claude/worktrees/factory-cat-$n/doc.md; done
+for n in 1 2 3 4 5 6 7; do git worktree add -q --detach .claude/worktrees/factory-cat-$n origin/main; echo wip >.claude/worktrees/factory-cat-$n/doc.md; done
 git worktree lock --reason "claude agent factory-cat-3 (pid ${process.pid} start 1)" .claude/worktrees/factory-cat-3
 git worktree lock --reason "kept by hand" .claude/worktrees/factory-cat-4
 git worktree lock --reason "claude session factory-cat-5 (pid 2147483646)" .claude/worktrees/factory-cat-5`);
   // factory-cat-1 was just written to: not left for a full tick yet.
   for (const n of names.slice(1)) age(n);
   writeFileSync(join(t, "active"), "factory-cat-2.service\n");
+  // cat-6's unit is still starting (or stopping): not "active", but running.
+  writeFileSync(join(t, "activating"), "factory-cat-6.service\n");
+  // A person has a shell (here: a sleep) open in cat-7, with no lock and no unit.
+  const person = spawn("sleep", ["60"], { cwd: wt("factory-cat-7"), stdio: "ignore" });
+  try {
 
   // The bus doesn't answer: nothing is salvaged at all.
   writeFileSync(join(t, "nobus"), "");
@@ -882,16 +890,80 @@ git worktree lock --reason "claude session factory-cat-5 (pid 2147483646)" .clau
   // Only cat-5: left a tick, no unit, its lock's pid is gone.
   assert.deepEqual(refs().map((r) => r.replace(/-\d{8}T\d{6}$/, "")), ["refs/factory/salvage/factory-cat-5"]);
   assert.ok(!existsSync(wt("factory-cat-5")));
-  for (const n of names.slice(0, 4)) assert.ok(existsSync(wt(n)), `${n} was removed`);
+  for (const n of names.filter((n) => n !== "factory-cat-5")) assert.ok(existsSync(wt(n)), `${n} was removed`);
+  assert.match(out, new RegExp(`factory-cat-7 holds unpushed work but a process \\(${person.pid}\\) is working in it; not salvaging it`));
   assert.match(out, /factory-cat-3 holds unpushed work but is locked by a running process or by hand; not salvaging it/);
   assert.match(out, /factory-cat-4 holds unpushed work but is locked by a running process or by hand; not salvaging it/);
   assert.equal(sh(`git -C ${wt("factory-cat-1")} status --porcelain`).trim(), "M doc.md");
 
-  // A tick later the fresh one is old enough; the running unit's still isn't touched.
+  // A tick later the fresh one is old enough; the running units' still aren't touched.
   age("factory-cat-1");
   out = cleanup();
   assert.match(out, /salvaged \S+\/factory-cat-1 to /);
   assert.ok(existsSync(wt("factory-cat-2")));
+  assert.ok(existsSync(wt("factory-cat-6")));
+  // Editing a file deep in a worktree counts as activity, though its top folder doesn't change.
+  sh(`mkdir -p ${wt("factory-cat-6")}/src/a && echo x >${wt("factory-cat-6")}/src/a/b.md`);
+  age("factory-cat-6");
+  rmSync(join(t, "activating"));
+  sh(`echo edited >${wt("factory-cat-6")}/src/a/b.md`);
+  out = cleanup();
+  assert.ok(existsSync(wt("factory-cat-6")), "salvaged a worktree edited a minute ago");
+  } finally {
+    person.kill();
+  }
+});
+
+test("salvage: a failed remove is told once and not salvaged again; failed PR lookups and Linear calls are retried", () => {
+  const { t, repo, state, sh, cleanup, wt, age, refs, took } = salvageRig();
+  sh(`cd ${repo}
+git worktree add -q --detach .claude/worktrees/factory-review-repo-pr-7 origin/main
+mkdir .claude/worktrees/factory-review-repo-pr-7/ro && echo keep >.claude/worktrees/factory-review-repo-pr-7/ro/f
+git worktree add -q -b b/cat-10-x .claude/worktrees/factory-cat-10 origin/main
+git -C .claude/worktrees/factory-cat-10 commit -q --allow-empty -m w
+git worktree add -q -b b/cat-11-x .claude/worktrees/factory-cat-11 origin/main
+git -C .claude/worktrees/factory-cat-11 commit -q --allow-empty -m w`);
+  for (const n of ["factory-review-repo-pr-7", "factory-cat-10", "factory-cat-11"]) age(n);
+  // A folder git can't empty: the remove fails after the ref is written.
+  sh(`chmod 555 ${wt("factory-review-repo-pr-7")}/ro`);
+  writeFileSync(join(t, "listfail"), "");
+  writeFileSync(join(t, "linearfail"), "");
+  try {
+    let out = cleanup();
+    assert.match(out, /tick-continues/);
+    assert.match(out, /salvaged \S+factory-review-repo-pr-7 to \S+, but could not remove it; leaving it to a person/);
+    assert.match(out, /could not look up the PR for \S+factory-cat-10-\S+; telling it next tick/);
+    assert.match(out, /could not look up the PR for \S+factory-cat-11-\S+; telling it next tick/);
+    // PR #7 is told the worktree stays and a person should look.
+    let c = took();
+    const told7 = c.filter((l) => l.startsWith("gh pr comment 7 "));
+    assert.equal(told7.length, 1, c.join("\n"));
+    assert.match(told7[0], /could not remove the worktree, so a person should look/);
+    assert.equal(refs().length, 3);
+
+    // Next tick: the stuck one isn't salvaged again; the PR lookup works now, cat-11 has no PR and Linear fails.
+    rmSync(join(t, "listfail"));
+    out = cleanup();
+    assert.match(out, /factory-review-repo-pr-7 was salvaged to refs\/factory\/salvage\/\S+ but could not be removed; a person should look/);
+    assert.equal(refs().length, 3, "salvaged the stuck worktree again");
+    assert.match(out, /told PR #12 in \S+ about \S+factory-cat-10-/);
+    assert.match(out, /could not comment on CAT-11 about \S+; trying again next tick/);
+    c = took();
+    assert.ok(!c.some((l) => l.startsWith("gh pr comment 7 ")), "told PR #7 twice");
+
+    rmSync(join(t, "linearfail"));
+    out = cleanup();
+    assert.match(out, /told CAT-11 about /);
+    assert.deepEqual(readdirSync(join(state, "salvage")), []);
+    // Paused: nothing is told.
+    writeFileSync(join(state, "paused"), "");
+    writeFileSync(join(state, "salvage", "x"), `${repo} refs/factory/salvage/factory-cat-12-20261104T000000 factory-cat-12 removed\n`);
+    took();
+    out = cleanup();
+    assert.deepEqual(took(), []);
+  } finally {
+    sh(`chmod 755 ${wt("factory-review-repo-pr-7")}/ro`);
+  }
 });
 
 test("salvage refs older than 14 days are deleted; younger ones and other refs stay", () => {
