@@ -211,9 +211,9 @@ gets a fresh try. A CI retry counts toward `CI_TRIES`, at an earlier head or
 this one. Records written before this change hold a bare date and still mean
 tried, so upgrading starts nothing new. Nothing is retried while `systemctl
 --user` can't reach the user bus. A cut-off session that left uncommitted
-work in its worktree waits for a person, as before (`left over with unpushed
-work`), and so does one waiting for a free slot: neither logs a retry until it
-starts. Builders are not covered: `settle` already handles a builder that ends
+work in its worktree waits (`left over with unpushed work`) until the next
+clean-up salvages it (see "Clean up" below), and one waiting for a free slot
+waits too: neither logs a retry until it starts. Builders are not covered: `settle` already handles a builder that ends
 without a PR. A machine-wide failure (the subscription's usage limit, an
 expired login, no network) fails the retry too, so each PR it hit gets the
 "cut off twice" comment.
@@ -485,7 +485,18 @@ units; gstack goes back to its bundled Chromium.
    Any other open PR without a stamp goes through the same review on unit
    `factory-review-<repo>-pr-<n>` (see "Every PR gets reviewed" above).
 4. **Clean up.** Each tick removes a finished builder or reviewer worktree once
-   it has no uncommitted changes and nothing unpushed.
+   it has no uncommitted changes and nothing unpushed. One that still holds
+   work (CAT-1482) is salvaged once it has been left for a full tick (nothing
+   in its top folder changed for 5 minutes), no unit runs in it, `systemctl
+   --user` reaches the user bus and the factory isn't paused. Its HEAD, plus a
+   `factory salvage: <name>` commit of any uncommitted files (ignored files
+   such as `.env.local` are left out), is kept as
+   `refs/factory/salvage/<name>-<YYYYMMDDTHHMMSS>` in the repo, the worktree
+   is force-removed, the journal says `salvaged <wt> to <ref>`, and the PR (or,
+   for a builder with no PR, the card) gets one comment naming the ref and
+   `git log -p <ref>`. A worktree locked by a live process or by hand is left
+   alone. Salvage refs are deleted after 14 days; to drop them all sooner:
+   `git for-each-ref refs/factory/salvage --format='%(refname)' | xargs -n1 git update-ref -d`.
 5. **Retro (CAT-1433).** The pass after a factory PR merges looks at it once
    (`~/.local/state/claude-factory/retro/cat-NNN-<pr>`), from the PR alone, with
    no model: review comments or a `Factory-Review-Fix:` commit, a
