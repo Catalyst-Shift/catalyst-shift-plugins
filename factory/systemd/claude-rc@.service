@@ -8,7 +8,8 @@ After=network-online.target
 Type=simple
 WorkingDirectory=%h/Projects/%i
 Environment=PATH=%h/.local/share/mise/shims:%h/.local/bin:/usr/local/bin:/usr/bin
-UnsetEnvironment=ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
+# FACTORY_INGEST_TOKEN is the board's machine token (CAT-1442): no session gets it.
+UnsetEnvironment=ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN FACTORY_INGEST_TOKEN
 ExecStart=/usr/bin/env claude remote-control --spawn worktree
 Restart=always
 RestartSec=30

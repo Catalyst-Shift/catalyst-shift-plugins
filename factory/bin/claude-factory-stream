@@ -1,0 +1,966 @@
+#!/usr/bin/env node
+// claude-factory-stream (CAT-1442): sends a factory machine's sessions and its
+// heartbeat to the board, POST <FACTORY_INGEST_URL> (default
+// https://os.catalystshift.ai/api/ingest/events, the route CAT-1446 built in
+// catalyst_os), with `Authorization: Bearer $FACTORY_INGEST_TOKEN`.
+//
+//   claude-factory-stream run --unit <unit> [--card CAT-1] [--repo <folder>] -- claude <args>
+//       Runs one session. Its stream-json lines go to stdout (the unit's log)
+//       as they come, and, cleaned (see sanitizeEvent), to the board in batches
+//       of up to 50 events every 2 seconds. Every batch is written to
+//       spool/<sessionId>.jsonl before it is sent and taken out once the board
+//       says 202, so a board that is down loses nothing: the spool is sent in
+//       order when it is back. The session never waits on the network.
+//   claude-factory-stream drain
+//       Sends the spools of sessions that have ended (the dispatcher, each tick).
+//   claude-factory-stream heartbeat [--once]
+//       Posts the machine's heartbeat every 60 seconds and within 5 seconds of
+//       a change, while claude-factory.timer is active.
+//
+// With FACTORY_INGEST_TOKEN unset, run just runs the session and nothing is
+// sent (the dispatcher does not use this script at all then). The token is
+// never passed to the session, never logged and never sent in a body.
+"use strict";
+
+const fs = require("node:fs");
+const path = require("node:path");
+const os = require("node:os");
+const crypto = require("node:crypto");
+const { spawn, spawnSync } = require("node:child_process");
+const readline = require("node:readline");
+
+const DEFAULT_URL = "https://os.catalystshift.ai/api/ingest/events";
+/** Tool-result bodies, and any other string, are cut to this many bytes per event. */
+const MAX_FIELD_BYTES = 4096;
+const BATCH_EVENTS = 50;
+const TOKEN_VAR = "FACTORY_INGEST_TOKEN";
+const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
+
+// ---- Cleaning events. Pure; tested in tests/factory-stream.test.mjs.
+
+// Tool calls whose output may hold env values or secrets: their results are
+// never sent, and their inputs keep only what names the call. Tested against
+// the input's string values one per line (a command, a path), not its JSON;
+// for an edit, only its path (code that reads process.env is not an env dump).
+const SENSITIVE = new RegExp(
+  [
+    String.raw`(^|[\s/"'=:(\x60*])\.env(\b|$)`, // .env, .env.local, x/.env
+    String.raw`\w\.env(rc)?\b|(^|[\s/])\.envrc\b`, // app.env, .envrc
+    String.raw`\.dev\.vars\b`,
+    String.raw`environment\.d\b`,
+    String.raw`\bprintenv\b`,
+    // env with nothing after it but options: bash -c "env", /usr/bin/env, sudo env, docker exec x env.
+    String.raw`(^|[\s"'/]|\$\()env([ \t]+-[-\w]+([ \t]+[A-Za-z_]\w*)?){0,4}[ \t]*($|[;&|)\x60<>"'])`,
+    // A bare env, set or export as a command: at the start or after ; & | ( $( or a backquote.
+    String.raw`(^|[;&|(\x60]\s*|\$\(\s*)(env|set|export|typeset|declare)(\s+-[-\w]+)*\s*($|[;&|)\x60<>])`,
+    String.raw`\bcompgen\s+-e\b|\bps\s+[a-z]*e[a-z]*w|\bps\s+[a-z]*w[a-z]*e`,
+    String.raw`\bshow-environment\b`,
+    String.raw`\bprocess\.env\b`,
+    String.raw`\bos\.environ\b`,
+    String.raw`\bENV\[`,
+    String.raw`\/proc\/[^\s]*\/environ`,
+    String.raw`\.npmrc\b|\.netrc\b|\.pgpass\b|\.git-credentials\b`,
+    String.raw`\bid_(rsa|ecdsa|ed25519)\b|\w\.pem\b|\w\.key\b|\w\.p12\b`,
+    String.raw`credentials|secrets?\.(json|ya?ml|toml|env)\b`,
+    String.raw`\bvercel\s+env\s+pull\b|\bgh\s+auth\s+token\b|\bsecret-tool\b|\bpass\s+show\b`,
+  ].join("|"),
+  "im",
+);
+// What a tool call keeps of its input when it is sensitive.
+const NAMING_INPUT = ["file_path", "path", "pattern", "glob", "command", "description", "url", "skill"];
+// Tools that write code: only their path says whether the call is sensitive.
+const EDITORS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+// Tools whose result is a file's contents: never sent, only its size.
+const FILE_READERS = new Set(["Read", "NotebookRead"]);
+// MCP tools whose result is a file, query rows, messages or logs (customer data): only its size, like Read.
+// Judged on whole _/- separated words of the tool's own name (after the last __), so browser_* or airtable stay.
+const MCP_READER_WORD = /(?:^|[_-])(?:sql|query|files?|contents?|download|read|logs?|export|fetch|documents?|attachments?|transcripts?|records?|rows?|messages?|emails?|mail|threads?|crm|contacts?|errors?)(?=$|[_-])/i;
+const isMcpReader = (name) => /^mcp__/.test(String(name ?? "")) && MCP_READER_WORD.test(String(name).split("__").pop());
+// A shell command that prints files (cat x, head -n 5 x, sed -n 1,9p x, git show x:f), at the start or after && ; |.
+// Repeats are bounded ({0,8}, {0,4}): commands are not windowed, and an open * here is quadratic.
+// Any line of the command counts, as does a print inside ( ) or $( ), behind sudo or time, or fed files by
+// xargs. After a plain pipe, head or tail reads the output before it (npm test | tail), so that stays.
+// [ \t]* (not \s*) after the boundary keeps it linear on runs of blank lines; cat <<EOF / cat > f write, not print.
+const SHELL_READER = /(?:^|&&|;|\|\||\(|\$\(|\x60|\|[ \t]*(?=xargs\b))[ \t]*(?:cd[ \t]+\S+[ \t]*&&[ \t]*)?(?:(?:xargs|sudo|time|nice|command)[ \t]+(?:-\S+[ \t]+){0,8}){0,4}(?:cat(?![ \t]*[<>])|head|tail|less|more|bat|nl|tac|xxd|od|strings|sed\s+-n|awk\s+'?\{?\s*print|git\s+(?:-C\s+\S+\s+)?show\s+\S*:)\b/m;
+
+// name=value where a segment of the name (split on _ or -) says it holds a
+// secret: GITHUB_TOKEN=, db_password:, "apiKey": "...", accessToken = ... .
+// Segments are whole, so author or keyboard do not match; the short words key,
+// pass and auth count only in an UPPER_CASE env-style name (DB_PASS=, not
+// `const key =`). Linear: bounded, no nested ambiguity.
+const SECRET_SEGMENT = String.raw`(?:[a-z]{0,20}(?:token|secret|password|passwd|passphrase|apikey|api[_-]key|privatekey|private[_-]key|accesskey|access[_-]key|credentials?)|pgpassword|database[_-]?url|dsn|cookie|salt)`;
+const VALUE = String.raw`("[^"\n]{0,4096}"?|'[^'\n]{0,4096}'?|[^\s"',;]{1,4096})`; // closing quote optional: an unterminated value is masked too
+const SECRET_ASSIGN = new RegExp(
+  String.raw`(\b(?:[A-Za-z0-9]{1,64}[_-]){0,6}${SECRET_SEGMENT}(?:[_-][A-Za-z0-9]{1,64}){0,6}\\?["']?\s*[=:]\s*\\?)${VALUE}`,
+  "gi",
+);
+const SECRET_ASSIGN_UPPER = new RegExp(
+  String.raw`(\b(?:[A-Z0-9]{1,64}_){0,6}(?:KEY|PASS|AUTH|PAT)(?:_[A-Z0-9]{1,64}){0,6}\\?["']?\s*[=:]\s*\\?)${VALUE}`,
+  "g",
+);
+// Passwords given as command-line options: curl -u user:pw, mysql -pPW, --password X, sshpass -p X.
+const SECRET_FLAGS = [
+  /(\s-u\s+[^\s:]{1,128}:)[^\s"']{1,512}/g,
+  /(\bmysql(?:dump)?\b[^\n]{0,200}?\s-p)[^\s-][^\s]{0,512}/g,
+  /(--(?:password|passwd|token|secret|api-key)[=\s]+)(?:"[^"\n]{1,512}"?|'[^'\n]{1,512}'?|[^\s"']{1,512})/gi,
+  /(\bsshpass\s+-p\s*)[^\s]{1,512}/g,
+];
+// Distinctive prefixes match anywhere, even glued to other text; the short
+// generic ones (sk-, npm_) need a word boundary.
+const SECRET_VALUES = [
+  /(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/g,
+  /glpat-[A-Za-z0-9_-]{20,}/g,
+  /\bsk-(?:ant-)?[A-Za-z0-9_-]{20,}/g,
+  /[rsp]k_(?:live|test)_[A-Za-z0-9]{10,}/g,
+  /sb_(?:secret|publishable)_[A-Za-z0-9_-]{16,}/g,
+  /whsec_[A-Za-z0-9]{16,}/g,
+  /lin_(?:api|oauth)_[A-Za-z0-9]{20,}/g,
+  /xox[abprs]-[A-Za-z0-9-]{10,}/g,
+  /hooks\.slack\.com\/services\/[A-Za-z0-9/]{20,}/g,
+  /AIza[0-9A-Za-z_-]{35}/g,
+  /AKIA[0-9A-Z]{16}/g,
+  /\bnpm_[A-Za-z0-9]{30,}/g,
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
+];
+// scheme://user:password@ and scheme://:password@
+const URL_PASSWORD = /\b([a-z][a-z0-9+.-]{0,20}:\/\/[^\s:/@]{0,256}:)[^\s@/]{1,512}@/gi;
+const BEARER = /\b((?:Bearer|Basic|Token)\s+)[A-Za-z0-9._~+/=-]{12,}/g;
+// Lower-case bearer only in a header (authorization: bearer …), so prose about bearer auth stays.
+const BEARER_ANY_CASE = /(\bauthorization["']?\s*[:=]\s*["']?bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi;
+// A field whose name says it holds a secret ({"token": "..."}); usage counts like output_tokens are numbers and stay.
+const SECRET_KEY = /^(?:.*[_-])?(?:[a-z]{0,20}(?:token|secret|password|passwd|apikey|api_key|privatekey|private_key|accesskey|access_key)|authorization|cookie)$/i;
+// Env names whose values are never sent: a whole segment says secret. SSH_AUTH_SOCK, GIT_AUTHOR_*, *_SESSION_* are not.
+const SECRET_ENV_NAME = /(^|_)(TOKEN|SECRET|PASSWORD|PGPASSWORD|PASSWD|PASS|PASSPHRASE|KEY|APIKEY|CREDENTIALS?|DATABASE_URL|DSN|COOKIE|PAT)(_|$)/;
+
+/** Values of this process's env vars whose names say they are secret (8+ chars): never sent. */
+function secretValues(env = process.env) {
+  const out = new Set();
+  for (const [k, v] of Object.entries(env)) {
+    if (typeof v === "string" && v.length >= 8 && (k === TOKEN_VAR || SECRET_ENV_NAME.test(k))) out.add(v);
+  }
+  return [...out].sort((a, b) => b.length - a.length);
+}
+
+/**
+ * Cuts a string to at most `max` bytes, the note saying how much was left out
+ * included; `unsent` bytes were already dropped before it (past the masking window).
+ */
+function clip(s, max = MAX_FIELD_BYTES, unsent = 0) {
+  const b = Buffer.from(s, "utf8");
+  if (b.length <= max && !unsent) return s;
+  // Room for the note, so a clipped string is never clipped again.
+  const keep = Math.min(b.length, Math.max(0, max - 48));
+  return `${b.subarray(0, keep).toString("utf8").replace(/\uFFFD+$/, "")}… [${b.length - keep + unsent} more bytes not sent]`;
+}
+
+/** Bytes of `s` past the masking window: dropped by scrub(), never sent. */
+const pastWindow = (s) => (s.length > LOOK ? Buffer.byteLength(s.slice(LOOK), "utf8") : 0);
+/** One string as it may leave: masked, then cut to `max` bytes. */
+const clean = (s, known, max = MAX_FIELD_BYTES) => clip(scrub(s, known), max, pastWindow(s));
+
+/**
+ * Masks secrets in one string, always followed by clip(). Only its first 8 K
+ * characters are looked at: clip() keeps at most 4 KB, so the rest is never
+ * sent, and a huge tool output costs the session nothing.
+ */
+const LOOK = 2 * MAX_FIELD_BYTES;
+function scrub(s, known = []) {
+  // Past the window is never looked at, so it is never sent: masking can
+  // shorten the head (a key block becomes [redacted]) and must not pull raw
+  // tail text into the 4 KB that goes out. clean() counts it as not sent.
+  if (s.length > LOOK) return scrub(s.slice(0, LOOK), known);
+  let out = s;
+  for (const v of known) if (out.includes(v)) out = out.split(v).join("[redacted]");
+  out = out.replace(SECRET_ASSIGN, "$1[redacted]").replace(SECRET_ASSIGN_UPPER, "$1[redacted]");
+  for (const re of SECRET_FLAGS) out = out.replace(re, "$1[redacted]");
+  for (const re of SECRET_VALUES) out = out.replace(re, "[redacted]");
+  return out.replace(URL_PASSWORD, "$1[redacted]@").replace(BEARER, "$1[redacted]").replace(BEARER_ANY_CASE, "$1[redacted]");
+}
+
+const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+const sizeOf = (v) => Buffer.byteLength(typeof v === "string" ? v : JSON.stringify(v ?? ""), "utf8");
+
+/** Every string in `v` scrubbed and clipped; keys kept. */
+function deepClean(v, known, depth = 0) {
+  if (typeof v === "string") return clean(v, known);
+  if (v === null || typeof v !== "object") return v;
+  if (depth > 32) return "[too deep]";
+  if (Array.isArray(v)) return v.map((x) => deepClean(x, known, depth + 1));
+  const out = {};
+  for (const [k, x] of Object.entries(v)) {
+    const key = clip(scrub(k, known), 256);
+    out[key] = x != null && typeof x !== "boolean" && SECRET_KEY.test(k) ? "[redacted]" : deepClean(x, known, depth + 1);
+  }
+  return out;
+}
+
+/** A tool result's body (string or content blocks) as at most 4 KB of text, masked before it is cut. */
+function clipResult(content, known) {
+  if (typeof content === "string") return clean(content, known);
+  if (!Array.isArray(content)) {
+    const size = sizeOf(content);
+    return size <= MAX_FIELD_BYTES ? content : `[result not sent: ${size} bytes]`;
+  }
+  // Room kept for the closing "[N more blocks not sent]" note.
+  let left = MAX_FIELD_BYTES - (content.length > 1 ? 48 : 0);
+  let skipped = 0;
+  const out = [];
+  for (const b of content) {
+    if (left <= 0) {
+      skipped++;
+      continue;
+    }
+    if (isObj(b) && b.type === "text" && typeof b.text === "string") {
+      const masked = scrub(b.text, known);
+      const unsent = pastWindow(b.text);
+      const text = clip(masked, left, unsent);
+      // Once a block is cut, the blocks after it are left out.
+      left = text === masked && !unsent ? left - Buffer.byteLength(text, "utf8") : 0;
+      out.push({ ...b, text });
+    } else if (isObj(b) && b.type === "image") {
+      out.push({ type: "text", text: "[image not sent]" });
+      left -= 40;
+    } else {
+      // Any other block (an MCP resource, a document) counts against the same 4 KB.
+      const size = sizeOf(b);
+      if (size <= left) {
+        left -= size;
+        out.push(b);
+      } else {
+        left = 0;
+        out.push({ type: "text", text: `[${isObj(b) && typeof b.type === "string" ? b.type.slice(0, 40) : "block"} not sent: ${size} bytes]` });
+      }
+    }
+  }
+  if (skipped) out.push({ type: "text", text: `[${skipped} more blocks not sent]` });
+  return out;
+}
+
+/** The input's string values, one per line, for the checks above. */
+function inputText(input) {
+  if (!isObj(input)) return String(input ?? "");
+  // description is the session's own prose ("Show env"), not what runs.
+  return Object.entries(input).filter(([k, v]) => k !== "description" && typeof v === "string").map(([, v]) => v).join("\n");
+}
+
+function isSensitiveCall(name, input) {
+  const text = EDITORS.has(name) && isObj(input) ? String(input.file_path ?? input.notebook_path ?? "") : inputText(input);
+  return SENSITIVE.test(text) || /env|secret|credential/i.test(String(name ?? "").replace(/^mcp__/, ""));
+}
+
+/** A sensitive call's input with only the fields that name it (path, command, pattern). */
+function reduceInput(input) {
+  if (!isObj(input)) return input;
+  const kept = {};
+  for (const k of NAMING_INPUT) if (typeof input[k] === "string") kept[k] = input[k];
+  const dropped = Object.keys(input).filter((k) => !(k in kept));
+  if (dropped.length) kept.not_sent = dropped;
+  return kept;
+}
+
+// Tools that read back a background command's output: judged by the call they read.
+const OUTPUT_READERS = new Set(["TaskOutput", "BashOutput"]);
+
+/** A call whose result is a file's contents: Read, a shell file print, a Grep in content mode. */
+function readsFiles(name, input) {
+  if (FILE_READERS.has(name) || isMcpReader(name)) return true;
+  if (name === "Bash" && isObj(input) && SHELL_READER.test(String(input.command ?? ""))) return true;
+  return name === "Grep" && isObj(input) && input.output_mode === "content";
+}
+
+/**
+ * One stream-json event as it may leave the machine. `ctx.tools` remembers
+ * each tool call by id so its result can be judged: a Read result is never
+ * sent (file contents), nor is the result of a call that touches .env files,
+ * env listings or credentials; every other tool result is cut to 4 KB. The
+ * event's `tool_use_result` (a structured copy of the result, file contents
+ * included) is dropped. Every string is then masked for secrets and cut to 4 KB.
+ */
+function sanitizeEvent(ev, ctx = { tools: new Map() }, known = []) {
+  if (!isObj(ev)) return { type: "text", text: clean(String(ev), known) };
+  const out = JSON.parse(JSON.stringify(ev));
+  delete out.tool_use_result;
+  if (out.type === "system" && out.subtype === "init") {
+    // The init line lists every tool, command, skill, agent and plugin (60 KB
+    // and more); the board reads its model and ids. Lists go as counts; MCP
+    // servers (name and status) stay.
+    const counts = {};
+    for (const [k, v] of Object.entries(out)) {
+      if (Array.isArray(v) && k !== "mcp_servers") {
+        counts[k] = v.length;
+        delete out[k];
+      }
+    }
+    out.counts = counts;
+  }
+  // A denied call's input (the result line lists them) is cut like a sensitive call's.
+  if (Array.isArray(out.permission_denials)) {
+    for (const d of out.permission_denials) {
+      if (isObj(d) && isObj(d.tool_input) && (isSensitiveCall(d.tool_name, d.tool_input) || EDITORS.has(d.tool_name))) d.tool_input = reduceInput(d.tool_input);
+    }
+  }
+  const content = isObj(out.message) && Array.isArray(out.message.content) ? out.message.content : [];
+  for (const b of content) {
+    if (!isObj(b)) continue;
+    if (b.type === "tool_use") {
+      let sensitive = isSensitiveCall(b.name, b.input);
+      let reads = readsFiles(b.name, b.input);
+      // Reading a background command's output is as sensitive as that command.
+      // Its id is unknown here, so any such read is held back while a
+      // sensitive or file-printing call has been run in the background.
+      if (OUTPUT_READERS.has(b.name) && ctx.background) {
+        sensitive ||= ctx.background.sensitive;
+        reads ||= ctx.background.reads;
+      }
+      if (isObj(b.input) && b.input.run_in_background === true && (sensitive || reads)) {
+        ctx.background = { sensitive: sensitive || ctx.background?.sensitive || false, reads: reads || ctx.background?.reads || false };
+      }
+      ctx.tools.set(b.id, { name: b.name, sensitive, reads, file: isObj(b.input) ? b.input.file_path ?? b.input.path : undefined });
+      if (sensitive) b.input = reduceInput(b.input);
+    } else if (b.type === "tool_result") {
+      const call = ctx.tools.get(b.tool_use_id);
+      ctx.tools.delete(b.tool_use_id);
+      if (call && (call.reads || call.sensitive)) {
+        const what = call.sensitive ? "output of a call that may show env values or secrets" : "file contents";
+        b.content = `[${what} not sent: ${sizeOf(b.content)} bytes${call.file ? ` from ${call.file}` : ""}]`;
+      } else {
+        b.content = clipResult(b.content, known);
+      }
+    }
+  }
+  return deepClean(out, known);
+}
+
+// The station a session is at, from what it just did (the board's rail reads these).
+const SKILL_STAGE = { investigate: "investigate", review: "review", cso: "review", "code-review": "review", qa: "qa", "qa-only": "qa", ship: "ship" };
+
+/** The stage an event moves a session to, or null. A reviewer never moves to build. */
+function stageOf(ev, role = "build") {
+  const content = isObj(ev) && isObj(ev.message) && Array.isArray(ev.message.content) ? ev.message.content : [];
+  if (ev?.type !== "assistant") return null;
+  let stage = null;
+  for (const b of content) {
+    if (!isObj(b) || b.type !== "tool_use") continue;
+    const input = isObj(b.input) ? b.input : {};
+    if (b.name === "Skill" && typeof input.skill === "string") {
+      const s = SKILL_STAGE[input.skill.split(":").pop().trim().toLowerCase()];
+      if (s) stage = s;
+    } else if (b.name === "Bash" && /\bgh\s+pr\s+create\b/.test(String(input.command ?? ""))) {
+      stage = "ship";
+    } else if (role === "build" && EDITORS.has(b.name) && stage == null) {
+      stage = "build";
+    }
+  }
+  return stage;
+}
+
+/**
+ * The claude command line with stream-json output and a known session id.
+ * The output format is changed where it stands, never moved or removed: an
+ * option list before it (--allowedTools a b) would otherwise swallow the prompt.
+ */
+function childArgs(args, sessionId) {
+  const [cmd, ...rest] = args;
+  let format = false;
+  const out = rest.map((a, i) => {
+    if (rest[i - 1] === "--output-format") {
+      format = true;
+      return "stream-json";
+    }
+    if (a.startsWith("--output-format=")) {
+      format = true;
+      return "--output-format=stream-json";
+    }
+    return a;
+  });
+  return [cmd, ["--session-id", sessionId, "--verbose", ...(format ? [] : ["--output-format", "stream-json"]), ...out]];
+}
+
+// ---- Machine, paths, sending.
+
+function home(env) {
+  return env.HOME || os.homedir();
+}
+// CLAUDE_FACTORY_STATE moves it, for a try-out that must not touch the live factory's state.
+function stateDir(env = process.env) {
+  return env.CLAUDE_FACTORY_STATE || path.join(home(env), ".local/state/claude-factory");
+}
+const spoolDir = (env) => path.join(stateDir(env), "spool");
+const streamDir = (env) => path.join(stateDir(env), "stream");
+
+/** This machine's name on the board: FACTORY_MACHINE, else repos.conf's label line, else the host name. */
+function machineName(env = process.env) {
+  if (env.FACTORY_MACHINE) return env.FACTORY_MACHINE;
+  const conf = env.CLAUDE_FACTORY_CONF || path.join(home(env), ".config/claude-factory/repos.conf");
+  try {
+    const m = fs.readFileSync(conf, "utf8").match(/^[ \t]*label[ \t]+(\S+)/m);
+    if (m) return m[1];
+  } catch {}
+  return os.hostname().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+}
+
+const log = (msg) => process.stderr.write(`claude-factory-stream: ${msg}\n`);
+
+/**
+ * POSTs one batch body (JSON text). Resolves {status, retryAfter} or
+ * {status: 0, error} on a network error or timeout; never throws.
+ */
+async function post(url, token, text, timeoutMs = 10_000) {
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: text,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    await r.arrayBuffer().catch(() => {});
+    return { status: r.status, retryAfter: num(r.headers.get("retry-after"), 0) };
+  } catch (e) {
+    return { status: 0, error: e?.name === "TimeoutError" ? "timeout" : "unreachable" };
+  }
+}
+
+/**
+ * Runs a file operation; a failure (disk full, no permission) is logged and
+ * never thrown, so streaming can never take the session down.
+ */
+function safely(what, fn) {
+  try {
+    return fn();
+  } catch (e) {
+    log(`could not ${what} (${e?.code ?? e?.message ?? e})`);
+    return undefined;
+  }
+}
+// Spool and state files hold session transcripts: only this user reads them.
+const PRIVATE = { mode: 0o600 };
+const mkdirPrivate = (dir) => fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+/**
+ * Replaces a spool file whole, or removes it when nothing is left. Written to a
+ * temporary file and renamed, so a full disk or a kill mid-write leaves the old
+ * spool as it was: unsent batches are never lost to a half-written file.
+ */
+function replaceSpool(file, lines) {
+  if (!lines.length) return fs.rmSync(file, { force: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, lines.map((l) => l + "\n").join(""), PRIVATE);
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
+/** The batch line split in two by events, each with its own seq, or null for a single event. */
+function splitLine(line) {
+  const body = JSON.parse(line);
+  if (!Array.isArray(body.events) || body.events.length < 2) return null;
+  const half = Math.ceil(body.events.length / 2);
+  return [body.events.slice(0, half), body.events.slice(half)].map((events) => JSON.stringify({ ...body, seq: events[0].seq, events }));
+}
+
+// How many acks between spool rewrites. Batches acked since the last rewrite
+// stay in the file; if they are sent again, the board ignores them as duplicates.
+const REWRITE_EVERY = 25;
+
+/**
+ * The outbox of one session: batches written ahead to the spool file, sent
+ * one at a time in seq order, taken out of the spool once the board stores
+ * them. Never blocks the caller: push() and cut() only touch memory and one
+ * small file append; sending runs on its own.
+ */
+class Outbox {
+  constructor({ url, token, machine, card, sessionId, env, onChange = () => {}, timeoutMs }) {
+    Object.assign(this, { url, token, machine, card, sessionId, onChange, timeoutMs });
+    this.spool = path.join(spoolDir(env), `${sessionId}.jsonl`);
+    this.rejected = path.join(spoolDir(env), `${sessionId}.rejected.jsonl`);
+    safely("create the spool directory", () => mkdirPrivate(spoolDir(env)));
+    this.seq = 0;
+    this.pending = [];
+    this.prepMs = 0;
+    // Each entry: {line, seq, n, prepMs}. Only the JSON line is kept, not the parsed body.
+    this.queue = [];
+    this.queuedEvents = 0;
+    this.acked = 0;
+    this.sending = null;
+    this.backoffUntil = 0;
+    this.backoffMs = 0;
+    this.lastSeq = null;
+  }
+
+  get spoolEvents() {
+    return this.queuedEvents + this.pending.length;
+  }
+
+  push(event, prepMs = 0) {
+    this.pending.push({ ...event, seq: this.seq++ });
+    this.prepMs += prepMs;
+    if (this.pending.length >= BATCH_EVENTS) this.cut();
+  }
+
+  /** Turns the pending events into batches: spooled first, then sent. */
+  cut() {
+    while (this.pending.length) {
+      const t0 = performance.now();
+      const events = this.pending.splice(0, BATCH_EVENTS);
+      const line = JSON.stringify({ machine: this.machine, card: this.card, sessionId: this.sessionId, seq: events[0].seq, events });
+      // A batch that cannot be spooled is still sent from memory.
+      safely("write the spool", () => fs.appendFileSync(this.spool, line + "\n", PRIVATE));
+      this.queue.push({ line, seq: events[0].seq, n: events.length, prepMs: this.prepMs + (performance.now() - t0) });
+      this.queuedEvents += events.length;
+      this.prepMs = 0;
+    }
+    this.onChange();
+    this.pump();
+  }
+
+  rewriteSpool() {
+    safely("rewrite the spool", () => replaceSpool(this.spool, this.queue.map((b) => b.line)));
+  }
+
+  /** Sends the oldest batch if nothing is in flight and no backoff is running. */
+  pump() {
+    if (this.sending || !this.queue.length || Date.now() < this.backoffUntil) return this.sending;
+    this.sending = this.sendHead()
+      .catch((e) => log(`send failed: ${e?.message ?? e}`))
+      .finally(() => {
+        this.sending = null;
+        this.onChange();
+        if (this.queue.length && Date.now() >= this.backoffUntil) this.pump();
+      });
+    return this.sending;
+  }
+
+  drop() {
+    const head = this.queue.shift();
+    this.queuedEvents -= head.n;
+    return head;
+  }
+
+  async sendHead() {
+    const head = this.queue[0];
+    const t0 = performance.now();
+    const r = await post(this.url, this.token, head.line, this.timeoutMs);
+    const postMs = performance.now() - t0;
+    const range = `seq ${head.seq}-${head.seq + head.n - 1}`;
+    const timing = `prep ${head.prepMs.toFixed(1)} ms, post ${postMs.toFixed(0)} ms`;
+    if (r.status === 202) {
+      this.drop();
+      this.lastSeq = head.seq + head.n - 1;
+      this.backoffMs = 0;
+      if (!this.queue.length || ++this.acked % REWRITE_EVERY === 0) this.rewriteSpool();
+      log(`sent ${range} (${head.n} events, ${(head.line.length / 1024).toFixed(1)} KB): ${timing}`);
+      return;
+    }
+    const parts = r.status === 413 ? splitLine(head.line) : null;
+    if (parts) {
+      // Too large: split in two and resend, still in order.
+      const halves = parts.map((line) => {
+        const b = JSON.parse(line);
+        return { line, seq: b.seq, n: b.events.length, prepMs: 0 };
+      });
+      this.queue.splice(0, 1, ...halves);
+      this.rewriteSpool();
+      log(`${range}: 413, split in two`);
+      return;
+    }
+    if (r.status === 400 || r.status === 413) {
+      // Can never succeed: keep it aside on the machine and go on.
+      if (safely("write the rejected batch", () => (fs.appendFileSync(this.rejected, head.line + "\n", PRIVATE), true)) !== true) {
+        // Not kept anywhere else: leave it at the head of the spool and try again later.
+        this.backoffUntil = Date.now() + 60_000;
+        log(`${range}: board rejected it (${r.status}) and it could not be put aside; kept in the spool`);
+        return;
+      }
+      this.drop();
+      this.rewriteSpool();
+      log(`${range}: board rejected it (${r.status}); kept in ${this.rejected}`);
+      return;
+    }
+    // Unreachable, timeout, 401/403 (token), 5xx: keep the spool, retry later.
+    const auth = r.status === 401 || r.status === 403;
+    this.backoffMs = Math.min(60_000, Math.max(2_000, this.backoffMs * 2));
+    const wait = Math.max(auth ? 60_000 : this.backoffMs, Math.min(r.retryAfter || 0, 300) * 1000);
+    this.backoffUntil = Date.now() + wait;
+    log(`${range}: ${r.status ? `board answered ${r.status}` : r.error}${auth ? " (check FACTORY_INGEST_TOKEN)" : ""}; spooled, retry in ${Math.round(wait / 1000)} s: ${timing}`);
+  }
+
+  /** Sends what is queued until empty or `ms` have passed (session end). */
+  async flush(ms) {
+    this.cut();
+    const end = Date.now() + ms;
+    while (this.queue.length && Date.now() < end) {
+      if (Date.now() < this.backoffUntil) {
+        await new Promise((r) => setTimeout(r, Math.min(250, end - Date.now())));
+        continue;
+      }
+      await this.pump();
+    }
+    // Whatever is left stays in the spool for the dispatcher's drain.
+    this.rewriteSpool();
+  }
+}
+
+function writeJson(file, value) {
+  mkdirPrivate(path.dirname(file));
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(value) + "\n", PRIVATE);
+  fs.renameSync(tmp, file);
+}
+
+function parseArgs(argv) {
+  const opts = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--") return { opts, rest: argv.slice(i + 1) };
+    if (a === "--once") opts.once = true;
+    else if (a.startsWith("--")) opts[a.slice(2)] = argv[++i];
+  }
+  return { opts, rest: [] };
+}
+
+/** card from a unit name: factory-cat-12 and factory-review-lb2-5 are CAT-12 and LB2-5. */
+function unitCard(unit) {
+  const m = String(unit).replace(/^factory-/, "").replace(/^review-/, "").match(/^([a-z][a-z0-9]*-[0-9]+)$/);
+  return m ? m[1].toUpperCase() : null;
+}
+
+const exitCode = (code, sig) => code ?? (sig ? 128 + (os.constants.signals[sig] || 0) : 1);
+
+/** Runs the command as is, nothing streamed (no token, or streaming could not start). */
+function runPlain(rest, childEnv) {
+  const child = spawn(rest[0], rest.slice(1), { stdio: ["ignore", "inherit", "inherit"], env: childEnv });
+  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => child.kill(sig));
+  return new Promise((res) => {
+    child.on("error", (e) => {
+      log(`could not start ${rest[0]}: ${e.message}`);
+      res(127);
+    });
+    child.on("close", (code, sig) => res(exitCode(code, sig)));
+  });
+}
+
+// ---- run: one session.
+
+async function run(opts, rest, env = process.env) {
+  if (!rest.length) {
+    log("usage: claude-factory-stream run --unit <unit> [--card CAT-1] [--repo <folder>] -- claude <args>");
+    return 2;
+  }
+  const token = env[TOKEN_VAR];
+  // The session's environment never carries the token.
+  const childEnv = { ...env };
+  delete childEnv[TOKEN_VAR];
+  if (!token) return runPlain(rest, childEnv);
+
+  const unit = opts.unit || "factory-session";
+  const role = /^factory-review-/.test(unit) ? "review" : "build";
+  const card = opts.card ? opts.card.toUpperCase() : unitCard(unit);
+  const sessionId = crypto.randomUUID();
+  const startedAt = new Date().toISOString();
+  const stateFile = path.join(streamDir(env), `${unit}.json`);
+  const known = secretValues(env);
+  const ctx = { tools: new Map() };
+  // Once anything in streaming fails unexpectedly, streaming stops and the
+  // session goes on: its lines still reach the log.
+  let streaming = true;
+  const stop = (e) => {
+    if (streaming) log(`streaming stopped, the session goes on: ${e?.stack ?? e?.message ?? e}`);
+    streaming = false;
+  };
+  process.on("uncaughtException", stop);
+  process.on("unhandledRejection", stop);
+
+  let box;
+  let lastWrite = 0;
+  const writeState = (ended = false) =>
+    safely("write the stream state", () =>
+      writeJson(stateFile, { unit, card, repo: opts.repo || null, sessionId, startedAt, pid: ended ? null : process.pid, lastSeq: box.lastSeq, spoolEvents: box.spoolEvents }),
+    );
+  let stage = role === "review" ? "review" : "start";
+  const status = (st, note) => box.push({ type: "status", at: new Date().toISOString(), card, stage: st, note });
+  try {
+    box = new Outbox({
+      url: env.FACTORY_INGEST_URL || DEFAULT_URL,
+      token,
+      machine: machineName(env),
+      card,
+      sessionId,
+      env,
+      timeoutMs: num(env.FACTORY_STREAM_TIMEOUT_MS, 10_000),
+      onChange: () => {
+        // At most every 500 ms: status --json reads it.
+        const now = Date.now();
+        if (now - lastWrite < 500) return;
+        lastWrite = now;
+        writeState();
+      },
+    });
+    status(stage, role === "review" ? "reviewer session started" : "session started");
+    box.cut();
+    writeState();
+  } catch (e) {
+    log(`streaming could not start, running the session without it: ${e?.message ?? e}`);
+    return runPlain(rest, childEnv);
+  }
+
+  const [cmd, args] = childArgs(rest, sessionId);
+  const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "inherit"], env: childEnv });
+  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => child.kill(sig));
+  const timer = setInterval(() => streaming && box.cut(), num(env.FACTORY_STREAM_FLUSH_MS, 2_000));
+
+  const rl = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
+  // Done reading when readline closes or the pipe does (a destroyed stream never closes readline).
+  const closed = new Promise((res) => {
+    rl.once("close", res);
+    child.stdout.once("close", res);
+  });
+  rl.on("line", (line) => {
+    process.stdout.write(line + "\n");
+    if (!streaming || !line.trim()) return;
+    try {
+      const t0 = performance.now();
+      let ev;
+      try {
+        ev = JSON.parse(line);
+      } catch {
+        ev = { type: "text", text: line };
+      }
+      const next = stageOf(ev, role);
+      const clean = sanitizeEvent(ev, ctx, known);
+      if (!clean.at) clean.at = new Date().toISOString();
+      box.push(clean, performance.now() - t0);
+      if (next && next !== stage) {
+        stage = next;
+        status(stage);
+      }
+    } catch (e) {
+      stop(e);
+    }
+  });
+
+  const [code, signal] = await new Promise((res) => {
+    child.on("error", (e) => {
+      log(`could not start ${cmd}: ${e.message}`);
+      res([127, null]);
+    });
+    child.on("exit", (c, s) => res([c, s]));
+  });
+  // A process the session left behind can hold its stdout open: wait a little, then stop reading.
+  const grace = setTimeout(() => {
+    rl.close();
+    child.stdout.destroy();
+  }, num(env.FACTORY_STREAM_CLOSE_MS, 5_000));
+  await closed;
+  clearTimeout(grace);
+  clearInterval(timer);
+  const exit = exitCode(code, signal);
+  if (streaming) {
+    try {
+      status("end", signal ? `ended by ${signal}` : `exit ${exit}`);
+      await box.flush(num(env.FACTORY_STREAM_FINAL_MS, 15_000));
+    } catch (e) {
+      stop(e);
+    }
+  }
+  writeState(true);
+  if (box.queue.length) log(`${box.spoolEvents} events left in ${box.spool}; the dispatcher sends them on its next tick`);
+  return exit;
+}
+
+// ---- drain: spools of sessions that have ended.
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === "EPERM";
+  }
+};
+
+/** Sends one spooled batch, split on 413. "sent" (or put aside as rejected) or "stop" (the board is not taking it now). */
+async function drainLine(url, token, line, rejected, deadline = Infinity) {
+  if (Date.now() > deadline) return "stop";
+  const r = await post(url, token, line);
+  if (r.status === 202) return "sent";
+  const parts = r.status === 413 ? splitLine(line) : null;
+  if (parts) {
+    for (const p of parts) if ((await drainLine(url, token, p, rejected, deadline)) === "stop") return "stop";
+    return "sent";
+  }
+  if (r.status === 400 || r.status === 413) {
+    return safely("write the rejected batch", () => (fs.appendFileSync(rejected, line + "\n", PRIVATE), true)) === true ? "sent" : "stop";
+  }
+  log(`drain: ${r.status ? `board answered ${r.status}` : r.error}`);
+  return "stop";
+}
+
+async function drain(env = process.env) {
+  const token = env[TOKEN_VAR];
+  if (!token) return 0;
+  const url = env.FACTORY_INGEST_URL || DEFAULT_URL;
+  const dir = spoolDir(env);
+  let files;
+  try {
+    // Oldest session first.
+    files = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".rejected.jsonl"))
+      .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => a.t - b.t)
+      .map((x) => x.f);
+  } catch {
+    return 0;
+  }
+  // A session still running sends its own spool.
+  const live = new Set();
+  safely("read the stream state", () => {
+    for (const f of fs.readdirSync(streamDir(env))) {
+      try {
+        const s = JSON.parse(fs.readFileSync(path.join(streamDir(env), f), "utf8"));
+        if (s.pid && alive(s.pid)) live.add(s.sessionId);
+      } catch {}
+    }
+  });
+  const deadline = Date.now() + num(env.FACTORY_DRAIN_MS, 60_000);
+  for (const f of files) {
+    const sessionId = f.slice(0, -".jsonl".length);
+    if (live.has(sessionId)) continue;
+    const file = path.join(dir, f);
+    const lines = fs.readFileSync(file, "utf8").split("\n").filter(Boolean);
+    let sent = 0;
+    let stopped = false;
+    for (const line of lines) {
+      if (Date.now() > deadline || (await drainLine(url, token, line, path.join(dir, `${sessionId}.rejected.jsonl`), deadline)) === "stop") {
+        stopped = true;
+        break;
+      }
+      sent++;
+    }
+    const left = lines.slice(sent);
+    safely("rewrite the spool", () => replaceSpool(file, left));
+    if (sent) log(`drain ${sessionId}: sent ${sent} spooled batches${left.length ? `, ${left.length} left` : ""}`);
+    // The board is down or the time is up: the next tick goes on from here.
+    if (stopped) break;
+  }
+  return 0;
+}
+
+// ---- heartbeat.
+
+function systemctl(args) {
+  const r = spawnSync("systemctl", ["--user", ...args], { encoding: "utf8" });
+  return { ok: r.status === 0, out: r.stdout || "" };
+}
+
+/** What the heartbeat says, without its time. Only allowlisted fields: no env values or tokens. */
+function heartbeatSnapshot(env = process.env) {
+  const st = stateDir(env);
+  let pass = {};
+  try {
+    pass = JSON.parse(fs.readFileSync(path.join(st, "pass.json"), "utf8"));
+  } catch {}
+  const units = systemctl(["list-units", "--type=service", "--state=active,activating", "--no-legend", "--plain", "factory-*"])
+    .out.split("\n")
+    .map((l) => l.trim().split(/\s+/)[0])
+    .filter((u) => u && u.startsWith("factory-"))
+    .map((u) => u.replace(/\.service$/, ""));
+  const running = units.sort().map((unit) => {
+    let s = {};
+    try {
+      s = JSON.parse(fs.readFileSync(path.join(streamDir(env), `${unit}.json`), "utf8"));
+    } catch {}
+    return { card: typeof s.card === "string" ? s.card : unitCard(unit), repo: typeof s.repo === "string" ? s.repo : null, startedAt: typeof s.startedAt === "string" ? s.startedAt : null };
+  });
+  const n = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const str = (v) => (typeof v === "string" ? v.slice(0, 200) : null);
+  return {
+    machine: machineName(env),
+    dispatcher: fs.existsSync(path.join(st, "paused")) ? "paused" : "running",
+    lastPassAt: str(pass.lastPassAt),
+    lastPassResult: str(pass.lastPassResult),
+    runningCap: n(pass.runningCap),
+    running,
+    reviewWaiting: n(pass.reviewWaiting),
+    reviewCap: n(pass.reviewCap),
+    // Pause comes from the local paused file only until the board's control
+    // endpoint is read (CAT-1441).
+    control: "local",
+  };
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Posts the heartbeat on a change (checked every 5 s) and at least every 60 s.
+ * Its environment is fixed when the unit starts, so with no token, or one the
+ * board refuses, it exits after a minute and systemd restarts it with the
+ * user manager's current environment (a new or removed token).
+ */
+async function heartbeat(opts, env = process.env) {
+  const url = env.FACTORY_INGEST_URL || DEFAULT_URL;
+  const tick = num(env.FACTORY_HEARTBEAT_TICK_MS, 5_000);
+  const every = num(env.FACTORY_HEARTBEAT_EVERY_MS, 60_000);
+  const restartAfter = num(env.FACTORY_HEARTBEAT_RESTART_MS, 60_000);
+  const token = env[TOKEN_VAR];
+  if (!token) {
+    if (!opts.once) await sleep(restartAfter);
+    return 0;
+  }
+  let lastKey = null;
+  let lastAt = 0;
+  let wait = tick;
+  for (;;) {
+    // A stopped dispatcher sends nothing, so the board shows the machine silent.
+    const on = opts.once || systemctl(["is-active", "--quiet", "claude-factory.timer"]).ok;
+    if (on) {
+      const snap = heartbeatSnapshot(env);
+      const key = JSON.stringify(snap);
+      if (opts.once || key !== lastKey || Date.now() - lastAt >= every) {
+        const body = { machine: snap.machine, card: null, sessionId: null, events: [{ type: "heartbeat", at: new Date().toISOString(), ...snap }] };
+        const r = await post(url, token, JSON.stringify(body));
+        if (opts.once) return r.status === 202 ? 0 : 1;
+        if (r.status === 202) {
+          lastKey = key;
+          lastAt = Date.now();
+          wait = tick;
+        } else {
+          log(`heartbeat: ${r.status ? `board answered ${r.status}` : r.error}`);
+          if (r.status === 401 || r.status === 403) {
+            log("heartbeat: the board refused the token; restarting to read the environment again");
+            await sleep(restartAfter);
+            return 1;
+          }
+          // Back off while the board is down: 10 s, 20 s, ... up to a minute.
+          wait = Math.min(60_000, Math.max(tick, wait * 2));
+        }
+      }
+    } else if (opts.once) return 0;
+    await sleep(wait);
+  }
+}
+
+async function main(argv) {
+  const [mode, ...more] = argv;
+  const { opts, rest } = parseArgs(more);
+  if (mode === "run") return run(opts, rest);
+  if (mode === "drain") return drain();
+  if (mode === "heartbeat") return heartbeat(opts);
+  log("usage: claude-factory-stream run|drain|heartbeat");
+  return 2;
+}
+
+module.exports = { sanitizeEvent, scrub, clip, stageOf, childArgs, secretValues, heartbeatSnapshot, unitCard, machineName, Outbox, MAX_FIELD_BYTES };
+
+if (require.main === module) {
+  main(process.argv.slice(2)).then(
+    (code) => process.exit(code),
+    (e) => {
+      log(`failed: ${e?.message ?? e}`);
+      process.exit(1);
+    },
+  );
+}

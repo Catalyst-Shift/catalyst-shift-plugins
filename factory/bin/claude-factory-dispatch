@@ -20,11 +20,15 @@
 #      per change; state/merge/<card key>-<pr number>);
 #   6. fills free slots with Ready For Factory cards from Linear, one
 #      unattended Claude session per card in its own worktree.
+# With FACTORY_INGEST_TOKEN set (CAT-1442), every session runs under
+# claude-factory-stream, which sends its stream-json events to the board; each
+# tick first sends what ended sessions left in the spool, and ends by writing
+# state/pass.json for the heartbeat (claude-factory-heartbeat.service).
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
 #   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...")
 #   pause:  touch ~/.local/state/claude-factory/paused
-#   status: claude-factory-dispatch status
+#   status: claude-factory-dispatch status   (--json: running cards, last seq sent, spool length)
 #   watch:  systemctl --user list-units 'factory-*'; logs in ~/.local/state/claude-factory/
 set -euo pipefail
 
@@ -39,6 +43,16 @@ HOST=${HOSTNAME:-$(uname -n)}
 
 # Subscription only: never let an API key in the environment turn this into paid usage.
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
+# The board's machine token (CAT-1442) goes only to claude-factory-stream, never
+# to a claude call: keep it out of this script's environment.
+INGEST_TOKEN=${FACTORY_INGEST_TOKEN:-}
+unset FACTORY_INGEST_TOKEN
+STREAM=${CLAUDE_FACTORY_STREAM:-$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/claude-factory-stream}
+# node by its real path, found from here: a mise shim run inside a repo's
+# worktree would pick that repo's pinned node, which may not be installed.
+NODE=${CLAUDE_FACTORY_NODE:-$( (cd "$HOME" && node -p process.execPath) 2>/dev/null </dev/null || true)}
+# Sessions stream to the board only with a token, the streamer and node; otherwise they run as before.
+streaming() { [ -n "$INGEST_TOKEN" ] && [ -r "$STREAM" ] && [ -n "$NODE" ] && [ -x "$NODE" ]; }
 
 CLAUDE=${CLAUDE_BIN:-$(command -v claude)} || { echo "claude not found on PATH (or set CLAUDE_BIN)" >&2; exit 1; }
 [ -f "$CONF" ] || { echo "no config at $CONF (see repos.conf.example)" >&2; exit 1; }
@@ -133,22 +147,31 @@ Then get the issue once more. If its assignee is not me (another machine claimed
     grep -oE '^PICK [A-Z]+-[0-9]+ [A-Za-z0-9._/-]+$' | tail -1 || true
 }
 
-# Starts a transient user unit running one unattended Claude session.
+# Starts a transient user unit running one unattended Claude session. With
+# streaming on, claude-factory-stream runs it (stream-json output, events to the
+# board) and is the only process that gets the token; it removes the token
+# from the session's environment. Without, the unit drops the token itself.
 run_unit() {
-  local unit=$1 dir=$2 log=$3
-  shift 3
+  local unit=$1 dir=$2 log=$3 card=$4 repo=$5 unset_env="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN"
+  shift 5
+  local -a cmd=("$CLAUDE" "$@")
+  if streaming; then
+    cmd=("$NODE" "$STREAM" run --unit "$unit" --card "$card" --repo "$repo" -- "$CLAUDE" "$@")
+  else
+    unset_env+=" FACTORY_INGEST_TOKEN"
+  fi
   systemd-run --user --quiet --unit="$unit" --collect \
     --working-directory="$dir" \
     --setenv=PATH="$PATH" \
-    --property=UnsetEnvironment="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN" \
+    --property=UnsetEnvironment="$unset_env" \
     --property=StandardOutput="append:$log" --property=StandardError="append:$log" \
-    "$CLAUDE" "$@" </dev/null
+    "${cmd[@]}" </dev/null
 }
 
 launch() {
   local dir=$1 id=$2 branch=$3 key
   key=$(cardkey "$id")
-  run_unit "factory-$key" "$dir" "$STATE/$key.log" \
+  run_unit "factory-$key" "$dir" "$STATE/$key.log" "$id" "$(basename "$dir")" \
     -p --permission-mode auto -w "factory-$key" --output-format text \
     "You are an unattended factory session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
@@ -183,7 +206,7 @@ review() {
   fi
   git -C "$dir" fetch --quiet origin "$branch" </dev/null
   git -C "$dir" worktree add --quiet --detach "$wt" "$sha" </dev/null
-  run_unit "factory-review-$key" "$wt" "$STATE/review-$key.log" \
+  run_unit "factory-review-$key" "$wt" "$STATE/review-$key.log" "$id" "$(basename "$dir")" \
     -p --permission-mode auto --output-format text \
     "You are an unattended factory reviewer on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
@@ -293,7 +316,7 @@ You did not write this code. PR #$number on branch $branch was opened by $author
 8. Finish with one PR comment: what you ran, what you answered or fixed, and the stamp (or why there is none)."
   fi
   # A unit that fails to start leaves the worktree for cleanup and no marker, so it is retried.
-  run_unit "$name" "$wt" "$STATE/review-$(reposlug "$dir")-pr-$number.log" \
+  run_unit "$name" "$wt" "$STATE/review-$(reposlug "$dir")-pr-$number.log" "" "$(basename "$dir")" \
     -p "${perms[@]}" --output-format text "$prompt" || {
     echo "PR #$number in $dir: could not start unit $name; trying again next tick"
     return 0
@@ -487,8 +510,36 @@ status() {
   if [ -e "$STATE/paused" ]; then echo "Paused: yes (rm $STATE/paused to resume)"; else echo "Paused: no"; fi
 }
 
+# A unit's card: factory-cat-12 and factory-review-cat-12 are CAT-12; a review
+# of another PR (factory-review-<repo>-pr-<n>) has none.
+unitcard() {
+  local k=${1#factory-}
+  k=${k#review-}
+  [[ $k =~ ^[a-z][a-z0-9]*-[0-9]+$ ]] && printf '%s' "${k^^}"
+  return 0
+}
+
+# CAT-1442: per running session, its card, the last seq the board stored and
+# how many events wait in its spool (from claude-factory-stream's state file;
+# null when the session is not streaming).
+status_json() {
+  local unit since f paused=false
+  [ -e "$STATE/paused" ] && paused=true
+  systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' |
+    while read -r unit _; do
+      unit=${unit%.service}
+      since=$(systemctl --user show "$unit" -p ActiveEnterTimestamp --value)
+      f=$STATE/stream/$unit.json
+      [ -r "$f" ] || f=/dev/null
+      jq -c --arg unit "$unit" --arg since "$since" --arg card "$(unitcard "$unit")" -n \
+        '(input? // {}) as $s | {unit: $unit, card: ($s.card // (if $card == "" then null else $card end)), repo: ($s.repo // null),
+          since: $since, sessionId: ($s.sessionId // null), lastSeq: ($s.lastSeq // null), spool: ($s.spoolEvents // null)}' "$f"
+    done | jq -s --argjson cap "$CAP" --argjson paused "$paused" --argjson streaming "$(streaming && echo true || echo false)" \
+      '{paused: $paused, cap: $cap, streaming: $streaming, running: .}'
+}
+
 if [ "${1:-}" = "status" ]; then
-  status
+  if [ "${2:-}" = "--json" ]; then status_json; else status; fi
   exit 0
 fi
 
@@ -496,10 +547,31 @@ mkdir -p "$STATE" "$STATE/reviewed"
 exec 9>"$STATE/lock"
 flock -n 9 || exit 0
 
+# CAT-1442: how this pass ended, for the heartbeat. Written on every exit
+# after the lock, an error included.
+PASS_RESULT=ok
+REVIEW_WAITING=null
+pass_done() {
+  local rc=$? result=$PASS_RESULT
+  [ "$rc" = 0 ] || result="error (exit $rc)"
+  [[ $REVIEW_WAITING =~ ^[0-9]+$ ]] || REVIEW_WAITING=null
+  printf '{"lastPassAt":"%s","lastPassResult":"%s","runningCap":%d,"reviewWaiting":%s,"reviewCap":%d}\n' \
+    "$(date -Is)" "$result" "$CAP" "$REVIEW_WAITING" "$WAITING_CAP" >"$STATE/pass.json.tmp" && mv "$STATE/pass.json.tmp" "$STATE/pass.json" ||
+    echo "could not write $STATE/pass.json; the heartbeat keeps the last pass" >&2
+  return 0
+}
+trap pass_done EXIT
+
 while read -r dir project; do cleanup "$dir"; done < <(repos)
+
+# Spools that ended sessions left (the board was down): sent in order, oldest first.
+if streaming; then
+  FACTORY_INGEST_TOKEN=$INGEST_TOKEN timeout 90 "$NODE" "$STREAM" drain </dev/null || echo "spool drain did not finish; the next tick tries again"
+fi
 
 if [ -e "$STATE/paused" ]; then
   echo "paused ($STATE/paused exists)"
+  PASS_RESULT=paused
   exit 0
 fi
 
@@ -509,8 +581,10 @@ settle
 merges
 
 waiting_now=$(waiting)
+REVIEW_WAITING=$waiting_now
 if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
   echo "$waiting_now factory PRs waiting on review (cap $WAITING_CAP); no new pickups"
+  PASS_RESULT="holding: $waiting_now PRs waiting on review"
   exit 0
 fi
 
@@ -524,4 +598,5 @@ while read -r dir project; do
   [ -n "$line" ] || continue
   read -r _ id branch <<<"$line"
   launch "$dir" "$id" "$branch"
+  PASS_RESULT="ok: started $id"
 done < <(repos)

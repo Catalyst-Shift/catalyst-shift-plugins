@@ -28,8 +28,10 @@ if [ ! -x "$CHROME" ]; then
 fi
 
 echo "== Installing from $SRC"
-install -Dm755 "$SRC/bin/claude-factory-dispatch" "$BIN/claude-factory-dispatch"
-echo "  $BIN/claude-factory-dispatch"
+for f in claude-factory-dispatch claude-factory-stream; do
+  install -Dm755 "$SRC/bin/$f" "$BIN/$f"
+  echo "  $BIN/$f"
+done
 for f in "$SRC"/systemd/*; do
   install -Dm644 "$f" "$UNITS/$(basename "$f")"
   echo "  $UNITS/$(basename "$f")"
@@ -52,6 +54,13 @@ ok() { echo "  ok: $*"; }
 
 echo "== Prerequisites"
 if command -v git >/dev/null; then ok "git"; else miss "git (sudo pacman -S git)"; fi
+if command -v jq >/dev/null; then ok "jq"; else miss "jq (sudo pacman -S jq)"; fi
+# claude-factory-stream (CAT-1442) needs node 18+ for fetch.
+if node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 18 ? 0 : 1)' 2>/dev/null; then
+  ok "node $(node --version) (claude-factory-stream)"
+else
+  miss "node 18 or later on PATH (mise use -g node@lts); sessions run without streaming until then"
+fi
 if command -v gh >/dev/null; then
   if gh auth status >/dev/null 2>&1; then ok "gh logged in"; else miss "gh is not logged in (gh auth login)"; fi
 else
@@ -88,7 +97,7 @@ fi
 # which reach the transient factory-* units) may set a variable that turns it off.
 # An Environment= line can hold several assignments, so any of them counts.
 sandbox_off=$( { systemctl --user show-environment 2>/dev/null || true
-  cat "$ENVD"/*.conf "$UNITS"/claude-factory.service "$UNITS"/claude-rc@.service \
+  cat "$ENVD"/*.conf "$UNITS"/claude-factory.service "$UNITS"/claude-factory-heartbeat.service "$UNITS"/claude-rc@.service \
     "$UNITS"/claude-*.d/*.conf "$UNITS"/factory-*.d/*.conf "$UNITS"/service.d/*.conf 2>/dev/null || true
 } | grep -E "^[[:space:]]*(Environment=([^#;]*[[:space:]])?)?\"?($NO_SANDBOX_VARS)=" || true)
 if [ -n "$sandbox_off" ]; then
@@ -98,6 +107,12 @@ if [ -n "$sandbox_off" ]; then
   exit 1
 fi
 ok "Chromium sandbox stays on (no GSTACK_CHROMIUM_NO_SANDBOX, CI or CONTAINER)"
+# The board's machine token (CAT-1442): only whether it is set, never its value.
+if systemctl --user show-environment 2>/dev/null | grep -q '^FACTORY_INGEST_TOKEN=.'; then
+  ok "FACTORY_INGEST_TOKEN is set: sessions and the heartbeat stream to the board"
+else
+  echo "  note: FACTORY_INGEST_TOKEN is not set in the user environment; nothing streams to the board (see factory/README.md, Streaming)"
+fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
   echo "  note: ANTHROPIC_API_KEY is set in this shell; the factory ignores it and runs on the subscription"
 fi
@@ -106,6 +121,7 @@ linger=$(loginctl show-user "$USER" -p Linger --value 2>/dev/null || true)
 echo "== To turn it on (install.sh never does this itself)"
 echo "  loginctl enable-linger $USER     # keep it running while you are logged out (now: Linger=${linger:-unknown})"
 echo "  systemctl --user enable --now claude-factory.timer"
+echo "  systemctl --user enable --now claude-factory-heartbeat.service   # heartbeat to the board; starts and stops with the timer"
 if [ -f "$CONF" ]; then
   { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]])' "$CONF" || true; } | while read -r dir _; do
     echo "  systemctl --user enable --now claude-rc@$(basename "$dir").service"
