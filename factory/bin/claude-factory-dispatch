@@ -48,7 +48,7 @@
 #
 #   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...", "model <job> <model>")
 #   pause:  touch ~/.local/state/claude-factory/paused
-#   status: claude-factory-dispatch status   (--json: running cards, last seq sent, spool length)
+#   status: claude-factory-dispatch status   (ends with the boot check in one line; --json: running cards, last seq sent, spool length)
 #   watch:  systemctl --user list-units 'factory-*'; logs in ~/.local/state/claude-factory/
 set -euo pipefail
 
@@ -71,6 +71,8 @@ unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
 INGEST_TOKEN=${FACTORY_INGEST_TOKEN:-}
 unset FACTORY_INGEST_TOKEN
 STREAM=${CLAUDE_FACTORY_STREAM:-$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/claude-factory-stream}
+# The read-only boot check `status` summarises (CAT-1483), installed beside this script.
+BOOTCHECK=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/claude-factory-bootcheck
 # node by its real path, found from here: a mise shim run inside a repo's
 # worktree would pick that repo's pinned node, which may not be installed.
 NODE=${CLAUDE_FACTORY_NODE:-$( (cd "$HOME" && node -p process.execPath) 2>/dev/null </dev/null || true)}
@@ -1018,6 +1020,8 @@ status() {
   printf '%s' "$open"
   if [ -e "$STATE/paused" ]; then echo "Paused: yes (rm $STATE/paused to resume)"; else echo "Paused: no"; fi
   if [ -n "$CTL_PAUSED_UNTIL" ]; then echo "Paused by the board until $CTL_PAUSED_UNTIL (control version $CTL_VERSION)"; fi
+  # CAT-1483: will it all come back after a reboot? Read-only, one line.
+  if [ -x "$BOOTCHECK" ]; then "$BOOTCHECK" --summary || true; else echo "boot: unknown (run install.sh)"; fi
 }
 
 # A unit's card: factory-cat-12 and factory-review-cat-12 are CAT-12; a review

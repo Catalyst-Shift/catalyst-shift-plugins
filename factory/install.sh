@@ -28,7 +28,7 @@ if [ ! -x "$CHROME" ]; then
 fi
 
 echo "== Installing from $SRC"
-for f in claude-factory-dispatch claude-factory-stream; do
+for f in claude-factory-dispatch claude-factory-stream claude-factory-bootcheck; do
   install -Dm755 "$SRC/bin/$f" "$BIN/$f"
   echo "  $BIN/$f"
 done
@@ -116,19 +116,6 @@ fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
   echo "  note: ANTHROPIC_API_KEY is set in this shell; the factory ignores it and runs on the subscription"
 fi
-linger=$(loginctl show-user "$USER" -p Linger --value 2>/dev/null || true)
-
-echo "== To turn it on (install.sh never does this itself)"
-echo "  loginctl enable-linger $USER     # keep it running while you are logged out (now: Linger=${linger:-unknown})"
-echo "  systemctl --user enable --now claude-factory.timer"
-echo "  systemctl --user enable --now claude-factory-heartbeat.service   # heartbeat to the board; starts and stops with the timer"
-if [ -f "$CONF" ]; then
-  { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]])' "$CONF" || true; } | while read -r dir _; do
-    echo "  systemctl --user enable --now claude-rc@$(basename "$dir").service"
-  done
-fi
-echo "  (one claude-rc@<folder>.service per repo under ~/Projects you want Remote Control for)"
-
 # Per-repo Remote Control units from before the template; replace them with claude-rc@<folder>.
 for old in "$UNITS"/claude-rc-*.service; do
   [ -e "$old" ] || continue
@@ -136,4 +123,12 @@ for old in "$UNITS"/claude-rc-*.service; do
   echo "  old unit $name: systemctl --user disable --now $name && rm $old, then enable claude-rc@${name#claude-rc-}.service"
 done
 
-if [ "$missing" = 0 ]; then echo "== Done"; else echo "== Done, but fix the MISSING lines above before turning it on"; fi
+# CAT-1483: does it all come back after a reboot with nobody logged in? Read-only;
+# each MISSING line names the command to run (install.sh never runs it itself).
+echo "== Boot check (comes back after a reboot with no login; install.sh never turns these on itself)"
+boot=0
+"$SRC/bin/claude-factory-bootcheck" || boot=1
+
+if [ "$missing" = 1 ]; then echo "== Done, but fix the MISSING lines above before turning it on"
+elif [ "$boot" = 1 ]; then echo "== Done; run the commands on the MISSING boot check lines above to turn it on"
+else echo "== Done"; fi
