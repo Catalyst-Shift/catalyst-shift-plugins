@@ -1,7 +1,7 @@
 {
   "name": "catalyst-ops",
-  "version": "0.9.0",
-  "description": "How Catalyst Shift operates (the Claude dev factory, catalyst-brain strategy/2026-10-23-claude-dev-factory.md). Three skills: card (write a card the factory can build), ways-of-working (three homes + the build method: card-as-spec, the Ready For Factory dispatcher, gstack, people merge by stage, review by risk, recommend-ask-proceed with hard stops), and decision-governance (proposed-vs-decided labelling, ratification rules). The factory's dispatcher does all pickup; /next is retired. Behavior only; canon content stays in the strategy doc and the canon note.",
+  "version": "0.10.0",
+  "description": "How Catalyst Shift operates (the Claude dev factory, catalyst-brain strategy/2026-10-23-claude-dev-factory.md). Five skills: reflect and correct (the retro after a merged card, and the fix for a repeated mistake), card (write a card the factory can build), ways-of-working (three homes + the build method: card-as-spec, the Ready For Factory dispatcher, gstack, people merge by stage, review by risk, recommend-ask-proceed with hard stops), and decision-governance (proposed-vs-decided labelling, ratification rules). The factory's dispatcher does all pickup; /next is retired. Behavior only; canon content stays in the strategy doc and the canon note.",
   "author": {
     "name": "Catalyst Shift",
     "email": "kevin@catalystshift.ai"
