@@ -55,6 +55,18 @@ exit 0
 `, { mode: 0o755 });
   writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
 [ "$1 $2" = "api user" ] && { echo kkreative; exit 0; }
+# CAT-1512: merge-rule reads the founder gate. No check run and no
+# .github/deep-paths (a repo from before the gate) passes.
+if [ "$1" = api ]; then
+  case $2 in
+    *check-runs*) q=.; while [ $# -gt 0 ]; do [ "$1" = --jq ] && q=$2; shift; done; echo '{"check_runs":[]}' | jq -c "$q"; exit;;
+    *deep-paths*) echo "gh: Not Found (HTTP 404)" >&2; exit 1;;
+  esac
+fi
+[ "$1 $2" = "repo view" ] && { echo main; exit 0; }
+if [ "$1 $2 $3" = "pr view 9" ] && [ -n "$GATE_PR" ]; then
+  q=.; while [ $# -gt 0 ]; do [ "$1" = --jq ] && q=$2; shift; done; printf '%s' "$GATE_PR" | jq -r "$q"; exit
+fi
 sub="$1 $2"; shift 2; n=; h=; q=.
 [ "$sub" = "pr view" ] && { n=$1; shift; }
 while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --jq) q=$2; shift;; esac; shift; done
@@ -86,7 +98,8 @@ exit 0
   const tick = (extra) => { const r = run([], extra); assert.equal(r.status, 0, r.stderr); return r; };
   const json = () => { const r = run(["status", "--json"]); assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout).stages; };
   const mine = () => json().repos.find((x) => x.repo === "My-Repo");
-  const rule = (risk, repoArg = "my-repo") => run(["merge-rule", repoArg, risk, "--dry-run"]);
+  const rule = (risk, repoArg = "my-repo") => run(["merge-rule", repoArg, risk, "--pr", "9", "--dry-run"],
+    { GATE_PR: JSON.stringify({ number: 9, headRefOid: "9".repeat(40), baseRefName: "main" }) });
   const stageCalls = () => read(calls).split("\n").filter((l) => l.endsWith("/stages")).length;
   return { t, home, state, repo, other, md, prs, units, set, stages, setConf, tick, run, json, mine, rule, stageCalls };
 }
@@ -284,7 +297,7 @@ test("the reviewer prompt carries the stage, its source, the merge-rule check an
     assert.match(p, /this repo is at factory stage 3 \(from board; the dispatcher gives the stage/);
     assert.match(p, /Stage 3 lets you self-merge risk: Low or Medium\./);
     assert.match(p, /no file in gh pr diff 9 --name-only matches a path in the base branch's \.github\/CODEOWNERS/);
-    assert.match(p, new RegExp(`${DISPATCH.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")} merge-rule My-Repo <that risk> --dry-run prints 'self-merge allowed'`));
+    assert.match(p, new RegExp(`${DISPATCH.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")} merge-rule My-Repo <that risk> --pr 9 --dry-run exits 0 and its first line says 'self-merge allowed'`));
     assert.doesNotMatch(p, /post-merge/);
 
     // A new head, the board at 4, a Friday: the review is due Monday.

@@ -1,5 +1,11 @@
 # Changelog — catalyst-ops
 
+## 0.10.1 — 2026-11-05 (CAT-1512)
+
+- The Ways of Working block (here and in `ways-of-working`) adds: where its stage allows, green merges itself. A red `founder gate` check (High risk, a deep path, or Dependabot) means Kevin or Keith reads the proof and merges by hand, and the factory never merges or turns on auto-merge past it. Any other red check is fixed, never merged past. Canon: catalyst-brain PR #35 (proposed).
+- `/card`: risk follows the repo's deep paths (`.github/deep-paths`, or CODEOWNERS where there is none yet). Below stage 4, a High or deep-path card turns the PR's `founder gate` red.
+- The dispatcher's `merge-rule` now needs `--pr <n>` and reads that PR's `founder gate` check at its head: only `success` passes, and no check passes only while the base has no `.github/deep-paths`. `status --json` lists red-gated PRs under `waiting_for_founder`.
+
 ## 0.10.0 — 2026-11-04 (CAT-1433)
 
 - New `reflect` skill (`/reflect`) and `correct` skill (`/correct`), adapted from Lauren Tan's pstack. `/reflect` runs after a merged factory card that had friction: it judges each lesson (durable, decision-changing, not a one-off, not already covered, routed to a skill the session used), comments `retro: <accepted> accepted, <rejected> rejected` on the card, and batches accepted skill and CLAUDE.md edits into the repo's one open `factory-reflect` PR, which a person approves and nobody self-merges. `/correct` handles a mistake that has happened twice at the highest level that works (architecture, types, a lint whose error names the fix, a test, a written rule last), proves the check fails on the real past mistake, and keeps the `## Rules and what enforces them` table in CLAUDE.md. Retros never add a gate; `validate` fails a `factory-reflect*` or `factory-correct*` PR that touches `.github/`, rulesets, CODEOWNERS, the required-checks list or the hard-stop list.

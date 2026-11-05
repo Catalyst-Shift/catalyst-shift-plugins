@@ -17,7 +17,7 @@ touch ~/.local/state/claude-factory/paused      # pause: no new sessions or revi
 rm ~/.local/state/claude-factory/paused         # resume
 
 claude-factory-dispatch status                    # one screen: running, waiting on you to merge, other open PRs, stages, paused, boot check
-claude-factory-dispatch merge-rule <repo> <risk> --dry-run   # may a reviewer self-merge that risk now? (stage and source; changes nothing)
+claude-factory-dispatch merge-rule <repo> <risk> --pr <n> --dry-run   # may a reviewer self-merge that PR now? (stage, source and founder gate; changes nothing)
 claude-factory-bootcheck                          # will it all come back after a reboot? (read-only; see First install)
 systemctl --user list-units 'factory-*'          # what's running
 journalctl --user -u claude-factory -n 50        # what the dispatcher did
@@ -372,6 +372,14 @@ on the machine and is never sent as is.
 claude-factory-dispatch status --json   # per running card: last seq the board stored, events still in the spool
 ```
 
+`status --json` also has `waiting_for_founder`: every open, non-draft PR in
+the repos in repos.conf (Dependabot's too) whose `founder gate` check is red at
+its head, each as `{repo, number, url, reason}`, where the reason is the
+check's output title (or summary). A repo GitHub didn't answer for is named in
+`waiting_for_founder_unread`, and so is each PR (`<repo>#<n>`) whose gate
+couldn't be read or is missing on a gated repo. This part calls GitHub (`gh pr list` per repo,
+one check-runs read per open PR).
+
 **Heartbeat:** `claude-factory-heartbeat.service` posts
 `{machine, dispatcher, pausedUntil, lastPassAt, lastPassResult, runningCap, running[], reviewWaiting, reviewCap, control, controlVersion}`
 every 60 seconds and within 5 seconds of a change. The dispatcher writes the
@@ -519,9 +527,16 @@ units; gstack goes back to its bundled Chromium.
    branch, the card's Risk is one the stage allows (stage 2: Low; stage 3: Low
    or Medium; stage 4: any), below stage 4 no file in the diff matches
    `.github/CODEOWNERS`, the stamp is still at the head, and, right before,
-   `claude-factory-dispatch merge-rule <repo> <risk> --dry-run` still prints
-   `self-merge allowed` (so a founder's veto on the board stops it from the
-   next tick). GitHub merges once the required checks are green. Before a
+   `claude-factory-dispatch merge-rule <repo> <risk> --pr <n> --dry-run` still
+   prints `self-merge allowed` (so a founder's veto on the board stops it from
+   the next tick). `merge-rule` also reads the PR's `founder gate` check run at
+   its head (CAT-1512): only a `success` passes. Pending, failed, or missing
+   while the base branch has a `.github/deep-paths` file is `no self-merge`,
+   and so is GitHub not answering; a repo with no `founder gate` check and no
+   `.github/deep-paths` keeps the old behaviour. A red founder gate means
+   Kevin or Keith reads the proof and merges by hand with the normal button;
+   any other red check is fixed, never merged past. `--pr` is required, so
+   no `merge-rule` answer skips the gate. GitHub merges once the required checks are green. Before a
    stage-4 High auto-merge, the reviewer adds the card label `post-merge-review`
    and the comment `post-merge review due <next working day>` (no label, no
    auto-merge); the dispatcher then leaves the

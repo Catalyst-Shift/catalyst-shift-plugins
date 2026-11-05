@@ -77,6 +77,16 @@ test("every claude and systemd-run call in the dispatcher reads stdin from /dev/
   assert.match(s, /"\$prompt" <\/dev\/null/);
 });
 
+// CAT-1478: `[ "$busy" -ge "$CAP" ]` reads a test error (a CAP that isn't a
+// number) as "below the cap", so a session starts past the cap. Ask "below the
+// cap?" with -lt and let the error fall to the held-back branch.
+test("every running-cap check in the dispatcher asks -lt, so a non-numeric cap holds sessions back", () => {
+  const bad = read(DISPATCH).split("\n")
+    .map((l, i) => [i + 1, l])
+    .filter(([, l]) => /-(ge|gt|le|eq|ne)\s+"\$\{?CAP\}?"|"\$\{?CAP\}?"\s+-(ge|gt|le|eq|ne)\b/.test(l));
+  assert.deepEqual(bad, [], "compare against $CAP with `[ x -lt \"$CAP\" ]` (fails closed), not -ge/-gt/-le/-eq/-ne");
+});
+
 test("the dispatcher finds claude via CLAUDE_BIN or command -v, and uses the shared state dir", () => {
   const s = read(DISPATCH);
   assert.match(s, /CLAUDE=\$\{CLAUDE_BIN:-\$\(command -v claude\)\}/);
@@ -110,7 +120,11 @@ test("only the card reviewer may turn on auto-merge, and only under the stage ru
   assert.match(rule, /Risk section names exactly one risk \(Low, Medium or High\) and it is one stage \$stage allows \(missing, mixed or unclear fails\)/);
   assert.match(rule, /no file in gh pr diff \$number --name-only matches a path in the base branch's \.github\/CODEOWNERS/);
   assert.match(rule, /you stamped it and the stamp's sha still equals the PR head/);
-  assert.match(rule, /merge-rule \$\(repo_name "\$dir"\) <that risk> --dry-run prints 'self-merge allowed'/);
+  assert.match(rule, /merge-rule \$\(repo_name "\$dir"\) <that risk> --pr \$number --dry-run exits 0 and its first line says 'self-merge allowed'/);
+  // CAT-1512: never auto-merge past a red founder gate, and never merge past any other red check.
+  assert.match(rule, /A red founder gate means Kevin or Keith reads the proof and merges by hand: never turn on auto-merge past it/);
+  assert.match(rule, /Any other red check is fixed, never merged past\./);
+  assert.match(rule, /If it says the founder gate is pending, run timeout 600 gh pr checks \$number --watch once and then the merge-rule again; still pending is 'no self-merge'/);
   assert.match(rule, /never turn on auto-merge/);
   // A PR without a factory card never auto-merges.
   assert.doesNotMatch(other, /--auto/);
@@ -618,9 +632,13 @@ test("every builder and reviewer session passes --model, and Linear calls use th
     assert.match(body, /-p --model "\$/, fn);
   }
   assert.doesNotMatch(s, /--model haiku/);
-  // The pick, settle, linear_issue, the retro report, (CAT-1441) the stop step's
-  // Blocked move, and (CAT-1485) settle's re-queue of a cut-off builder.
-  assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 6);
+  // Every housekeeping call (the pick, settle, linear_issue, the retro report, the
+  // stop step, the re-queue...) names the housekeeping model on its own line. No
+  // exact count is pinned: each card that adds a call raised the number, so two
+  // open PRs always conflicted on this line (CAT-1441, CAT-1485).
+  const calls = s.split("\n").filter((l) => /timeout \d+ "\$CLAUDE" -p\b/.test(l));
+  assert.ok(calls.length >= 3, "found the housekeeping call sites");
+  for (const l of calls) assert.match(l, /--model "\$MODEL_HOUSEKEEPING"/, `a housekeeping call without the housekeeping model: ${l.trim()}`);
 });
 
 test("install.sh's boot check skips label, offset, review-authors, model and stages lines like the dispatcher does", () => {
@@ -713,7 +731,7 @@ test("status ends with the boot check's one line and enables nothing", () => {
 
 test("install.sh ends with the boot check and its last word depends on it", () => {
   const s = read(INSTALL);
-  assert.match(s, /claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do/);
+  assert.match(s, /^for f in claude-factory-dispatch( claude-factory-[a-z-]+)* claude-factory-bootcheck( claude-factory-[a-z-]+)*; do$/m);
   const at = s.indexOf('"$SRC/bin/claude-factory-bootcheck" || boot=1');
   assert.ok(at > s.indexOf("== Prerequisites") && at > s.indexOf("claude-rc-*.service"), "boot check runs after everything else");
   assert.match(s.slice(at), /^"\$SRC\/bin\/claude-factory-bootcheck" \|\| boot=1\n\nif \[ "\$missing" = 1 \][^\n]*\nelif \[ "\$boot" = 1 \][^\n]*\nelse echo "== Done"; fi\n$/);
@@ -2819,8 +2837,263 @@ test("mark-done: done on exit 0, stopped on SIGTERM, untouched otherwise, only s
     assert.ok(!existsSync(join(state, "ci/r/missing")));
     // It never calls the dispatcher.
     assert.doesNotMatch(read(MARK_DONE), /claude-factory-dispatch|\$CLAUDE/);
-    assert.match(read(INSTALL), /for f in claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do/);
+    assert.match(read(INSTALL), /^for f in( claude-factory-[a-z-]+)* claude-factory-mark-done( claude-factory-[a-z-]+)*; do$/m);
   } finally {
     rmSync(t, { recursive: true, force: true });
+  }
+});
+
+// ---- CAT-1512: the factory never merges or turns on auto-merge past a red
+// founder gate. merge-rule (the reviewer's last check before gh pr merge
+// --auto) reads the PR's `founder gate` check run at its head; status --json
+// lists the PRs waiting on a founder. gh is faked: pr view and pr list answer
+// from files, check-runs from runs/<sha>.json, and the base branch's
+// .github/deep-paths is "present", "absent" (404) or anything else (500).
+function gateRig() {
+  const t = mkdtempSync(join(tmpdir(), "factory-gate-"));
+  const home = join(t, "home"), bin = join(t, "bin"), repo = join(t, "gate-repo"), runs = join(t, "runs");
+  for (const d of [bin, repo, runs, join(home, ".local/state/claude-factory"), join(home, ".config/claude-factory")]) mkdirSync(d, { recursive: true });
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"), `label kevin-omarchy\nstages claude-md\n${repo} proj\n`);
+  writeFileSync(join(t, "calls"), "");
+  writeFileSync(join(t, "deep"), "absent");
+  writeFileSync(join(t, "list.json"), "[]");
+  const head = "7".repeat(40);
+  writeFileSync(join(t, "pr.json"), JSON.stringify({ number: 7, headRefOid: head, baseRefName: "main" }));
+  writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
+echo "gh $*" >>"${t}/calls"
+q=.; prev=; for a; do [ "$prev" = --jq ] && q=$a; prev=$a; done
+case "$1 $2" in
+  "api user") echo kkreative; exit 0;;
+  "repo view") echo main; exit 0;;
+  "pr view") jq -r "$q" "${t}/pr.json"; exit;;
+  "pr list") [ -e "${t}/list-fail" ] && exit 1; jq -r "$q" "${t}/list.json"; exit;;
+esac
+if [ "$1" = api ]; then
+  case $2 in
+    *check-runs*)
+      [ -e "${t}/runs-fail" ] && { echo "gh: Bad Gateway (HTTP 502)" >&2; exit 1; }
+      sha=$(printf '%s' "$2" | sed 's|.*/commits/||; s|/.*||')
+      f="${runs}/$sha.json"; [ -e "$f" ] || f="${runs}/none.json"
+      [ -e "$f" ] || { echo '{"check_runs":[]}' | jq -c "$q"; exit; }
+      jq -c "$q" "$f"; exit;;
+    *deep-paths*)
+      case $(cat "${t}/deep") in
+        present) echo '{"name":"deep-paths"}'; exit 0;;
+        absent) echo "gh: Not Found (HTTP 404)" >&2; exit 1;;
+        *) echo "gh: Server Error (HTTP 500)" >&2; exit 1;;
+      esac;;
+  esac
+fi
+exit 1
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "git"), `#!/usr/bin/env bash
+case "$*" in
+  *"remote get-url origin"*) echo "git@github.com:Catalyst-Shift/Gate-Repo.git";;
+  *"show origin/HEAD:CLAUDE.md"*) printf '# repo\\nFactory stage: 2\\n';;
+  *) exit 1;;
+esac
+`, { mode: 0o755 });
+  writeFileSync(join(bin, "systemctl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  writeFileSync(join(bin, "claude"), "#!/bin/sh\necho NONE\n", { mode: 0o755 });
+  const run = (args) => spawnSync("bash", [DISPATCH, ...args], { encoding: "utf8",
+    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_NODE: "/nonexistent" } });
+  const checkRuns = (sha, list) => writeFileSync(join(runs, `${sha}.json`), JSON.stringify({ total_count: list.length, check_runs: list }));
+  const gate = (status, conclusion, title = null, summary = null) => ({ name: "founder gate", status, conclusion, output: { title, summary } });
+  const rule = () => run(["merge-rule", "gate-repo", "Low", "--pr", "7", "--dry-run"]);
+  return { t, head, run, rule, checkRuns, gate, calls: () => read(join(t, "calls")) };
+}
+
+test("CAT-1512: merge-rule allows auto-merge only when the PR's founder gate concluded success at its head", () => {
+  const { t, head, rule, checkRuns, gate, calls } = gateRig();
+  try {
+    // success: allowed, and the gate's own words are shown.
+    checkRuns(head, [gate("completed", "success", "Low, no deep path: merges itself")]);
+    let r = rule();
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^Gate-Repo: stage 2 \(from claude-md\), risk Low: self-merge allowed/m);
+    assert.match(r.stdout, /^founder gate on PR #7: Low, no deep path: merges itself$/m);
+    // It asked GitHub for the founder gate check at the PR's head sha, nothing looser.
+    assert.match(calls(), new RegExp(`gh api repos/\\{owner\\}/\\{repo\\}/commits/${head}/check-runs\\?check_name=founder%20gate&filter=latest`));
+
+    // pending (queued or in progress): no auto-merge.
+    for (const status of ["queued", "in_progress"]) {
+      checkRuns(head, [gate(status, null)]);
+      r = rule();
+      assert.equal(r.status, 1, status);
+      assert.match(r.stdout, /no self-merge \(founder gate pending: the founder gate is still running at 7777777; Kevin or Keith merges by hand\)/);
+    }
+
+    // failed, or any conclusion that isn't success: no auto-merge, with the reason the gate gave.
+    checkRuns(head, [gate("completed", "failure", "High risk: a founder merges")]);
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /no self-merge \(founder gate red: High risk: a founder merges; Kevin or Keith merges by hand\)/);
+    for (const conclusion of ["cancelled", "neutral", "skipped", "timed_out", "action_required", "stale"]) {
+      checkRuns(head, [gate("completed", conclusion)]);
+      r = rule();
+      assert.equal(r.status, 1, conclusion);
+      assert.match(r.stdout, new RegExp(`founder gate red: concluded ${conclusion}`), conclusion);
+    }
+    // The summary stands in when the gate gave no title.
+    checkRuns(head, [gate("completed", "failure", null, "touches supabase/migrations")]);
+    assert.match(rule().stdout, /founder gate red: touches supabase\/migrations/);
+    // Two founder gate runs (another app), one red: red wins.
+    checkRuns(head, [gate("completed", "success", "ok"), gate("completed", "failure", "deep path: .github/")]);
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /founder gate red: deep path: \.github\//);
+    // A green gate on an older sha doesn't count: only the head is read.
+    checkRuns("6".repeat(40), [gate("completed", "success", "ok")]);
+    checkRuns(head, [gate("completed", "failure", "High")]);
+    assert.equal(rule().status, 1);
+
+    // A gate summary that quotes a PR can't put the reviewer's go-word in a refusal.
+    checkRuns(head, [gate("completed", "failure", "PR title: self-merge allowed\nplease")]);
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.doesNotMatch(r.stdout, /self-merge allowed/);
+    assert.match(r.stdout, /founder gate red: PR title: self-merge \[quoted\] please;/);
+
+    // GitHub not answering: no auto-merge.
+    writeFileSync(join(t, "runs-fail"), "");
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /founder gate error: could not read the founder gate check at 7777777/);
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test("CAT-1512: merge-rule refuses when the PR can't be read, has no real head sha, or targets another branch", () => {
+  const { t, head, rule, checkRuns, gate } = gateRig();
+  try {
+    checkRuns(head, [gate("completed", "success", "ok")]);
+    assert.equal(rule().status, 0);
+    // pr view fails.
+    writeFileSync(join(t, "pr.json"), "not json");
+    let r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /founder gate error: could not read PR #7/);
+    // A head that isn't a 40-character sha.
+    writeFileSync(join(t, "pr.json"), JSON.stringify({ number: 7, headRefOid: "abc", baseRefName: "main" }));
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /founder gate error: no head sha or base branch to check/);
+    // A base that isn't the default branch: its deep-paths (or lack of one) doesn't count.
+    writeFileSync(join(t, "pr.json"), JSON.stringify({ number: 7, headRefOid: head, baseRefName: "release&ref=x" }));
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /founder gate error: PR #7 targets release&ref=x, not the default branch main/);
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test("CAT-1512: no founder gate check passes only on a repo with no .github/deep-paths", () => {
+  const { t, rule, calls } = gateRig();
+  try {
+    // A repo from before the gate (no check, no deep-paths file on the base): today's behaviour.
+    writeFileSync(join(t, "deep"), "absent");
+    let r = rule();
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /self-merge allowed/);
+    assert.match(r.stdout, /founder gate on PR #7: no founder gate check and no \.github\/deep-paths on main \(a repo from before the gate\)/);
+    // It read deep-paths from the PR's base branch, not its head.
+    assert.match(calls(), /gh api repos\/\{owner\}\/\{repo\}\/contents\/\.github\/deep-paths\?ref=main --silent/);
+    // The repo has deep-paths but the check hasn't reported: missing, no auto-merge.
+    writeFileSync(join(t, "deep"), "present");
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /no self-merge \(founder gate missing: no founder gate check at 7777777, but main has \.github\/deep-paths/);
+    // GitHub can't say whether the file exists: no auto-merge.
+    writeFileSync(join(t, "deep"), "error");
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /founder gate error: could not tell whether main has \.github\/deep-paths/);
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test("CAT-1512: merge-rule needs the PR number, and a stage that refuses the risk never reads the gate", () => {
+  const { t, run, calls } = gateRig();
+  try {
+    for (const args of [["gate-repo", "Low", "--dry-run"], ["gate-repo", "Low", "--pr"], ["gate-repo", "Low", "--pr", "x"], ["gate-repo", "Low", "--pr", "7", "--bogus"]]) {
+      const r = run(["merge-rule", ...args]);
+      assert.equal(r.status, 2, args.join(" "));
+      assert.match(r.stderr, /usage: claude-factory-dispatch merge-rule <repo> <risk> --pr <number> \[--dry-run\]/);
+    }
+    // Stage 2 doesn't allow Medium: no self-merge, and no GitHub call.
+    const r = run(["merge-rule", "gate-repo", "Medium", "--pr", "7", "--dry-run"]);
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /no self-merge \(stage 2 allows Low\)/);
+    assert.doesNotMatch(calls(), /check-runs/);
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test("CAT-1512: status --json lists PRs waiting on a founder gate with their URL and the gate's reason", () => {
+  const { t, run, checkRuns, gate } = gateRig();
+  try {
+    const sha = (c) => c.repeat(40);
+    const pr = (number, c, isDraft = false) => ({ number, url: `https://github.com/Catalyst-Shift/Gate-Repo/pull/${number}`, headRefOid: sha(c), baseRefName: "main", isDraft });
+    writeFileSync(join(t, "list.json"), JSON.stringify([pr(11, "a"), pr(12, "b"), pr(13, "c"), pr(14, "d", true), pr(15, "e")]));
+    checkRuns(sha("a"), [gate("completed", "failure", "High risk: a founder merges")]); // waits on a founder
+    checkRuns(sha("b"), [gate("completed", "success", "merges itself")]);             // green
+    checkRuns(sha("c"), [gate("in_progress", null)]);                                 // still running
+    checkRuns(sha("d"), [gate("completed", "failure", "draft")]);                     // a draft: not yet
+    checkRuns(sha("e"), [gate("completed", "failure", null, "Dependabot PR")]);       // Dependabot
+    let r = run(["status", "--json"]);
+    assert.equal(r.status, 0, r.stderr);
+    let j = JSON.parse(r.stdout);
+    assert.deepEqual(j.waiting_for_founder, [
+      { repo: "Gate-Repo", number: 11, url: "https://github.com/Catalyst-Shift/Gate-Repo/pull/11", reason: "High risk: a founder merges" },
+      { repo: "Gate-Repo", number: 15, url: "https://github.com/Catalyst-Shift/Gate-Repo/pull/15", reason: "Dependabot PR" },
+    ]);
+    assert.deepEqual(j.waiting_for_founder_unread, []);
+    // The rest of status --json is still there.
+    assert.equal(typeof j.stages, "object");
+    assert.ok(Array.isArray(j.running));
+    // A gate GitHub doesn't answer for: the PR is named, not dropped.
+    writeFileSync(join(t, "runs-fail"), "");
+    j = JSON.parse(run(["status", "--json"]).stdout);
+    assert.deepEqual(j.waiting_for_founder, []);
+    assert.deepEqual(j.waiting_for_founder_unread, ["Gate-Repo#11", "Gate-Repo#12", "Gate-Repo#13", "Gate-Repo#15"]);
+    rmSync(join(t, "runs-fail"));
+    // GitHub not answering for a repo: named, not silently empty.
+    writeFileSync(join(t, "list-fail"), "");
+    r = run(["status", "--json"]);
+    assert.equal(r.status, 0, r.stderr);
+    j = JSON.parse(r.stdout);
+    assert.deepEqual(j.waiting_for_founder, []);
+    assert.deepEqual(j.waiting_for_founder_unread, ["Gate-Repo"]);
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test("CAT-1512: every gh pr merge in factory/ and catalyst-ops/ is guarded by merge-rule --pr, and nothing calls the merge API", () => {
+  const files = [];
+  const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else files.push(p); } };
+  walk(FACTORY);
+  walk(join(ROOT, "catalyst-ops"));
+  let calls = 0;
+  for (const f of files) {
+    const lines = read(f).split("\n");
+    lines.forEach((line, i) => {
+      // The merge API (PUT .../pulls/<n>/merge, or GraphQL mergePullRequest / enablePullRequestAutoMerge) is never used.
+      assert.doesNotMatch(line, /pulls\/[^ ]*\/merge\b|mergePullRequest|enablePullRequestAutoMerge/, `${f}:${i + 1}`);
+      // Every documented merge-rule call names the PR, so none skips its founder gate.
+      if (/merge-rule <repo> <risk>|merge-rule \$\(repo_name/.test(line)) assert.match(line, /--pr /, `${f}:${i + 1}`);
+      // A gh pr merge that names a PR runs on it, so it must be guarded; denials and "never" lines name none.
+      for (const m of line.matchAll(/gh pr merge (\$number|<n>|\d+)/g)) {
+        calls++;
+        const around = lines.slice(Math.max(0, i - 2), i + 8).join("\n");
+        assert.match(around, /merge-rule [^\n]*--pr (\$number|<n>)/, `${f}:${i + 1} merges without the founder gate guard: ${m[0]}`);
+      }
+    });
+  }
+  assert.ok(calls >= 2, "expected the reviewer prompt and its README description");
+});
+
+test("CAT-1512: the Ways of Working block says green merges itself, a red founder gate is merged by hand, any other red check is fixed", () => {
+  for (const f of [join(ROOT, "CLAUDE.md"), join(ROOT, "catalyst-ops/skills/ways-of-working/SKILL.md")]) {
+    const s = read(f).replace(/\s+/g, " ");
+    assert.match(s, /Where its stage allows, green merges itself\./, f);
+    assert.match(s, /A red `founder gate` check \(High risk, a deep path, or Dependabot\) means Kevin or Keith reads the proof and merges by hand; the factory never merges or turns on auto-merge past it\./, f);
+    assert.match(s, /Any other red check is fixed, never merged past\./, f);
+    // Card line 5: the "CODEOWNERS path gets the founder whose machine didn't build it" rule stays out of the block.
+    assert.doesNotMatch(s, /whose machine did(n't| not) build it/, f);
   }
 });

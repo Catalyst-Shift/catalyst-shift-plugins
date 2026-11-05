@@ -15,7 +15,9 @@ user-invocable: true
      adversarial review CI check, pstack, HOW_WE_BUILD.md as the method doc,
      Karen. ADDED: the Ready For Factory dispatcher on Kevin's and Keith's
      Omarchy machines, gstack, the local review stamp, merge stages, review
-     by risk, the 3-PR review cap). -->
+     by risk, the 3-PR review cap). Amended 2026-11-05 (CAT-1512): green
+     merges itself by stage, a red founder gate is merged by hand, any
+     other red check is fixed. -->
 
 **Three homes.** Repos hold WHAT IS BUILT — the live repo beats any doc, deck, or
 memory of build state. Linear holds WHAT IS HAPPENING — anything with a date, a
@@ -61,7 +63,10 @@ only:** strategy, documents and Cowork sessions follow the three homes and
   moves to stage 2 (low risk merges itself); after 40 clean self-merges, to
   stage 3 (medium too). Any revert or escaped bug drops the repo one stage, and
   the fix ships with a test or lint rule. High risk is always reviewed by Kevin
-  or Keith.
+  or Keith. Where its stage allows, green merges itself. A red `founder gate`
+  check (High risk, a deep path, or Dependabot) means Kevin or Keith reads the
+  proof and merges by hand; the factory never merges or turns on auto-merge
+  past it. Any other red check is fixed, never merged past.
 - **Review by risk.** Low: skim the evidence. Medium: read the evidence and the
   diff. High: full review plus a click-through on the preview.
 - **Recommend, ask, keep going.** On a product, UX, pricing or architecture fork:

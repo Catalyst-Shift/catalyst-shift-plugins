@@ -18,8 +18,10 @@ purpose: the block is byte-identical across surfaces and ends the file.
 | A PR merges only with `Reviewed: <head sha>` in its body | `review stamp` check (`.github/workflows/review-stamp.yml`) | CAT-1299 |
 | The dispatcher and installer are valid bash, hardcode no home path, and every `claude` / `systemd-run` call reads stdin from `/dev/null` | `tests/factory.test.mjs` | CAT-1298 |
 | A `factory-reflect` or `/correct` PR never touches a gate (`.github/`, rulesets, CODEOWNERS, required checks, the Ways of Working block, the ways-of-working skill) | `validate` step "A factory-reflect or /correct PR touches no gate", `scripts/retro-guard.mjs`, `tests/retro-guard.test.mjs` | CAT-1433 |
+| A running-cap check in the dispatcher asks `-lt "$CAP"`, so a non-numeric cap holds sessions back instead of starting them | `tests/factory.test.mjs` "every running-cap check … asks -lt" | CAT-1478 |
 | A merged factory PR is retro'd once: `retro: clean` or a `/reflect` session | `tests/factory-retro.test.mjs` | CAT-1433 |
 | The heartbeat test pins only the long-stable fields; a card that adds a heartbeat field tests it in its own test, so parallel PRs don't conflict on one exact-body line | `tests/factory-stream.test.mjs` "the heartbeat carries the machine's state" (`STABLE` list) | CAT-1487 |
+| Every dispatcher housekeeping model call names `$MODEL_HOUSEKEEPING` on its own line (no pinned call count, so parallel PRs don't conflict) | `tests/factory.test.mjs` "every builder and reviewer session passes --model" | CAT-1441 |
 
 ## Ways of Working — Catalyst Shift
 
@@ -32,7 +34,9 @@ purpose: the block is byte-identical across surfaces and ends the file.
      adversarial review CI check, pstack, HOW_WE_BUILD.md as the method doc,
      Karen. ADDED: the Ready For Factory dispatcher on Kevin's and Keith's
      Omarchy machines, gstack, the local review stamp, merge stages, review
-     by risk, the 3-PR review cap). -->
+     by risk, the 3-PR review cap). Amended 2026-11-05 (CAT-1512): green
+     merges itself by stage, a red founder gate is merged by hand, any
+     other red check is fixed. -->
 
 **Three homes.** Repos hold WHAT IS BUILT — the live repo beats any doc, deck, or
 memory of build state. Linear holds WHAT IS HAPPENING — anything with a date, a
@@ -78,7 +82,10 @@ only:** strategy, documents and Cowork sessions follow the three homes and
   moves to stage 2 (low risk merges itself); after 40 clean self-merges, to
   stage 3 (medium too). Any revert or escaped bug drops the repo one stage, and
   the fix ships with a test or lint rule. High risk is always reviewed by Kevin
-  or Keith.
+  or Keith. Where its stage allows, green merges itself. A red `founder gate`
+  check (High risk, a deep path, or Dependabot) means Kevin or Keith reads the
+  proof and merges by hand; the factory never merges or turns on auto-merge
+  past it. Any other red check is fixed, never merged past.
 - **Review by risk.** Low: skim the evidence. Medium: read the evidence and the
   diff. High: full review plus a click-through on the preview.
 - **Recommend, ask, keep going.** On a product, UX, pricing or architecture fork:
