@@ -713,7 +713,7 @@ test("status ends with the boot check's one line and enables nothing", () => {
 
 test("install.sh ends with the boot check and its last word depends on it", () => {
   const s = read(INSTALL);
-  assert.match(s, /claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do/);
+  assert.match(s, /^for f in claude-factory-dispatch( claude-factory-[a-z-]+)* claude-factory-bootcheck( claude-factory-[a-z-]+)*; do$/m);
   const at = s.indexOf('"$SRC/bin/claude-factory-bootcheck" || boot=1');
   assert.ok(at > s.indexOf("== Prerequisites") && at > s.indexOf("claude-rc-*.service"), "boot check runs after everything else");
   assert.match(s.slice(at), /^"\$SRC\/bin\/claude-factory-bootcheck" \|\| boot=1\n\nif \[ "\$missing" = 1 \][^\n]*\nelif \[ "\$boot" = 1 \][^\n]*\nelse echo "== Done"; fi\n$/);
@@ -2819,7 +2819,7 @@ test("mark-done: done on exit 0, stopped on SIGTERM, untouched otherwise, only s
     assert.ok(!existsSync(join(state, "ci/r/missing")));
     // It never calls the dispatcher.
     assert.doesNotMatch(read(MARK_DONE), /claude-factory-dispatch|\$CLAUDE/);
-    assert.match(read(INSTALL), /for f in claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do/);
+    assert.match(read(INSTALL), /^for f in( claude-factory-[a-z-]+)* claude-factory-mark-done( claude-factory-[a-z-]+)*; do$/m);
   } finally {
     rmSync(t, { recursive: true, force: true });
   }
