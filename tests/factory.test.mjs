@@ -879,8 +879,9 @@ const cleanupScript = (state, claude = "false") => {
   return [
     `STATE=${state}`, `LAUNCHED=$STATE/launched`, "HOST=testhost", "LINEAR=mcp__claude_ai_Linear",
     `CLAUDE=${claude}`, "MODEL_HOUSEKEEPING=haiku",
-    line("active()"), line("cardkey()"), line("put_marker()"), line("SALVAGE_DAYS="), line("SALVAGE_IDLE_MIN="),
+    line("active()"), line("cardkey()"), line("put_marker()"), line("SALVAGE_DAYS="), line("SALVAGE_IDLE_MIN="), line("SCRATCH_NAMES="),
     fn("unit_running"), fn("launched"), fn("linear_issue"), fn("cleanup"), fn("salvage"), fn("salvage_tell"), fn("salvage_prune"),
+    fn("is_scratch_name"), fn("drop_scratch_files"), fn("left_a_tick"), fn("merged_head"), fn("scratch_sweep"),
   ].join("\n");
 };
 
@@ -973,7 +974,13 @@ esac
   writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
 echo "gh $*" >>"${calls}"
 case "$1 $2" in
-  "pr list") [ ! -e "${t}/listfail" ] || exit 1; case "$*" in *"--head b/cat-10-x"*) echo 12;; esac;;
+  "pr list")
+    case "$*" in
+      # CAT-1503: merged lookups answer the heads in $t/merged-<branch> and fail while $t/mergedfail exists.
+      *"--state merged"*) [ ! -e "${t}/mergedfail" ] || exit 1; for a; do b=$a; [ "$prev" = --head ] && break; prev=$a; done; f="${t}/merged-\${b//\//_}"; [ ! -e "$f" ] || cat "$f";;
+      *) [ ! -e "${t}/listfail" ] || exit 1; case "$*" in *"--head b/cat-10-x"*) echo 12;; esac;;
+    esac;;
+  "pr view") [ ! -e "${t}/mergedfail" ] || exit 1; [ ! -e "${t}/merged-pr-$3" ] || cat "${t}/merged-pr-$3";;
   "pr comment") [ "$3" != 7 ] || [ ! -e "${t}/ghfail" ];;
 esac
 `, { mode: 0o755 });
@@ -1176,6 +1183,99 @@ git -C .claude/worktrees/factory-cat-11 commit -q --allow-empty -m w`);
   }
 });
 
+// CAT-1503: every reviewer used to write its comment and body files inside its
+// worktree, so no reviewer worktree was ever removed, and CAT-1482 would have
+// salvaged each one and commented on old, merged PRs (client repos included).
+test("cleanup: a worktree holding only known scratch files is removed, not salvaged; anything else still is", () => {
+  const { t, repo, state, sh, cleanup, wt, age, refs, took } = salvageRig();
+  sh(`cd ${repo}
+for n in factory-review-repo-pr-40 factory-review-repo-pr-41 factory-review-repo-pr-42 factory-review-repo-pr-43; do git worktree add -q --detach .claude/worktrees/$n origin/main; done
+cd .claude/worktrees/factory-review-repo-pr-40 && echo c >.factory-review-comment.md && echo b >.factory-review-body.md && mkdir .git-review-x && echo d >.git-review-x/diff && echo o >osv-head.json && echo SECRET=1 >.env.local && cd ${repo}
+echo c >.claude/worktrees/factory-review-repo-pr-41/.dep-review-comment.md
+cd .claude/worktrees/factory-review-repo-pr-42 && echo c >.factory-review-comment.md && echo two >doc.md && cd ${repo}
+cd .claude/worktrees/factory-review-repo-pr-43 && echo c >.factory-review-comment.md && echo n >notes.md && cd ${repo}`);
+  mkdirSync(join(state, "scratch", "factory-review-repo-pr-40"), { recursive: true });
+  // 41 was written to just now: not touched this tick.
+  for (const n of ["factory-review-repo-pr-40", "factory-review-repo-pr-42", "factory-review-repo-pr-43"]) age(n);
+  let out = cleanup();
+  assert.match(out, /tick-continues/);
+  assert.match(out, /deleted scratch files left in \S+factory-review-repo-pr-40: /);
+  assert.match(out, /removed finished worktree \S+factory-review-repo-pr-40\n/);
+  assert.ok(!existsSync(wt("factory-review-repo-pr-40")));
+  assert.ok(!existsSync(join(state, "scratch", "factory-review-repo-pr-40")), "its scratch folder stayed");
+  assert.ok(existsSync(wt("factory-review-repo-pr-41")), "touched a worktree written to this tick");
+  assert.ok(existsSync(join(wt("factory-review-repo-pr-41"), ".dep-review-comment.md")));
+  // A modified tracked file, or any other new file, is still salvaged, scratch file and all.
+  assert.deepEqual(refs().map((r) => r.replace(/-\d{8}T\d{6}$/, "")).sort(), ["refs/factory/salvage/factory-review-repo-pr-42", "refs/factory/salvage/factory-review-repo-pr-43"]);
+  const r42 = refs().find((r) => r.includes("pr-42-"));
+  assert.equal(sh(`git -C ${repo} show ${r42}:doc.md`), "two\n");
+  assert.equal(sh(`git -C ${repo} show ${r42}:.factory-review-comment.md`), "c\n");
+  assert.ok(!took().some((l) => / 40 | 41 /.test(l)), "told PR 40 or 41");
+  // Once 41 has been left a tick, it goes too, with no ref and no comment.
+  age("factory-review-repo-pr-41");
+  out = cleanup();
+  assert.match(out, /removed finished worktree \S+factory-review-repo-pr-41\n/);
+  assert.equal(refs().length, 2);
+  assert.deepEqual(took().filter((l) => !l.startsWith("gh pr comment 42 ") && !l.startsWith("gh pr comment 43 ")), []);
+});
+
+test("cleanup: a worktree whose HEAD is a merged PR's head is removed without salvage, even with its branch gone from origin", () => {
+  const { t, repo, state, sh, cleanup, wt, age, refs, took } = salvageRig();
+  // A builder squash-merged and deleted on origin, its card reviewer detached at
+  // the same head, another PR's reviewer (PR #30, merged), and a builder whose
+  // merged PR has a different head (it holds a commit nobody pushed).
+  sh(`cd ${repo}
+git worktree add -q -b b/cat-20-x .claude/worktrees/factory-cat-20 origin/main
+git -C .claude/worktrees/factory-cat-20 commit -q --allow-empty -m built
+git worktree add -q --detach .claude/worktrees/factory-review-cat-20 b/cat-20-x
+git checkout -q --detach origin/main && git commit -q --allow-empty -m pr30 && git update-ref refs/heads/pr30 HEAD && git checkout -q main 2>/dev/null || git checkout -q -
+git worktree add -q --detach .claude/worktrees/factory-review-repo-pr-30 pr30 && git branch -q -D pr30
+git worktree add -q -b b/cat-21-x .claude/worktrees/factory-cat-21 origin/main
+git -C .claude/worktrees/factory-cat-21 commit -q --allow-empty -m pushed
+git -C .claude/worktrees/factory-cat-21 commit -q --allow-empty -m not-pushed`);
+  writeFileSync(join(state, "launched"), `${repo} b/cat-20-x cat-20\n${repo} b/cat-21-x cat-21\n`);
+  const head = (n) => sh(`git -C ${wt(n)} rev-parse HEAD`).trim();
+  writeFileSync(join(t, "merged-b_cat-20-x"), `${head("factory-cat-20")}\n`);
+  writeFileSync(join(t, "merged-pr-30"), `${head("factory-review-repo-pr-30")}\n`);
+  writeFileSync(join(t, "merged-b_cat-21-x"), `${sh(`git -C ${wt("factory-cat-21")} rev-parse HEAD^`).trim()}\n`);
+  const names = ["factory-cat-20", "factory-review-cat-20", "factory-review-repo-pr-30", "factory-cat-21"];
+  for (const n of names) age(n);
+
+  // GitHub can't be asked: nothing is removed or salvaged, and it says so.
+  writeFileSync(join(t, "mergedfail"), "");
+  let out = cleanup();
+  for (const n of names) {
+    assert.ok(existsSync(wt(n)), `${n} went while GitHub could not be asked`);
+    assert.match(out, new RegExp(`${n}: could not ask GitHub whether its HEAD is a merged PR's head; trying again next tick`));
+  }
+  assert.deepEqual(refs(), []);
+  rmSync(join(t, "mergedfail"));
+  took();
+
+  out = cleanup();
+  for (const n of names.slice(0, 3)) {
+    assert.match(out, new RegExp(`removed finished worktree \\S+/${n} \\(its HEAD is a merged PR's head\\)`));
+    assert.ok(!existsSync(wt(n)), `${n} still there`);
+  }
+  // The one with work past its merged head is salvaged as before (CAT-1482).
+  assert.deepEqual(refs().map((r) => r.replace(/-\d{8}T\d{6}$/, "")), ["refs/factory/salvage/factory-cat-21"]);
+  const c = took();
+  assert.ok(c.some((l) => l.includes("--head b/cat-20-x") && l.includes("--state merged")), c.join("\n"));
+  assert.ok(c.some((l) => l.startsWith("gh pr view 30 ")), c.join("\n"));
+  assert.ok(!c.some((l) => /^gh pr comment (12|30) /.test(l) || /CAT-20/.test(l)), c.join("\n"));
+});
+
+test("run_unit gives every session a fresh scratch folder outside its worktree and names it in the prompt", () => {
+  const s = read(DISPATCH);
+  const fn = s.slice(s.indexOf("\nrun_unit() {\n"), s.indexOf("\n}\n", s.indexOf("\nrun_unit() {\n")));
+  assert.match(fn, /local scratch=\$STATE\/scratch\/\$unit/);
+  assert.match(fn, /rm -rf "\$scratch" && mkdir -p "\$scratch"/);
+  assert.match(fn, /set -- --add-dir "\$scratch" "\$\{@:1:\$#-1\}" "\$\{!#\}\n\nScratch files: /);
+  // No prompt sends a scratch file into the worktree any more.
+  assert.doesNotMatch(s, /inside this worktree/);
+  assert.match(s, /\nscratch_sweep\n/);
+});
+
 test("salvage refs older than 14 days are deleted; younger ones and other refs stay", () => {
   const { repo, sh, cleanup, refs } = salvageRig();
   sh(`cd ${repo}
@@ -1264,7 +1364,7 @@ exit 0
   // The other-PR reviewer is unchanged: it may push a one-line fix and has no tool denials.
   assert.match(read(`${units}.factory-review-repo-pr-1`), /git push origin 'HEAD:b\/1'/);
   assert.doesNotMatch(read(`${units}.factory-review-repo-pr-1.args`), /disallowedTools/);
-  assert.match(read(`${units}.factory-review-repo-pr-1.args`), /\/claude\n-p\n--model\nclaude-sonnet-5-5\n--permission-mode\nauto\n--output-format\ntext\n$/);
+  assert.match(read(`${units}.factory-review-repo-pr-1.args`), /\/claude\n--add-dir\n[^\n]*\/\.local\/state\/claude-factory\/scratch\/factory-review-repo-pr-1\n-p\n--model\nclaude-sonnet-5-5\n--permission-mode\nauto\n--output-format\ntext\n$/);
 
   // The Dependabot PR counts toward the cap: PR #1's reviewer still runs, cap 1.
   r = tick("kkreative dependabot", 1);
@@ -1288,7 +1388,11 @@ exit 0
     // Enforced, not just asked: dontAsk with an allowlist, no repo settings or
     // MCP servers, push/merge/gh api denied, and nothing that installs or runs code.
     const args = read(`${units}.factory-review-repo-pr-3.args`);
-    assert.match(args, /\/claude\n-p\n--model\nclaude-haiku-5-5\n--permission-mode\ndontAsk$/m);
+    assert.match(args, /\/claude\n--add-dir\n[^\n]*\/scratch\/factory-review-repo-pr-3\n-p\n--model\nclaude-haiku-5-5\n--permission-mode\ndontAsk$/m);
+    // CAT-1503: its comment and body files go in the scratch folder, which exists, not the worktree.
+    assert.ok(existsSync(join(state, "scratch", "factory-review-repo-pr-3")), "no scratch folder");
+    assert.match(prompt, /Write the comment and body files with the Write tool, in the scratch folder named at the end of this prompt/);
+    assert.ok(prompt.endsWith(`under ${join(state, "scratch", "factory-review-repo-pr-3")}, never inside the git worktree. A file left in the worktree makes it look like unsaved work.`), prompt.slice(-400));
     assert.match(r.stdout, /started dependency review of PR #3 .*model claude-haiku-5-5\)/);
     assert.doesNotMatch(args, /^auto$/m);
     assert.match(args, /^--setting-sources\nuser$/m);
@@ -2173,7 +2277,7 @@ esac
     assert.equal(argv[argv.indexOf("--model") + 1], "claude-opus-5-5");
     // Its scratch checkout of the base is outside its worktree, so it is added.
     const basewt = join(repo, ".claude/worktrees/ci-base-my-repo-pr-21");
-    assert.equal(argv[argv.indexOf("--add-dir") + 1], basewt);
+    assert.ok(argv.some((a, i) => argv[i - 1] === "--add-dir" && a === basewt), argv.join(" "));
     assert.ok(existsSync(basewt), "the --add-dir path exists (empty) before the session starts");
     assert.ok(prompt.includes(`git worktree add --detach ${basewt} origin/main`), prompt);
     const args = argv.join("\n");
