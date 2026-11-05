@@ -296,7 +296,7 @@ test("the reviewer prompt carries the stage, its source, the merge-rule check an
     let p = prompt();
     assert.match(p, /this repo is at factory stage 3 \(from board; the dispatcher gives the stage/);
     assert.match(p, /Stage 3 lets you self-merge risk: Low or Medium\./);
-    assert.match(p, /no file in gh pr diff 9 --name-only matches a path in the base branch's \.github\/CODEOWNERS/);
+    assert.match(p, /no file in gh pr diff 9 --name-only matches a deep path of the base branch: its \.github\/deep-paths when it has one, else its \.github\/CODEOWNERS/);
     assert.match(p, new RegExp(`${DISPATCH.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")} merge-rule My-Repo <that risk> --pr 9 --dry-run exits 0 and its first line says 'self-merge allowed'`));
     assert.doesNotMatch(p, /post-merge/);
 

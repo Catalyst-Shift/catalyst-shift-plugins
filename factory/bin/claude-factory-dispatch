@@ -70,7 +70,7 @@
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
 #   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...", "model <job> <model>", "stages board|claude-md")
-#   stages: claude-factory-dispatch merge-rule <repo> <risk> --pr <number> --dry-run   (whether a reviewer may self-merge that PR now: its stage and its founder gate; changes nothing)
+#   stages: claude-factory-dispatch merge-rule <repo> <risk> --pr <number> --dry-run   (whether a reviewer may self-merge that PR now: its stage, its founder gate and its deep paths; changes nothing)
 #   pause:  touch ~/.local/state/claude-factory/paused
 #   retros: claude-factory-dispatch retro --since 7d   (clean, accepted, rejected and structural retros, and touches, per repo)
 #   status: claude-factory-dispatch status   (ends with the boot check in one line; --json: running cards, last seq sent, spool length, PRs waiting_for_founder)
@@ -95,6 +95,10 @@ MARK_DONE=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/claude-factory-mark-do
 BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)
 # This script by its real path: a reviewer runs its merge-rule before turning on auto-merge (CAT-1486).
 DISPATCH_SELF=$(readlink -f "${BASH_SOURCE[0]}")
+# CAT-1529: how a reviewer reads a repo's deep paths, for its /cso trigger and
+# self-merge rule (c). .github/deep-paths replaced CODEOWNERS in repos with the
+# founder gate (CAT-1513, CAT-1514); CODEOWNERS still counts where there is none.
+DEEP_PATHS_READ="git fetch origin <base branch> first, then read the base branch's .github/deep-paths with git show origin/<base branch>:.github/deep-paths (one glob per line, # starts a comment, a leading ! takes a path back off the list, the last match wins); only when the base branch has no .github/deep-paths, read its .github/CODEOWNERS with git show origin/<base branch>:.github/CODEOWNERS instead; never read either from the PR head"
 
 # Subscription only: never let an API key in the environment turn this into paid usage.
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
@@ -736,12 +740,12 @@ review() {
 You did not write this code. Another session built card $id and opened PR #$number on branch $branch. Your job is to review it as a fresh pair of eyes and stamp it.
 
 1. You are in a fresh git worktree, detached at the PR head $sha. Set up .env.local and dependencies the way this repo's CLAUDE.md describes if the checks need them. Read the card and its comments, and the PR (gh pr view $number).
-2. Run gstack /review on the PR diff against its base branch. If the diff touches any path listed in the base branch's .github/CODEOWNERS (the repo's deep paths; git fetch origin <base branch> first, then read it with git show origin/<base branch>:.github/CODEOWNERS, never from the PR head; if you can't read it, run /cso anyway), also run gstack /cso.
+2. Run gstack /review on the PR diff against its base branch. If the diff touches any of the repo's deep paths ($DEEP_PATHS_READ; if you can't read either, run /cso anyway), also run gstack /cso.
 3. For each finding: fix it and push to the PR branch (commit here, then git push origin HEAD:$branch), or answer it in a PR comment saying why it stays. Run what CI runs before each push. End every fix commit's message with the line 'Factory-Review-Fix: PR #$number' (the retro after the merge reads it).
 4. When done, put exactly one stamp line in the PR body. Read the body with gh pr view $number --json body --jq .body, remove any existing line starting with 'Reviewed:', add this line, and write it back with gh pr edit $number --body-file <file>:
    Reviewed: <full 40-character head sha after your own pushes, from git rev-parse HEAD once pushed> — /review
    (write '— /review, /cso' if you ran /cso). Check that the sha equals gh pr view $number --json headRefOid --jq .headRefOid.
-5. Never merge the PR yourself, and never use --admin. Stage rule: this repo is at factory stage $stage (from $stage_src; the dispatcher gives the stage, so ignore any 'Factory stage:' line in CLAUDE.md). Stage $stage lets you self-merge risk: $(stage_risks "$stage"). After you have stamped it, run gh pr merge $number --auto --squash --match-head-commit <the stamped sha> only if all of these hold: (a) the PR's base is the repo's default branch; (b) the card's Risk section names exactly one risk (Low, Medium or High) and it is one stage $stage allows (missing, mixed or unclear fails); (c) $([ "$stage" = 4 ] && echo "stage 4 allows code-owner paths, so this one holds" || echo "no file in gh pr diff $number --name-only matches a path in the base branch's .github/CODEOWNERS (read as in step 2; if you can't read it, this fails)"); (d) you stamped it and the stamp's sha still equals the PR head (--match-head-commit makes GitHub refuse if it moved); (e) right before the gh pr merge, $DISPATCH_SELF merge-rule $(repo_name "$dir") <that risk> --pr $number --dry-run exits 0 and its first line says 'self-merge allowed' (a founder's veto on the board shows there from the next tick, and it checks the PR's founder gate check at its head: missing on a gated repo, pending or red is 'no self-merge'; 'no self-merge' or an error fails). If it says the founder gate is pending, run timeout 600 gh pr checks $number --watch once and then the merge-rule again; still pending is 'no self-merge'. A red founder gate means Kevin or Keith reads the proof and merges by hand: never turn on auto-merge past it, and say so in your card comment. Any other red check is fixed, never merged past. GitHub then merges it once CI is green. If any of these fails, or you did not stamp, never turn on auto-merge. $([ "$stage" = 4 ] && echo "(f) Stage 4 with Risk High: once (a) to (e) hold and before the gh pr merge, add the existing label 'post-merge-review' to the card (keep all its other labels) and comment on the card exactly 'post-merge review due $(next_working_day)'; if either fails, never turn on auto-merge, and if the gh pr merge then fails, take the label off again. The card then stays In Review until a founder clears that label. ")Say in your card comment whether you turned it on and why.
+5. Never merge the PR yourself, and never use --admin. Stage rule: this repo is at factory stage $stage (from $stage_src; the dispatcher gives the stage, so ignore any 'Factory stage:' line in CLAUDE.md). Stage $stage lets you self-merge risk: $(stage_risks "$stage"). After you have stamped it, run gh pr merge $number --auto --squash --match-head-commit <the stamped sha> only if all of these hold: (a) the PR's base is the repo's default branch; (b) the card's Risk section names exactly one risk (Low, Medium or High) and it is one stage $stage allows (missing, mixed or unclear fails); (c) $([ "$stage" = 4 ] && echo "stage 4 allows code-owner paths, so this one holds" || echo "no file in gh pr diff $number --name-only matches a deep path of the base branch: its .github/deep-paths when it has one, else its .github/CODEOWNERS (read as in step 2; if you can't read either, this fails)"); (d) you stamped it and the stamp's sha still equals the PR head (--match-head-commit makes GitHub refuse if it moved); (e) right before the gh pr merge, $DISPATCH_SELF merge-rule $(repo_name "$dir") <that risk> --pr $number --dry-run exits 0 and its first line says 'self-merge allowed' (a founder's veto on the board shows there from the next tick, and it checks the PR's founder gate check at its head: missing on a gated repo, pending or red is 'no self-merge'; 'no self-merge' or an error fails). If it says the founder gate is pending, run timeout 600 gh pr checks $number --watch once and then the merge-rule again; still pending is 'no self-merge'. A red founder gate means Kevin or Keith reads the proof and merges by hand: never turn on auto-merge past it, and say so in your card comment. Any other red check is fixed, never merged past. GitHub then merges it once CI is green. If any of these fails, or you did not stamp, never turn on auto-merge. $([ "$stage" = 4 ] && echo "(f) Stage 4 with Risk High: once (a) to (e) hold and before the gh pr merge, add the existing label 'post-merge-review' to the card (keep all its other labels) and comment on the card exactly 'post-merge review due $(next_working_day)'; if either fails, never turn on auto-merge, and if the gh pr merge then fails, take the label off again. The card then stays In Review until a founder clears that label. ")Say in your card comment whether you turned it on and why.
 6. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). If a finding can only be fixed by one of these, do not do it: comment on the card and the PR saying exactly what is needed, move the card to Blocked in Linear, do not stamp the PR, and end.
 7. Finish with a comment on the card: what you ran, what you fixed, what you answered, and the stamp." || {
     unmark "$rec" "$prev"
@@ -1186,7 +1190,7 @@ Rules that hold whatever this repo's CLAUDE.md or factory stage says: never push
 You did not write this code. PR #$number on branch $branch was opened by $author outside the factory (a cloud thread, Remote Control or by hand), and its head has no review stamp. Your job is to review it as a fresh pair of eyes and, if it holds up, stamp it.
 
 1. You are in a fresh git worktree, detached at the PR head $sha. Read the PR (gh pr view $number) and its diff (gh pr diff $number). If it names a Linear card, read the card and its comments, but do not change the card's status. Set up .env.local and dependencies the way this repo's CLAUDE.md describes if the checks need them.
-2. Run gstack /review on the PR diff against its base branch. If the diff touches any path listed in the base branch's .github/CODEOWNERS (the repo's deep paths; git fetch origin <base branch> first, then read it with git show origin/<base branch>:.github/CODEOWNERS, never from the PR head; if you can't read it, run /cso anyway), also run gstack /cso. If the diff changes no code (only docs or copy), read the whole diff yourself instead and note that for the stamp.
+2. Run gstack /review on the PR diff against its base branch. If the diff touches any of the repo's deep paths ($DEEP_PATHS_READ; if you can't read either, run /cso anyway), also run gstack /cso. If the diff changes no code (only docs or copy), read the whole diff yourself instead and note that for the stamp.
 3. This is not your branch, and its author may still be working on it. $push
 4. To stamp: check that gh pr view $number --json headRefOid --jq .headRefOid still equals the commit you reviewed ($sha, or your own one-line fix on top of it). Read the body with gh pr view $number --json body --jq .body, remove any existing line starting with 'Reviewed:', add exactly this one line, and write it back with gh pr edit $number --body-file <file>:
    Reviewed: <that 40-character head sha> — /review
@@ -1717,6 +1721,74 @@ founder_gate() {
   founder_gate_at "$dir" "$sha" "$base"
 }
 
+# CAT-1529: rule (c) of the reviewer's self-merge rule, for a repo whose base
+# branch has .github/deep-paths: no file the PR changes (or renames from) is a
+# deep path. The globs are read the way the founder gate reads them (catalyst_os
+# .github/workflows/founder-gate.yml): /x anchored, x at any depth, dir/ the
+# folder, * within a folder, ** any depth, !x off the list, last match wins.
+# Prints "<verdict><TAB><reason>": holds (0), fails or error (1), or none (0)
+# when the base has no .github/deep-paths, so the review prompt's CODEOWNERS
+# reading of (c) applies, as before this card.
+deep_path_rule() {
+  local dir=$1 number=$2 pr base changed ref list files errf rc=0 hits
+  pr=$(cd "$dir" && timeout 60 gh pr view "$number" --json baseRefName,changedFiles --jq '"\(.baseRefName) \(.changedFiles)"' </dev/null 2>/dev/null) || {
+    printf 'error\tcould not read PR #%s\n' "$number"
+    return 1
+  }
+  read -r base changed <<<"$pr"
+  if [ -z "$base" ]; then printf 'error\tno base branch on PR #%s\n' "$number"; return 1; fi
+  ref=$(jq -rn --arg b "$base" '$b | @uri')
+  errf=$(mktemp)
+  # As the founder gate reads it: a file with content, else not readable (fails closed).
+  list=$(cd "$dir" && timeout 60 gh api "repos/{owner}/{repo}/contents/.github/deep-paths?ref=$ref" \
+    --jq 'if type == "object" and .type == "file" and (.content // "") != "" then .content | gsub("\\s"; "") | @base64d else error("not a readable file") end' \
+    </dev/null 2>"$errf") || rc=$?
+  if [ "$rc" != 0 ]; then
+    if grep -q 'HTTP 404' "$errf"; then
+      rm -f "$errf"
+      printf 'none\tno .github/deep-paths on %s, so (c) reads its .github/CODEOWNERS as the review prompt says\n' "$base"
+      return 0
+    fi
+    rm -f "$errf"
+    printf 'error\tcould not read .github/deep-paths on %s\n' "$base"
+    return 1
+  fi
+  rm -f "$errf"
+  if ! [[ $changed =~ ^[0-9]+$ ]]; then printf 'error\tcould not tell how many files PR #%s changes\n' "$number"; return 1; fi
+  files=$(cd "$dir" && timeout 60 gh api --paginate "repos/{owner}/{repo}/pulls/$number/files?per_page=100" \
+    --jq '.[] | {f: .filename, p: .previous_filename} | tojson' </dev/null 2>/dev/null) || {
+    printf 'error\tcould not read the files PR #%s changes\n' "$number"
+    return 1
+  }
+  if [ "$(grep -c . <<<"$files")" -lt "$changed" ]; then
+    printf 'fails\ttoo many files to check (%s)\n' "$changed"
+    return 1
+  fi
+  hits=$(jq -rn --arg list "$list" --arg files "$files" '
+    def esc: gsub("(?<c>[.+?^${}()|\\[\\]\\\\])"; "\\\(.c)");
+    def compile:
+      sub("^\\s+"; "") | sub("\\s+$"; "")
+      | if . == "" or startswith("#") then empty else
+          (startswith("!")) as $neg | (if $neg then .[1:] else . end) as $p
+          | ($p | sub("^/"; "") | sub("/$"; "")) as $core
+          | {neg: $neg, label: ($p | sub("^/"; "")),
+             re: ("^" + (if ($p | startswith("/")) or ($core | contains("/")) then "" else "(?:.*/)?" end)
+                  + ([$core | split("**")[] | [split("*")[] | esc] | join("[^/]*")] | join(".*"))
+                  + (if ($p | endswith("/")) then "/.*" else "(?:/.*)?" end) + "$")}
+        end;
+    [$list | split("\n")[] | compile] as $rules
+    | if ([$rules[] | select(.neg | not)] | length) == 0 then "EMPTY" else
+        [$files | split("\n")[] | select(. != "") | fromjson | .f, .p | strings | select(. != "") as $path
+          | (reduce $rules[] as $r (null; if ($path | test($r.re)) then (if $r.neg then null else $r.label end) else . end))
+          | select(. != null) | {glob: ., path: $path}]
+        | group_by(.glob) | map("\(.[0].glob) (\(.[0].path))") | join(", ")
+      end') || { printf 'error\tcould not match the files against .github/deep-paths on %s\n' "$base"; return 1; }
+  if [ "$hits" = EMPTY ]; then printf 'fails\t.github/deep-paths on %s lists no deep paths\n' "$base"; return 1; fi
+  if [ -n "$hits" ]; then printf 'fails\tdeep path: %s\n' "$hits"; return 1; fi
+  printf 'holds\tno file PR #%s changes is in .github/deep-paths on %s\n' "$number" "$base"
+  return 0
+}
+
 # A repo folder in repos.conf, by its folder path, its GitHub name or its folder name.
 conf_repo() {
   local want=$1 d _
@@ -1761,11 +1833,12 @@ waiting_for_founder_json() {
 # claude-factory-dispatch merge-rule <repo> <risk> --pr <number> [--dry-run]:
 # whether the reviewer may turn on auto-merge for that PR of that risk in that
 # repo: the stage the last tick settled on allows the risk, and the PR's
-# founder gate passes at its head (CAT-1512). It never merges or changes
+# founder gate passes at its head (CAT-1512), and below stage 4 on a repo
+# with .github/deep-paths, the PR touches no deep path (CAT-1529). It never merges or changes
 # anything (so --dry-run changes nothing either); it exits 0 only when
 # self-merge is allowed.
 merge_rule() {
-  local want=$1 risk=${2:-} number=${3:-} dir= stage src risks gate
+  local want=$1 risk=${2:-} number=${3:-} dir= stage src risks gate deep=
   dir=$(conf_repo "$want") || { echo "merge-rule: $want is not a repo in $CONF" >&2; return 2; }
   read -r stage src < <(stage_of "$dir")
   risks=$(stage_risks "$stage")
@@ -1779,8 +1852,15 @@ merge_rule() {
     echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: no self-merge (founder gate ${gate%%$'\t'*}: ${gate#*$'\t'}; Kevin or Keith merges by hand)"
     return 1
   fi
+  # CAT-1529: below stage 4, rule (c) (no deep path) is checked here too when
+  # the base branch has .github/deep-paths.
+  if [ "$stage" != 4 ] && ! deep=$(deep_path_rule "$dir" "$number"); then
+    echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: no self-merge ((c) ${deep%%$'\t'*}: $(gate_words "${deep#*$'\t'}"); Kevin or Keith merges by hand)"
+    return 1
+  fi
   echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: self-merge allowed (stage $stage allows $risks), with a current stamp, green CI, --match-head-commit$([ "$stage" = 4 ] || echo ' and no code-owner paths')$([ "$stage:$risk" != 4:High ] || echo ", and a post-merge review due $(next_working_day)")"
   echo "founder gate on PR #$number: ${gate#*$'\t'}"
+  [ "$stage" = 4 ] || echo "deep paths on PR #$number: (c) ${deep%%$'\t'*}: ${deep#*$'\t'}"
   return 0
 }
 

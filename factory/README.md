@@ -17,7 +17,7 @@ touch ~/.local/state/claude-factory/paused      # pause: no new sessions or revi
 rm ~/.local/state/claude-factory/paused         # resume
 
 claude-factory-dispatch status                    # one screen: running, waiting on you to merge, other open PRs, stages, paused, boot check
-claude-factory-dispatch merge-rule <repo> <risk> --pr <n> --dry-run   # may a reviewer self-merge that PR now? (stage, source and founder gate; changes nothing)
+claude-factory-dispatch merge-rule <repo> <risk> --pr <n> --dry-run   # may a reviewer self-merge that PR now? (stage, source, founder gate and deep paths; changes nothing)
 claude-factory-bootcheck                          # will it all come back after a reboot? (read-only; see First install)
 systemctl --user list-units 'factory-*'          # what's running
 journalctl --user -u claude-factory -n 50        # what the dispatcher did
@@ -507,8 +507,9 @@ units; gstack goes back to its bundled Chromium.
    the dispatcher adds a worktree `.claude/worktrees/factory-review-cat-NNN`
    detached at the PR head and starts unit `factory-review-cat-NNN`: a fresh
    `claude -p --model <review model> --permission-mode auto` session that didn't write the code. It runs
-   gstack `/review` (plus `/cso` if the diff touches a path in
-   `.github/CODEOWNERS`), fixes or answers each finding, and writes one line
+   gstack `/review` (plus `/cso` if the diff touches a deep path: the base
+   branch's `.github/deep-paths`, or its `.github/CODEOWNERS` where it has no
+   deep-paths file, CAT-1529), fixes or answers each finding, and writes one line
    `Reviewed: <40-char head sha> — /review[, /cso]` in the PR body. It never
    merges itself. A hard stop moves the card to Blocked.
    **Stages (CAT-1326, CAT-1486).** The dispatcher gives the reviewer the
@@ -525,15 +526,21 @@ units; gstack goes back to its bundled Chromium.
    After stamping, the reviewer runs `gh pr merge <n> --auto --squash
    --match-head-commit <stamped sha>` only when the PR targets the default
    branch, the card's Risk is one the stage allows (stage 2: Low; stage 3: Low
-   or Medium; stage 4: any), below stage 4 no file in the diff matches
-   `.github/CODEOWNERS`, the stamp is still at the head, and, right before,
+   or Medium; stage 4: any), below stage 4 no file in the diff is a deep path
+   (`.github/deep-paths` on the base branch, else `.github/CODEOWNERS`; neither
+   readable fails), the stamp is still at the head, and, right before,
    `claude-factory-dispatch merge-rule <repo> <risk> --pr <n> --dry-run` still
    prints `self-merge allowed` (so a founder's veto on the board stops it from
    the next tick). `merge-rule` also reads the PR's `founder gate` check run at
    its head (CAT-1512): only a `success` passes. Pending, failed, or missing
    while the base branch has a `.github/deep-paths` file is `no self-merge`,
    and so is GitHub not answering; a repo with no `founder gate` check and no
-   `.github/deep-paths` keeps the old behaviour. A red founder gate means
+   `.github/deep-paths` keeps the old behaviour. Below stage 4 on a repo with
+   `.github/deep-paths`, `merge-rule` also checks the deep-path rule itself
+   (CAT-1529): it reads the list from the base branch with the founder gate's
+   glob rules and the PR's files (renames included), and says `no self-merge`
+   when one matches, the list is empty or unreadable, or GitHub lists fewer
+   files than the PR changes. A red founder gate means
    Kevin or Keith reads the proof and merges by hand with the normal button;
    any other red check is fixed, never merged past. `--pr` is required, so
    no `merge-rule` answer skips the gate. GitHub merges once the required checks are green. Before a
@@ -541,8 +548,8 @@ units; gstack goes back to its bundled Chromium.
    and the comment `post-merge review due <next working day>` (no label, no
    auto-merge); the dispatcher then leaves the
    merged card's status alone until a founder clears the label. Otherwise nobody turns on auto-merge: not the builder, and never the
-   reviewer of a PR without a factory card. These rules live in the prompts; the
-   dispatcher does not check them itself. GitHub backs up two of them: a
+   reviewer of a PR without a factory card. Apart from what `merge-rule` checks,
+   these rules live in the prompts; the dispatcher does not check them itself. GitHub backs up two of them: a
    CODEOWNERS path still needs a code-owner approval, and `--match-head-commit`
    refuses a moved head. A push after auto-merge is on is caught only once the
    repo's ruleset requires the `review stamp` check.
