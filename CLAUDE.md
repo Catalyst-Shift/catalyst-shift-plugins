@@ -18,6 +18,7 @@ purpose: the block is byte-identical across surfaces and ends the file.
 | A PR merges only with `Reviewed: <head sha>` in its body | `review stamp` check (`.github/workflows/review-stamp.yml`) | CAT-1299 |
 | The dispatcher and installer are valid bash, hardcode no home path, and every `claude` / `systemd-run` call reads stdin from `/dev/null` | `tests/factory.test.mjs` | CAT-1298 |
 | A `factory-reflect` or `/correct` PR never touches a gate (`.github/`, rulesets, CODEOWNERS, required checks, the Ways of Working block, the ways-of-working skill) | `validate` step "A factory-reflect or /correct PR touches no gate", `scripts/retro-guard.mjs`, `tests/retro-guard.test.mjs` | CAT-1433 |
+| A running-cap check in the dispatcher asks `-lt "$CAP"`, so a non-numeric cap holds sessions back instead of starting them | `tests/factory.test.mjs` "every running-cap check … asks -lt" | CAT-1478 |
 | A merged factory PR is retro'd once: `retro: clean` or a `/reflect` session | `tests/factory-retro.test.mjs` | CAT-1433 |
 
 ## Ways of Working — Catalyst Shift

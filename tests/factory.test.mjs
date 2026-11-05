@@ -77,6 +77,16 @@ test("every claude and systemd-run call in the dispatcher reads stdin from /dev/
   assert.match(s, /"\$prompt" <\/dev\/null/);
 });
 
+// CAT-1478: `[ "$busy" -ge "$CAP" ]` reads a test error (a CAP that isn't a
+// number) as "below the cap", so a session starts past the cap. Ask "below the
+// cap?" with -lt and let the error fall to the held-back branch.
+test("every running-cap check in the dispatcher asks -lt, so a non-numeric cap holds sessions back", () => {
+  const bad = read(DISPATCH).split("\n")
+    .map((l, i) => [i + 1, l])
+    .filter(([, l]) => /-(ge|gt|le|eq|ne)\s+"\$\{?CAP\}?"|"\$\{?CAP\}?"\s+-(ge|gt|le|eq|ne)\b/.test(l));
+  assert.deepEqual(bad, [], "compare against $CAP with `[ x -lt \"$CAP\" ]` (fails closed), not -ge/-gt/-le/-eq/-ne");
+});
+
 test("the dispatcher finds claude via CLAUDE_BIN or command -v, and uses the shared state dir", () => {
   const s = read(DISPATCH);
   assert.match(s, /CLAUDE=\$\{CLAUDE_BIN:-\$\(command -v claude\)\}/);
