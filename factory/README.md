@@ -153,6 +153,34 @@ saying why (`PR #<n> in <repo> conflicts; …`, including `waiting for a free
 slot (<running>/<cap>)`), and PRs whose mergeability GitHub still shows as
 `UNKNOWN` are listed per repo and never resolved (CAT-1478).
 
+**One open-PR list per repo per tick (CAT-1540):** the conflict, CI and review
+sweeps read one shared list of each repo's open PRs, fetched once per tick
+before them (`gh pr list --state open --limit 100` with only the fields they
+read) into `~/.local/state/claude-factory/open-prs/<repo>.json`. GitHub's
+GraphQL quota is 5,000 points an hour per user, shared with the board and every
+session on the same login, and a 2-minute tick that listed each repo three
+times spent it within the hour. A repo GitHub doesn't answer for gets one
+journal line (`gh pr list failed in <repo>; no conflict, CI or review sessions
+there this tick: …`). A spent quota gets one line for the whole tick, naming
+the reset time read over REST (`gh api rate_limit`, no GraphQL cost):
+`GitHub GraphQL quota spent (resets at <time>); no conflict, CI or review
+sessions this tick`, and the repos after it are not asked. A secondary (burst)
+rate limit gets one line with no reset time (`GitHub secondary rate limit hit;
+…`). Either way the tick picks up no new card, since it can't count the PRs
+waiting on review (`GitHub is rate limiting, so the PRs waiting on review can't
+be counted; no new pickups`). A repo with 100 open PRs gets a line saying the ones past them get no
+session. Two repos whose folder names give the same state name get no list and
+no session until one is renamed, so neither acts on the other's PRs.
+`status --json` reads its own list (with `url`, also at most 100 PRs a repo).
+The same list answers the per-branch questions that used to cost one call per
+line of `state/launched` (a file that only grows) every tick: the review
+sweep for the factory's own cards, and the count of factory PRs waiting on
+review (which asks per branch only for a repo GitHub didn't list). Merges,
+retros and touches share one lookup of each launched branch's newest PR per
+tick, and one merged or closed over a week ago (`OLD`, which all three leave
+alone) is kept in `state/pr-old/` for a day instead of being asked every
+tick; launching the branch again drops it.
+
 **Red CI (CAT-1479):** each tick, right after the conflict sweep, any open PR
 from a branch this machine's factory launched whose required checks (`gh pr
 checks --required`, which reads the branch ruleset) have a failing conclusion
@@ -184,8 +212,8 @@ head is labelled instead (`CI_TRIES` in the dispatcher), so no PR can start
 sessions without end. A PR labelled `needs-ci-call` waits for
 a person, and its tries are forgotten when the dispatcher labels it and
 whenever a tick sees the label (red or green),
-so removing the label lets the next tick try again, with its tries starting over. One `gh pr list` per
-repo finds the PRs, not one call per launched branch. Each red PR the sweep
+so removing the label lets the next tick try again, with its tries starting over. The tick's one
+open-PR list per repo finds the PRs (below), not one call per launched branch. Each red PR the sweep
 passes over gets one journal line per tick saying why (`PR #<n> in <repo>
 fails CI (<checks>); …`): labelled `needs-ci-call`, `no-factory-review` (the
 opt-out covers CI sessions too) or `needs-conflict-call`, conflicting with its

@@ -191,10 +191,18 @@ launched() {
   awk 'NF >= 2 && !seen[$1 " " $2]++' "$LAUNCHED"
 }
 
-# Open PRs from branches this dispatcher launched.
+# Open PRs from branches this dispatcher launched. CAT-1540: read from the
+# tick's open-PR list (the launched file only grows, so one call per line was
+# most of the GraphQL quota); a repo GitHub didn't list is asked per branch.
 waiting() {
-  local n=0 dir branch _
+  local n=0 dir branch _ json
   while read -r dir branch _; do
+    if json=$(open_prs "$dir"); then
+      if jq -e --arg b "$branch" 'any(.[]; .headRefName == $b)' <<<"$json" >/dev/null 2>&1; then n=$((n + 1)); fi
+      continue
+    fi
+    # Rate limited: asking per branch would fail and count 0; the tick holds pickups instead.
+    [ -z "$OPEN_PRS_LIMITED" ] || continue
     if [ "$(cd "$dir" && gh pr list --head "$branch" --state open --json number --jq length </dev/null 2>/dev/null || echo 0)" != "0" ]; then
       n=$((n + 1))
     fi
@@ -713,6 +721,7 @@ Card: $id in Linear. It is already In Progress and assigned to the person who ru
    - Blocked (step 5): Blocked, with what you need.
    Never leave it In Progress."
   echo "$dir $branch $key" >>"$LAUNCHED"
+  rm -f "$STATE/pr-old/$(pr_key "$dir" "$branch")"
   # A card can come back (Blocked, then Ready For Factory again): settle it again.
   rm -f "$STATE/settled/$key" "$STATE/settle-wait/$key"
   # Picked up while settle's re-queue answer was lost: the move did happen.
@@ -846,6 +855,74 @@ To label the PR for a person (steps 3 and 4): gh pr edit $number --add-label nee
   echo "started ${retry:+second }conflict session for PR #$number ($branch onto $base at ${basesha:0:12}) in $dir (unit $name, log $STATE/conflict-$slug-pr-$number.log)"
 }
 
+# CAT-1540: the one open-PR list call. GraphQL charges by the nodes asked for,
+# and the quota (5,000 points an hour) is per user and shared with the board and
+# every session on this login, so each repo is listed once per tick: at most 100
+# PRs (no factory repo has more), only the fields asked for. Prints a JSON array.
+OPEN_PRS_LIMIT=100
+open_prs_fetch() {
+  local out
+  out=$(cd "$1" && timeout 60 gh pr list --state open --limit "$OPEN_PRS_LIMIT" --json "$2" --jq . </dev/null) || return 1
+  [ -n "$out" ] || out='[]'
+  jq -e 'type == "array"' <<<"$out" >/dev/null 2>&1 || { echo "gh pr list gave no JSON list" >&2; return 1; }
+  printf '%s\n' "$out"
+}
+
+# The fields conflicts, ci_fixes and pr_reviews read, and no others.
+OPEN_PRS_FIELDS=number,headRefOid,headRefName,baseRefName,mergeable,isDraft,author,labels,isCrossRepository,body
+
+# Once per tick, before the sweeps: state/open-prs/<repo slug>.json for each
+# repo GitHub answered for. A repo it didn't gets one line, and no conflict, CI
+# or review session this tick. A spent GraphQL quota gets one line for the whole
+# tick, naming when it resets (read over REST, which costs no GraphQL), and the
+# repos after it are not asked.
+OPEN_PRS_TICK=
+OPEN_PRS_LIMITED=
+open_prs_refresh() {
+  local dir _ slug f reset when
+  local -A seen=()
+  rm -rf "$STATE/open-prs"
+  mkdir -p "$STATE/open-prs"
+  OPEN_PRS_TICK=1
+  while read -r dir _; do
+    slug=$(reposlug "$dir")
+    f=$STATE/open-prs/$slug.json
+    # Two repos whose folders give the same state name would read each other's
+    # PRs; neither gets a list, so neither gets a session.
+    if [ -n "${seen[$slug]:-}" ]; then
+      rm -f "$f"
+      echo "$dir and ${seen[$slug]} share the state name $slug; no conflict, CI or review sessions in either this tick (rename a folder)"
+      continue
+    fi
+    seen[$slug]=$dir
+    if open_prs_fetch "$dir" "$OPEN_PRS_FIELDS" >"$f.tmp" 2>"$STATE/gh-pr-list.err"; then
+      mv "$f.tmp" "$f"
+      [ "$(jq length "$f")" -lt "$OPEN_PRS_LIMIT" ] || echo "$OPEN_PRS_LIMIT open PRs in $dir, the most one list reads: PRs past them get no conflict, CI or review session"
+      continue
+    fi
+    rm -f "$f.tmp"
+    # A secondary (burst) limit clears in minutes, not at the hourly reset.
+    if grep -qi 'secondary rate limit' "$STATE/gh-pr-list.err"; then
+      echo "GitHub secondary rate limit hit; no conflict, CI or review sessions this tick"
+      OPEN_PRS_LIMITED=1
+      return 0
+    fi
+    if grep -qi 'rate limit' "$STATE/gh-pr-list.err"; then
+      reset=$(timeout 30 gh api rate_limit --jq .resources.graphql.reset </dev/null 2>/dev/null || true)
+      when=unknown
+      [[ $reset =~ ^[0-9]+$ ]] && when=$(date -d "@$reset" -Is)
+      echo "GitHub GraphQL quota spent (resets at $when); no conflict, CI or review sessions this tick"
+      OPEN_PRS_LIMITED=1
+      return 0
+    fi
+    echo "gh pr list failed in $dir; no conflict, CI or review sessions there this tick: $(tail -1 "$STATE/gh-pr-list.err")"
+  done < <(repos)
+}
+
+# This tick's open-PR list for a repo; fails (silently: the refresh said why)
+# when GitHub didn't answer for it.
+open_prs() { cat "$STATE/open-prs/$(reposlug "$1").json" 2>/dev/null; }
+
 # Start a conflict session for each open, non-draft PR in the configured repos
 # that GitHub lists as CONFLICTING. Skipped: Dependabot, forks, PRs labelled
 # no-factory-review, PRs whose head is the default branch or another open PR's
@@ -859,18 +936,18 @@ To label the PR for a person (steps 3 and 4): gh pr edit $number --add-label nee
 # until someone opens them) are listed, never resolved; that list comes before
 # the ownership checks, so both machines list the same PR. No such PR, no output.
 conflicts() {
-  local authors dir _ slug prs unknown mergeable number sha branch base called shared author key def
+  local authors dir _ slug json prs unknown mergeable number sha branch base called shared author key def
   authors=$(review_authors)
   while read -r dir _; do
     slug=$(reposlug "$dir")
     mkdir -p "$STATE/conflicts/$slug"
     def=$(git -C "$dir" symbolic-ref --short refs/remotes/origin/HEAD </dev/null 2>/dev/null || true)
     def=${def#origin/}
-    if ! prs=$(cd "$dir" && timeout 60 gh pr list --state open --limit 500 --json number,headRefOid,headRefName,baseRefName,mergeable,isDraft,author,labels,isCrossRepository \
-      --jq '[.[].baseRefName] as $bases | .[] | select(.mergeable == "CONFLICTING" or .mergeable == "UNKNOWN") | select(.isDraft | not) | select(.isCrossRepository | not)
+    json=$(open_prs "$dir") || continue
+    if ! prs=$(jq -r '[.[].baseRefName] as $bases | .[] | select(.mergeable == "CONFLICTING" or .mergeable == "UNKNOWN") | select(.isDraft | not) | select(.isCrossRepository | not)
         | select([.labels[].name] | index("no-factory-review") | not)
-        | "\(.mergeable) \(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \([.labels[].name] | index("needs-conflict-call") != null) \(.headRefName as $h | $bases | index($h) != null) \(.author.login)"' </dev/null 2>"$STATE/gh-pr-list.err"); then
-      echo "gh pr list failed in $dir; no conflict sessions there this tick: $(tail -1 "$STATE/gh-pr-list.err")"
+        | "\(.mergeable) \(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \([.labels[].name] | index("needs-conflict-call") != null) \(.headRefName as $h | $bases | index($h) != null) \(.author.login)"' <<<"$json"); then
+      echo "could not read the open PRs in $dir; no conflict sessions there this tick"
       continue
     fi
     unknown=$(awk '$1 == "UNKNOWN" && $2 ~ /^[0-9]+$/ { l = l (n++ ? ", #" : "#") $2 } END { if (n) print n " PR" (n > 1 ? "s" : "") " (" l ")" }' <<<"$prs")
@@ -1045,8 +1122,8 @@ To label the PR for a person: gh pr edit $number --add-label needs-ci-call (if t
 # Start a CI session for each open PR from a branch this machine launched whose
 # required checks have a failing conclusion at its head. A `review stamp`
 # failure alone is not one (the review sweeps handle stamps), and a PR with
-# every check green, or no required checks, adds no line. One gh pr list per
-# repo, not one per launched branch: that file only grows. Each red PR it
+# every check green, or no required checks, adds no line. It reads the tick's
+# one open-PR list per repo (CAT-1540), not one per launched branch: that file only grows. Each red PR it
 # passes over gets one line saying why: labelled needs-ci-call (a person
 # decides; its tries are forgotten whenever the label is on, red or not, so
 # removing it tries again), no-factory-review or needs-conflict-call, listed as
@@ -1055,14 +1132,14 @@ To label the PR for a person: gh pr edit $number --add-label needs-ci-call (if t
 # reviewer, conflict or CI session running on it, or a required check still
 # running (the failing set isn't final yet).
 ci_fixes() {
-  local dir _ slug prs number sha branch base draft called optout conflictcall mergeable key checks fails links pending list
+  local dir _ slug json prs number sha branch base draft called optout conflictcall mergeable key checks fails links pending list
   while read -r dir _; do
     slug=$(reposlug "$dir")
     mkdir -p "$STATE/ci/$slug"
-    if ! prs=$(cd "$dir" && timeout 60 gh pr list --state open --limit 500 --json number,headRefOid,headRefName,baseRefName,isDraft,labels,mergeable,isCrossRepository \
-      --jq '.[] | select(.isCrossRepository | not) | [.labels[].name] as $l
-        | "\(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \(.isDraft) \($l | index("needs-ci-call") != null) \($l | index("no-factory-review") != null) \($l | index("needs-conflict-call") != null) \(.mergeable)"' </dev/null 2>"$STATE/gh-pr-list.err"); then
-      echo "gh pr list failed in $dir; no CI sessions there this tick: $(tail -1 "$STATE/gh-pr-list.err")"
+    json=$(open_prs "$dir") || continue
+    if ! prs=$(jq -r '.[] | select(.isCrossRepository | not) | [.labels[].name] as $l
+        | "\(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \(.isDraft) \($l | index("needs-ci-call") != null) \($l | index("no-factory-review") != null) \($l | index("needs-conflict-call") != null) \(.mergeable)"' <<<"$json"); then
+      echo "could not read the open PRs in $dir; no CI sessions there this tick"
       continue
     fi
     while read -r number sha branch base draft called optout conflictcall mergeable; do
@@ -1106,14 +1183,16 @@ ci_fixes() {
 
 # Start a reviewer for each finished builder whose open PR head has no stamp yet.
 reviews() {
-  local dir branch key pr number sha body retry
+  local dir branch key pr number sha body retry json
   while read -r dir branch key; do
     [ "$(running)" -lt "$CAP" ] || return 0
     key=${key:-$(cardkey "$branch")}
     [ -n "$key" ] || continue
     active "factory-$key" && continue
     active "factory-review-$key" && continue
-    pr=$(cd "$dir" && gh pr list --head "$branch" --state open --json number,headRefOid --jq '.[0] | select(.) | "\(.number) \(.headRefOid)"' </dev/null 2>/dev/null) || continue
+    # CAT-1540: the tick's open-PR list, not one call per launched branch.
+    json=$(open_prs "$dir") || continue
+    pr=$(jq -r --arg b "$branch" 'first(.[] | select(.headRefName == $b) | select(.isCrossRepository | not)) | "\(.number) \(.headRefOid)"' <<<"$json" 2>/dev/null) || continue
     [ -n "$pr" ] || continue
     read -r number sha <<<"$pr"
     # A conflict session is about to move this head; review the one it pushes.
@@ -1225,18 +1304,18 @@ You did not write this code. PR #$number on branch $branch was opened by $author
 # (reviews() handles those, once their builder has finished). Dependabot's PRs
 # count only when review-authors lists dependabot or dependabot[bot] (CAT-1327).
 pr_reviews() {
-  local authors dir _ slug prs number sha author branch fork dep pending retry
+  local authors dir _ slug json prs number sha author branch fork dep pending retry
   authors=$(review_authors)
   [ -n "$authors" ] || { echo "no review authors (gh api user failed, no review-authors line); skipping other PRs"; return 0; }
   while read -r dir _; do
     slug=$(reposlug "$dir")
     mkdir -p "$STATE/reviewed/$slug"
-    if ! prs=$(cd "$dir" && timeout 60 gh pr list --state open --limit 500 --json number,headRefOid,headRefName,body,author,isDraft,labels,isCrossRepository \
-      --jq '.[] | select(.isDraft | not)
+    json=$(open_prs "$dir") || continue
+    if ! prs=$(jq -r '.[] | select(.isDraft | not)
         | select([.labels[].name] | index("no-factory-review") | not)
         | .headRefOid as $sha | select((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b") | not)
-        | "\(.number) \($sha) \(.author.login) \(.headRefName) \(.isCrossRepository)"' </dev/null 2>"$STATE/gh-pr-list.err"); then
-      echo "gh pr list failed in $dir; no reviews there this tick: $(tail -1 "$STATE/gh-pr-list.err")"
+        | "\(.number) \($sha) \(.author.login) \(.headRefName) \(.isCrossRepository)"' <<<"$json"); then
+      echo "could not read the open PRs in $dir; no reviews there this tick"
       continue
     fi
     while read -r number sha author branch fork; do
@@ -1422,12 +1501,26 @@ Otherwise change nothing, and print exactly one final line: SETTLED <the status 
 # state is OPEN, MERGED, CLOSED, or OLD for a PR merged or closed more than 7
 # days ago (left alone, so old launches never reach Linear); stamped is true
 # when the body has `Reviewed: <head sha>`.
+# CAT-1540: merges, retros and touches each ask this for every launched branch,
+# and the launched file only grows, so within a tick the answer is asked once
+# (state/open-prs/pr-<key>, cleared each tick), and an OLD answer is kept a day
+# (state/pr-old/<key>; launch() drops it when the branch is launched again).
 factory_pr() {
-  (cd "$1" && gh pr list --head "$2" --state all --limit 1 --json number,state,closedAt,url,headRefOid,body \
+  local key memo old out
+  key=$(pr_key "$1" "$2")
+  old=$STATE/pr-old/$key
+  if [ -n "$(find "$old" -mmin -1440 2>/dev/null)" ]; then cat "$old"; return 0; fi
+  memo=$STATE/open-prs/pr-$key
+  if [ -n "$OPEN_PRS_TICK" ] && [ -f "$memo" ]; then cat "$memo"; return 0; fi
+  out=$(cd "$1" && gh pr list --head "$2" --state all --limit 1 --json number,state,closedAt,url,headRefOid,body \
     --jq '.[0] | select(.) | .headRefOid as $sha
       | (if .state != "OPEN" and ((.closedAt // "1970-01-01T00:00:00Z") | fromdateiso8601) < now - 604800 then "OLD" else .state end) as $state
-      | "\(.number) \($state) \((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b")) \(.url)"' </dev/null 2>/dev/null)
+      | "\(.number) \($state) \((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b")) \(.url)"' </dev/null 2>/dev/null) || return 1
+  [ -z "$OPEN_PRS_TICK" ] || printf '%s\n' "$out" >"$memo"
+  if [[ $out =~ ^[0-9]+\ OLD\  ]]; then mkdir -p "$STATE/pr-old" && printf '%s\n' "$out" >"$old"; fi
+  printf '%s\n' "$out"
 }
+pr_key() { printf '%s %s' "$1" "$2" | md5sum | cut -c1-16; }
 
 # CI is green when the PR has checks and the latest run of each passed or was
 # skipped (gh pr checks, which ignores runs a later one replaced).
@@ -1813,8 +1906,8 @@ waiting_for_founder_json() {
   local dir _ prs number url sha base out verdict reason unread=()
   {
     while read -r dir _; do
-      prs=$(cd "$dir" && timeout 60 gh pr list --state open --limit 200 --json number,url,headRefOid,baseRefName,isDraft \
-        --jq '.[] | select(.isDraft | not) | "\(.number) \(.url) \(.headRefOid) \(.baseRefName)"' </dev/null 2>/dev/null) || {
+      prs=$(open_prs_fetch "$dir" number,url,headRefOid,baseRefName,isDraft 2>/dev/null |
+        jq -r '.[] | select(.isDraft | not) | "\(.number) \(.url) \(.headRefOid) \(.baseRefName)"') || {
         unread+=("$(repo_name "$dir")")
         continue
       }
@@ -2269,6 +2362,7 @@ if [ -e "$STATE/paused" ]; then
   exit 0
 fi
 
+open_prs_refresh
 conflicts
 ci_fixes
 reviews
@@ -2282,6 +2376,12 @@ waiting_now=$(waiting)
 REVIEW_WAITING=$waiting_now
 # Paused from the board: reviews, conflict and CI sessions above still ran; nothing new is claimed.
 if [ -n "$CTL_PAUSED_UNTIL" ]; then exit 0; fi
+# CAT-1540: rate limited, the waiting count can't be read, so nothing new starts.
+if [ -n "$OPEN_PRS_LIMITED" ]; then
+  echo "GitHub is rate limiting, so the PRs waiting on review can't be counted; no new pickups"
+  PASS_RESULT="holding: GitHub rate limited"
+  exit 0
+fi
 if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
   echo "$waiting_now factory PRs waiting on review (cap $WAITING_CAP); no new pickups"
   PASS_RESULT="holding: $waiting_now PRs waiting on review"
