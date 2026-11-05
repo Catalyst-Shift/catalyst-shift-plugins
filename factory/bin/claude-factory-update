@@ -122,11 +122,16 @@ clone_problem() {
 # (a machine installs only on a factory/ change, so it stays on the last one).
 # Prints why not. state/update/canary keeps "<sha> <lastPassAt>" per tick seen.
 canary_ok() {
-  local c=$1 latest=$2 lead=$3 fleet=$4 row sha boot pass n key
+  local c=$1 latest=$2 lead=$3 fleet=$4 row sha boot pass result n key
   if [ -z "$fleet" ] || ! row=$(jq -ce --arg m "$lead" 'first(.machines[]? | select(.machine == $m) | .heartbeat) // empty' "$fleet" 2>/dev/null); then
     echo "can't read $lead's heartbeat from the board"; return 1
   fi
-  IFS=$'\t' read -r sha boot pass < <(jq -r '[(.installed.factorySha // "-"), (.update.boot // "-"), (.lastPassAt // "-")] | @tsv' <<<"$row")
+  IFS=$'\t' read -r sha boot pass result < <(jq -r '[(.installed.factorySha // "-"), (.update.boot // "-"), (.lastPassAt // "-"), (.lastPassResult // "-")] | @tsv' <<<"$row")
+  # A tick that ended in an error is not a healthy canary tick, whatever the boot check says.
+  if [[ $result == error* ]]; then
+    rm -f "$UPD/canary"
+    echo "$lead's last tick ended in an error ($result)"; return 1
+  fi
   # The board's answer is data: only a full sha this clone has goes to git.
   if [[ $sha =~ ^[0-9a-f]{40}$ ]] && [ "$sha" != "$latest" ] && git -C "$c" merge-base --is-ancestor "$sha" "$latest" 2>/dev/null &&
     git -C "$c" diff --quiet "$sha" "$latest" -- factory/ 2>/dev/null; then
@@ -145,7 +150,7 @@ canary_ok() {
 }
 
 check() {
-  local force= held= hold= fleet= busy= c installed latest why boot lead bad refresh=
+  local force= held= hold= fleet= busy= c installed latest why boot lead bad badtree refresh=
   while [ $# -gt 0 ]; do
     case $1 in
       --force) force=1 ;;
@@ -181,13 +186,18 @@ check() {
   fi
   latest=$(git -C "$c" rev-parse --verify --quiet origin/main 2>/dev/null) || { skip "no origin/main in the plugins clone"; return 0; }
   boot=$(boot_summary)
+  # update/bad is "<sha> <factory/ tree> <reason>" of the last rollback. Read
+  # first: a failed rollback install can leave installed.json on the bad sha.
+  # Keyed by the tree too, so a later commit outside factory/ doesn't re-install
+  # the same broken factory/.
+  if [ -s "$UPD/bad" ]; then
+    IFS=$'\t' read -r bad badtree why <"$UPD/bad"
+    if [ "$latest" = "$bad" ] || [ "$(git -C "$c" rev-parse --verify --quiet "$latest:factory" 2>/dev/null)" = "$badtree" ]; then
+      say "rolled-back ($why; waiting for a factory/ change on origin/main)"; write_state rolled-back "$latest" "$why" "$boot"; idle; return 0
+    fi
+  fi
   if [ "$latest" = "$installed" ]; then
     say "current ($(short "$installed"))"; write_state current "$latest" "" "$boot"; idle; return 0
-  fi
-  bad=$(cut -f1 "$UPD/bad" 2>/dev/null || true)
-  if [ "$latest" = "$bad" ]; then
-    why=$(cut -f2- "$UPD/bad")
-    say "rolled-back ($why; waiting for a new origin/main)"; write_state rolled-back "$latest" "$why" "$boot"; idle; return 0
   fi
   if ! git -C "$c" merge-base --is-ancestor "$installed" "$latest" 2>/dev/null; then
     skip "origin/main $(short "$latest") is not a fast-forward of the installed $(short "$installed")"; return 0
@@ -301,7 +311,7 @@ apply() {
     reason="$reason; the rollback install failed too"
     boot=$(boot_summary)
   fi
-  printf '%s\trolled back to %s (%s)\n' "$now" "$(short "$prev")" "$reason" >"$UPD/bad"
+  printf '%s\t%s\trolled back to %s (%s)\n' "$now" "$(git -C "$c" rev-parse --verify --quiet "$now:factory" 2>/dev/null || echo -)" "$(short "$prev")" "$reason" >"$UPD/bad"
   say "rolled back to $(short "$prev") ($reason)"
   write_state rolled-back "$now" "rolled back to $(short "$prev") ($reason)" "$boot"
   return 0

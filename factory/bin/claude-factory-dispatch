@@ -2465,8 +2465,8 @@ update_step() {
   # The board's switches (CAT-1563): updatesHeld turns updates off; a new
   # control version with updateRequested checks now and skips the canary wait.
   if jq -e '.updatesHeld == true' "$STATE/control.json" >/dev/null 2>&1; then args+=(--held); fi
-  ver=$CTL_VERSION
-  if [ "$ver" != null ] && jq -e '.updateRequested | . == true or (type == "string" and . != "")' "$STATE/control.json" >/dev/null 2>&1 &&
+  ver=$(jq -r '.version | if type == "number" then tostring else "null" end' "$STATE/control.json" 2>/dev/null || echo null)
+  if [[ $ver =~ ^[0-9]+$ ]] && jq -e '.updateRequested | . == true or (type == "string" and . != "")' "$STATE/control.json" >/dev/null 2>&1 &&
     [ "$(cat "$STATE/update/requested" 2>/dev/null || true)" != "$ver" ]; then
     args+=(--force)
   fi
@@ -2498,9 +2498,10 @@ update_step() {
   esac
   local target=-
   [ "$decision" = refresh ] || target=${decision#apply }
-  # RuntimeMaxSec: a hung install must not hold every tick (install.sh itself has 600 s, twice with a rollback).
+  # RuntimeMaxSec: a hung install or refresh must not hold every tick (install.sh
+  # has 600 s, twice with a rollback; a refresh's own timeouts add up to about 25 minutes plus 2 per repo).
   if systemd-run --user --quiet --unit=claude-factory-update --collect --description="Claude factory self-update (CAT-1562)" \
-    --setenv=PATH="$PATH" --property=RuntimeMaxSec=1800 \
+    --setenv=PATH="$PATH" --property=RuntimeMaxSec=3600 \
     --property=UnsetEnvironment="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN FACTORY_INGEST_TOKEN" \
     --property=StandardOutput="append:$STATE/update.log" --property=StandardError="append:$STATE/update.log" \
     "$UPDATER" apply "$target" </dev/null; then
@@ -2574,6 +2575,12 @@ if update_running; then
   PASS_RESULT="holding: updating"
   exit 0
 fi
+# CAT-1562: the machine updates itself when plugins main moves, first thing in
+# the tick: before it starts any session, and before any step a bad version
+# could fail in, so a broken dispatcher still pulls its own fix. It reads the
+# board's control.json as the last tick left it (control_fetch comes later,
+# and only it applies the caps). Starting the update ends the tick.
+update_step
 
 while read -r dir project; do cleanup "$dir"; done < <(repos)
 scratch_sweep
@@ -2595,9 +2602,6 @@ write_pass "${PASS_RESULT/#ok/running}"
 control_stop
 # CAT-1486: each repo's stage from the board, before any reviewer starts.
 stages_fetch
-# CAT-1562: the machine updates itself when plugins main moves, before this
-# tick starts any session. Starting the update ends the tick.
-update_step
 
 if [ -e "$STATE/paused" ]; then
   echo "paused ($STATE/paused exists)"

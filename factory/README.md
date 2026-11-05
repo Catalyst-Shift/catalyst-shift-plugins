@@ -490,8 +490,10 @@ lands without a person's merge.
   nothing and logs one `update: skipped (<reason>)` line.
 - **Wait.** The update waits for a tick with no session starting (a
   `factory-*` unit activating, or active for under 60 seconds). Running
-  builders and reviewers keep running on the code they started with; the
-  update never stops a session.
+  builders and reviewers keep running on the scripts they started with (only
+  `claude-factory-mark-done`, which a session runs as it stops, is the new
+  one); the update never stops a session. The check runs first in the tick,
+  so a version that breaks a later step still pulls its own fix.
 - **Apply.** The tick starts `claude-factory-update apply <sha>` as its own
   unit, `claude-factory-update.service` (30 minutes at most), and ends; ticks
   hold while it runs. It fast-forwards the clone to exactly the sha the check
@@ -500,7 +502,8 @@ lands without a person's merge.
   `claude-factory-bootcheck --summary`, and checks the installed scripts still
   parse (`bash -n`, `node --check`). Anything but `boot: ok` and parsing
   scripts checks out the previous `factorySha`, re-runs its install.sh and logs
-  `update: rolled back to <sha> (<reason>)`; that `main` sha is not tried again.
+  `update: rolled back to <sha> (<reason>)`; that `factory/` is not tried again
+  until a commit changes it.
 - **Refresh.** The same unit, at most hourly and only on a tick with no session
   running (plugins and gstack change files a running session may still read),
   runs `claude plugin marketplace update` and `claude plugin update` for
@@ -519,7 +522,7 @@ lands without a person's merge.
 **Canary order.** `update after kevin-omarchy` in Keith's repos.conf makes his
 machine update only once kevin-omarchy's heartbeat has shown the same
 `factorySha` (or an older one with the same `factory/`) with `boot: ok` on 3
-of its ticks. The machine reads that
+of its ticks; a tick that ended in an error starts the count again. The machine reads that
 heartbeat from the board (`GET /api/machines`) with its token; until the board
 answers it, the machine waits and says why in `update.reason`.
 

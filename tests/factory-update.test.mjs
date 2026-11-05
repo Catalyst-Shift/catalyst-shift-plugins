@@ -275,6 +275,11 @@ test("a failing boot check after the install rolls back to the previous factoryS
     let r = x.run(["check", "--force"]);
     assert.notEqual(x.decision(r), `=> apply ${sha}`);
     assert.equal(x.upd().state, "rolled-back");
+    // A later commit outside factory/ doesn't re-install the same broken factory/.
+    const docs = x.commit("README.md", "r2\n");
+    r = x.run(["check", "--force"]);
+    assert.notEqual(x.decision(r), `=> apply ${docs}`);
+    assert.equal(x.upd().state, "rolled-back");
     const next = x.commit("factory/dispatch", "v3\n");
     r = x.run(["check", "--force"]);
     assert.equal(x.decision(r), `=> apply ${next}`);
@@ -386,6 +391,13 @@ test("canary: a commit outside factory/ after the leader's install neither stall
     const c = x.commit("factory/dispatch", "v3\n");
     beat("--output=/tmp/x", "2026-11-05T10:06:00Z");
     assert.match(x.lines(check())[0], new RegExp(`waiting: kevin-omarchy is not on ${c.slice(0, 7)}`));
+    // A tick that ended in an error is no healthy tick: the count starts again.
+    beat(c, "2026-11-05T10:08:00Z");
+    assert.match(x.lines(check())[0], /for 1 of 3 ticks/);
+    writeFileSync(fleet, JSON.stringify({ machines: [{ machine: "kevin-omarchy", heartbeat: { installed: { factorySha: c }, update: { boot: "boot: ok" }, lastPassAt: "2026-11-05T10:10:00Z", lastPassResult: "error (exit 1)" } }] }));
+    assert.match(x.lines(check())[0], /waiting: kevin-omarchy's last tick ended in an error \(error \(exit 1\)\)/);
+    beat(c, "2026-11-05T10:12:00Z");
+    assert.match(x.lines(check())[0], /for 1 of 3 ticks/);
   } finally {
     x.done();
   }
@@ -574,4 +586,7 @@ test("every systemd-run in the dispatcher's update step reads stdin from /dev/nu
   const step = s.slice(s.indexOf("update_step() {"), s.indexOf("\n}\n", s.indexOf("update_step() {")));
   assert.match(step, /"\$UPDATER" apply "\$target" <\/dev\/null/);
   assert.match(step, /"\$UPDATER" "\$\{args\[@\]\}" <\/dev\/null/);
+  // The update runs first in the tick, so a version that fails a later step still pulls its fix.
+  const main = s.slice(s.indexOf("trap pass_done EXIT"));
+  assert.ok(main.indexOf("\nupdate_step\n") > 0 && main.indexOf("\nupdate_step\n") < main.indexOf("cleanup \"$dir\""), "update_step before cleanup");
 });
