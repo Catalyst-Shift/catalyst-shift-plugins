@@ -430,15 +430,20 @@ test("the heartbeat carries the machine's state and no env values or tokens", as
   const [hb] = body.events;
   assert.equal(hb.type, "heartbeat");
   assert.ok(!Number.isNaN(Date.parse(hb.at)));
+  // Pin the long-stable fields only. A card that adds a heartbeat field tests that field in its own
+  // test (see the CAT-1487 installed.json test); an exact-body pin made every such card edit this
+  // one line, so two open PRs always conflicted here.
+  const STABLE = ["type", "machine", "dispatcher", "pausedUntil", "lastPassAt", "lastPassResult", "runningCap", "running", "reviewWaiting", "reviewCap"];
   assert.deepEqual(
-    { ...hb, at: undefined },
+    Object.fromEntries(STABLE.map((k) => [k, hb[k]])),
     {
-      type: "heartbeat", at: undefined, machine: "kevin-omarchy", dispatcher: "running", pausedUntil: null,
+      type: "heartbeat", machine: "kevin-omarchy", dispatcher: "running", pausedUntil: null,
       lastPassAt: "2026-11-03T10:05:00-05:00", lastPassResult: "ok", runningCap: 2,
       running: [{ card: "CAT-7", kind: "build", pr: null, repo: "lbl-nextjs", startedAt: "2026-11-03T10:00:00Z" }, { card: null, kind: "review", pr: null, repo: null, startedAt: null }],
-      reviewWaiting: 1, reviewCap: 3, installed: null, control: "local", controlVersion: null,
+      reviewWaiting: 1, reviewCap: 3,
     },
   );
+  assert.equal(hb.control, "local");
   const s = JSON.stringify(body);
   assert.ok(!s.includes(TOKEN) && !s.includes("zzzzzzzzzzzz"));
   // Paused shows as paused.

@@ -19,6 +19,7 @@ purpose: the block is byte-identical across surfaces and ends the file.
 | The dispatcher and installer are valid bash, hardcode no home path, and every `claude` / `systemd-run` call reads stdin from `/dev/null` | `tests/factory.test.mjs` | CAT-1298 |
 | A `factory-reflect` or `/correct` PR never touches a gate (`.github/`, rulesets, CODEOWNERS, required checks, the Ways of Working block, the ways-of-working skill) | `validate` step "A factory-reflect or /correct PR touches no gate", `scripts/retro-guard.mjs`, `tests/retro-guard.test.mjs` | CAT-1433 |
 | A merged factory PR is retro'd once: `retro: clean` or a `/reflect` session | `tests/factory-retro.test.mjs` | CAT-1433 |
+| The heartbeat test pins only the long-stable fields; a card that adds a heartbeat field tests it in its own test, so parallel PRs don't conflict on one exact-body line | `tests/factory-stream.test.mjs` "the heartbeat carries the machine's state" (`STABLE` list) | CAT-1487 |
 
 ## Ways of Working — Catalyst Shift
 
