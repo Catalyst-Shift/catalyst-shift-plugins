@@ -350,6 +350,72 @@ exit 0
   return x;
 }
 
+// CAT-1510: the first status event says what the session is for.
+async function firstStatus(args, extraState) {
+  const { t, home: h, state } = home();
+  const b = board();
+  await b.up();
+  const fake = join(t, "fake-claude");
+  writeFileSync(fake, `#!/usr/bin/env node\nconsole.log(JSON.stringify({ type: "result", subtype: "success", is_error: false }));\n`, { mode: 0o755 });
+  const env = { HOME: h, PATH: `${NODE_DIR}:/usr/bin:/bin`, FACTORY_INGEST_TOKEN: TOKEN, FACTORY_INGEST_URL: b.url(), FACTORY_STREAM_FLUSH_MS: "50" };
+  const code = await new Promise((res) => spawn(process.execPath, [STREAM, "run", ...args, "--", fake, "-p", "x"], { env }).on("close", res));
+  assert.equal(code, 0);
+  const statuses = b.bodies.flatMap((x) => x.events).filter((e) => e.type === "status");
+  await b.down();
+  return { statuses, state };
+}
+
+test("the first status event carries kind, pr and repo; an outside review adds author and dependency", async () => {
+  let r = await firstStatus(["--unit", "factory-review-my-repo-pr-88", "--card", "", "--repo", "my-repo", "--kind", "review", "--pr", "88", "--author", "dependabot[bot]", "--dependency", "true"]);
+  const [rev] = r.statuses;
+  assert.equal(rev.stage, "review");
+  assert.equal(rev.card, null);
+  assert.deepEqual({ kind: rev.kind, pr: rev.pr, repo: rev.repo, author: rev.author, dependency: rev.dependency }, { kind: "review", pr: 88, repo: "my-repo", author: "dependabot[bot]", dependency: true });
+  assert.equal(r.statuses[1].kind, undefined, "only the first event carries them");
+  assert.equal(JSON.parse(read(join(r.state, "stream", "factory-review-my-repo-pr-88.json"))).pr, 88);
+
+  r = await firstStatus(["--unit", "factory-review-my-repo-pr-9", "--repo", "my-repo", "--kind", "review", "--pr", "9", "--author", "kev"]);
+  assert.equal(r.statuses[0].author, "kev");
+  assert.equal(r.statuses[0].dependency, undefined);
+
+  r = await firstStatus(["--unit", "factory-conflict-my-repo-pr-21", "--repo", "my-repo", "--kind", "conflict", "--pr", "21"]);
+  assert.deepEqual({ stage: r.statuses[0].stage, kind: r.statuses[0].kind, pr: r.statuses[0].pr, repo: r.statuses[0].repo, author: r.statuses[0].author }, { stage: "conflict", kind: "conflict", pr: 21, repo: "my-repo", author: undefined });
+
+  r = await firstStatus(["--unit", "factory-cat-5", "--card", "CAT-5", "--repo", "my-repo", "--kind", "build"]);
+  assert.deepEqual({ stage: r.statuses[0].stage, kind: r.statuses[0].kind, card: r.statuses[0].card, repo: r.statuses[0].repo }, { stage: "start", kind: "build", card: "CAT-5", repo: "my-repo" });
+  assert.ok(!("pr" in r.statuses[0]));
+});
+
+test("with no --kind the stream falls back to the unit name; a --kind review makes a reviewer", async () => {
+  for (const [unit, kind] of [["factory-review-my-repo-pr-3", "review"], ["factory-review-cat-4", "review"], ["factory-conflict-my-repo-pr-3", "conflict"], ["factory-ci-my-repo-pr-3", "ci"], ["factory-retro-cat-4", "retro"], ["factory-cat-4", "build"], ["whatever", "build"]]) {
+    assert.equal(S.kindOf(undefined, unit), kind, unit);
+  }
+  assert.equal(S.kindOf("bogus", "factory-ci-x-pr-1"), "ci");
+  assert.equal(S.kindOf("review", "factory-cat-4"), "review");
+  const old = await firstStatus(["--unit", "factory-conflict-my-repo-pr-21", "--repo", "my-repo"]);
+  assert.equal(old.statuses[0].kind, "conflict");
+  assert.equal(old.statuses[0].stage, "conflict");
+  // Role follows --kind: a review kind on a build-style unit name starts at review.
+  const rev = await firstStatus(["--unit", "factory-cat-6", "--kind", "review"]);
+  assert.equal(rev.statuses[0].stage, "review");
+  assert.equal(rev.statuses[0].note, "reviewer session started");
+});
+
+test("the dispatcher's six launch sites pass their kind, pr and (outside review) author and dependency", () => {
+  const src = read(DISPATCH);
+  const sites = src.split("\n").filter((l) => /\brun_unit "/.test(l) && !l.startsWith("run_unit()"));
+  assert.equal(sites.length, 6, sites.join("\n"));
+  const has = (re) => assert.equal(sites.filter((l) => re.test(l)).length, 1, `${re}\n${sites.join("\n")}`);
+  has(/^\s*RUN_KIND=build run_unit "factory-\$key"/);
+  has(/^\s*RUN_KIND=review RUN_PR=\$number run_unit "factory-review-\$key"/);
+  has(/^\s*RUN_KIND=conflict RUN_PR=\$number run_unit "\$name"/);
+  has(/^\s*RUN_KIND=ci RUN_PR=\$number run_unit "\$name"/);
+  has(/^\s*RUN_KIND=review RUN_PR=\$number RUN_AUTHOR=\$author RUN_DEP=\$dep run_unit "\$name"/);
+  has(/^\s*RUN_KIND=retro RUN_PR=\$number run_unit "\$name"/);
+  assert.match(src, /--kind "\$RUN_KIND"/);
+  assert.match(src, /--pr "\$RUN_PR"/);
+});
+
 test("the heartbeat carries the machine's state and no env values or tokens", async () => {
   const x = heartbeatHome(true);
   const b = board();
@@ -369,7 +435,7 @@ test("the heartbeat carries the machine's state and no env values or tokens", as
     {
       type: "heartbeat", at: undefined, machine: "kevin-omarchy", dispatcher: "running", pausedUntil: null,
       lastPassAt: "2026-11-03T10:05:00-05:00", lastPassResult: "ok", runningCap: 2,
-      running: [{ card: "CAT-7", repo: "lbl-nextjs", startedAt: "2026-11-03T10:00:00Z" }, { card: null, repo: null, startedAt: null }],
+      running: [{ card: "CAT-7", kind: "build", pr: null, repo: "lbl-nextjs", startedAt: "2026-11-03T10:00:00Z" }, { card: null, kind: "review", pr: null, repo: null, startedAt: null }],
       reviewWaiting: 1, reviewCap: 3, installed: null, control: "local", controlVersion: null,
     },
   );
@@ -457,7 +523,7 @@ test("with a token, the dispatcher runs each session under claude-factory-stream
   const at = args.indexOf(join(x.bin, "stream"));
   assert.ok(at > 0, args.join(" "));
   // node by its real path, then the streamer.
-  assert.deepEqual(args.slice(at - 1, at + 10), ["/bin/bash", join(x.bin, "stream"), "run", "--unit", "factory-cat-3", "--card", "CAT-3", "--repo", "my-repo", "--", join(x.bin, "claude")]);
+  assert.deepEqual(args.slice(at - 1, at + 12), ["/bin/bash", join(x.bin, "stream"), "run", "--unit", "factory-cat-3", "--card", "CAT-3", "--repo", "my-repo", "--kind", "build", "--", join(x.bin, "claude")]);
   assert.ok(args.includes("--property=UnsetEnvironment=ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN"));
   assert.equal(read(join(x.t, "stream-calls")), "drain token=set\n");
   assert.ok(!existsSync(join(x.t, "claude-saw-token")), "a claude call got the token");
