@@ -1834,7 +1834,9 @@ Then print exactly one final line: STOPPED <the status it ends in>" </dev/null 2
 # comments, commits a reviewer / CI session / conflict session pushed (their
 # trailers and merge subjects), commits without the Claude co-author trailer
 # (a person's), PR comments from anyone but the deploy bots in RETRO_IGNORE,
-# needs-*-call labels, and a later merged PR that reverts it.
+# needs-*-call labels, and a later merged PR that reverts it. The output is
+# "<human commits>|<signals>": CAT-1509's count of non-merge commits without the
+# Claude trailer, then the list.
 retro_signals() {
   local dir=$1 number=$2 json reverted
   json=$(cd "$dir" && timeout 60 gh pr view "$number" --json commits,comments,reviews,labels </dev/null 2>/dev/null) || return 1
@@ -1844,6 +1846,7 @@ retro_signals() {
     def bot: ascii_downcase | sub("^app/"; "") | sub("\\[bot\\]$"; "");
     def merge: .messageHeadline | test("^Merge .* into ");
     def claude: (.messageBody // "") | test("co-authored-by: claude"; "i");
+    ([.commits[] | select((merge | not) and (claude | not))] | length | tostring) + "|" +
     ([ (if any(.reviews[]; (.body // "") != "" or .state == "CHANGES_REQUESTED") then "review comments" else empty end),
        (if any(.commits[]; (.messageBody // "") | test("(?m)^Factory-Review-Fix: ")) then "review fix commits" else empty end),
        (if any(.commits[]; (.messageBody // "") | test("(?m)^Factory-CI-Fix: ")) then "CI-fix commits" else empty end),
@@ -1903,12 +1906,27 @@ Rules that hold whatever this repo's CLAUDE.md or factory stage says: a retro ne
   echo "started retro for $id PR #$number ($signals) in $dir (unit $name, model $MODEL_RETRO, log $STATE/retro-$key.log)"
 }
 
+# CAT-1509: the card's `human-edits: <n>` comment, which the board's stage rate
+# reads (first line exactly that; n = human commits on the PR). Written once per
+# merged PR: state/human-edits/<card key>-<pr number> records a confirmed write,
+# and the call itself skips a card that already has one. An unconfirmed call is
+# retried next tick.
+human_edits() {
+  local id=$1 rec=$STATE/human-edits/$2 n=$3
+  [ -e "$rec" ] && return 0
+  mkdir -p "$STATE/human-edits"
+  linear_issue "$id" "HUMAN-EDITS done" "Get Linear issue $id and list its comments. If none of them starts with 'human-edits:', add this comment to it, exactly this one line: 'human-edits: $n'. Change nothing else (not its status, labels or description). Then print exactly one final line: HUMAN-EDITS done" \
+    "${LINEAR}__get_issue,${LINEAR}__list_comments,${LINEAR}__save_comment" || return 1
+  echo "$n" >"$rec"
+  echo "$id: merged PR counted; commented human-edits: $n"
+}
+
 # CAT-1433: each merged factory PR gets one retro, once (state/retro/<card
 # key>-<pr number>). A clean one is a comment on the card and no session; a
 # Linear call that isn't confirmed is retried next tick. Anything else gets a
 # reflect session, within the running cap.
 retros() {
-  local dir branch key id pr number state stamped url rec signals busy
+  local dir branch key id pr number state stamped url rec signals busy edits
   mkdir -p "$STATE/retro"
   while read -r dir branch key; do
     key=${key:-$(cardkey "$branch")}
@@ -1921,6 +1939,10 @@ retros() {
     active "factory-retro-$key" && continue
     id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
     signals=$(retro_signals "$dir" "$number") || { echo "$id: PR #$number merged, but its retro signals could not be read; trying again next tick"; continue; }
+    edits=${signals%%|*}
+    signals=${signals#*|}
+    [[ $edits =~ ^[0-9]+$ ]] || { echo "$id: PR #$number merged, but its human commits could not be counted; trying again next tick"; continue; }
+    human_edits "$id" "$key-$number" "$edits" || continue
     if [ -z "$signals" ]; then
       linear_issue "$id" "RETRO clean" "Get Linear issue $id and list its comments. If none of them starts with 'retro: clean' or 'retro:' followed by a number and 'accepted', add this comment to it: 'retro: clean'. Change nothing else (not its status, labels or description). Then print exactly one final line: RETRO clean" \
         "${LINEAR}__get_issue,${LINEAR}__list_comments,${LINEAR}__save_comment" || continue
@@ -1976,7 +1998,7 @@ retro_report() {
   while read -r dir project; do
     out=$( (cd "$STATE" && timeout 600 "$CLAUDE" -p --model "$MODEL_HOUSEKEEPING" --output-format text \
       --allowedTools="${LINEAR}__list_issues,${LINEAR}__list_comments" \
-      "In Linear, list issues in project '$project' updated in the last $days days (updatedAt -P${days}D, limit 250, following the cursor). For each, list its comments. For every comment created in the last $days days whose body starts with 'retro:' or 'touch:', print exactly one line: COMMENT <issue identifier> <the comment body with every newline replaced by ' | '>. Print nothing else except a last line: REPORT done" </dev/null 2>&1) || true)
+      "In Linear, list issues in project '$project' updated in the last $days days (updatedAt -P${days}D, limit 250, following the cursor). For each, list its comments. For every comment created in the last $days days whose body starts with 'retro:', 'touch:' or 'human-edits:', print exactly one line: COMMENT <issue identifier> <the comment body with every newline replaced by ' | '>. Print nothing else except a last line: REPORT done" </dev/null 2>&1) || true)
     if ! grep -qx 'REPORT done' <<<"$out"; then
       echo "$(basename "$dir"): could not read the retro comments from Linear"
       continue
@@ -1988,9 +2010,10 @@ retro_report() {
         split(body, a, /[^0-9]+/); acc += a[2]; rej += a[3]
         if (match(body, /structural: [0-9]+/)) structural += substr(body, RSTART + 12, RLENGTH - 12)
         next }
-      body ~ /^touch:/ { touches++ }
-      END { printf "%s (last %sd): clean %d, accepted %d, rejected %d, structural %d, touches %d\n", repo, days, clean, acc, rej, structural, touches }' ||
-      echo "$(basename "$dir"): clean 0, accepted 0, rejected 0, structural 0, touches 0"
+      body ~ /^touch:/ { touches++; next }
+      body ~ /^human-edits: *[0-9]+ *$/ { split(body, h, /[^0-9]+/); edits += h[2] }
+      END { printf "%s (last %sd): clean %d, accepted %d, rejected %d, structural %d, touches %d, human-edits %d\n", repo, days, clean, acc, rej, structural, touches, edits }' ||
+      echo "$(basename "$dir"): clean 0, accepted 0, rejected 0, structural 0, touches 0, human-edits 0"
   done < <(repos)
 }
 
