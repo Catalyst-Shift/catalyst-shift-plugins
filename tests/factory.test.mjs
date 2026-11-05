@@ -662,8 +662,8 @@ test("every builder and reviewer session passes --model, and Linear calls use th
   for (const l of calls) assert.match(l, /--model "\$MODEL_HOUSEKEEPING"/, `a housekeeping call without the housekeeping model: ${l.trim()}`);
 });
 
-test("install.sh's boot check skips label, offset, review-authors, model, stages and update lines like the dispatcher does", () => {
-  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\|stages\[\[:space:\]\]\|update\[\[:space:\]\]\)'/;
+test("install.sh's boot check skips label, offset, review-authors, model, stages, prs and update lines like the dispatcher does", () => {
+  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\|stages\[\[:space:\]\]\|prs\[\[:space:\]\]\|update\[\[:space:\]\]\)'/;
   assert.match(read(BOOTCHECK), skip);
   assert.match(read(DISPATCH), skip);
   // CAT-1562: the self-update's repo refresh reads the same repo lines.
@@ -2157,11 +2157,13 @@ esac
     writeFileSync(fixture, JSON.stringify([pr(46, { mergeable: "MERGEABLE" }), pr(47, { mergeable: "MERGEABLE", isDraft: true })]));
     r = tick();
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(r.stdout, "", r.stdout);
+    // CAT-1542: this machine has no board token, so the tick says once that its open PRs come from GitHub.
+    const quiet = (out) => out.replace(/^open PRs come from GitHub this tick: no machine token for the board\n/, "");
+    assert.equal(quiet(r.stdout), "", r.stdout);
     writeFileSync(fixture, "[]");
     r = tick();
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(r.stdout, "", r.stdout);
+    assert.equal(quiet(r.stdout), "", r.stdout);
   } finally {
     rmSync(t, { recursive: true, force: true });
   }

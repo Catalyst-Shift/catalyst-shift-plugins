@@ -178,9 +178,31 @@ check has finished, while the head and `updated_at` stay the same, for at most
 and ask over REST, with its ETag, only for a branch whose PR is no longer open.
 A fresh machine with no `state/etag` does a plain first read. Measured on
 omarchy over 7 repos: the first tick 26 REST reads, each idle tick after it 7
-reads that all came back 304 (no quota) and no GraphQL. When the board's
-webhook feed (CAT-1541/1542) lands it replaces this list read, and the ETag
-path becomes its fallback.
+reads that all came back 304 (no quota) and no GraphQL.
+
+**Open PRs from the board (CAT-1542):** with the machine token, each tick
+first asks the Factory Board for each repo's open PRs
+(`GET /api/factory/prs?repo=<GitHub repo name>`, the token on curl's stdin as
+for `/api/factory/stages`). The board keeps them from GitHub's webhooks
+(CAT-1541) and reconciles a quiet repo before it answers (CAT-1560), so a
+fresh answer replaces both the list read and every per-PR mergeability read
+for that repo: that repo costs no GitHub quota for the tick. The answer also
+carries whether the head is stamped (`reviewedAtHead`) and its check summary;
+a PR the board shows all-green is not asked for its required checks. One
+`git ls-remote` per repo (no API quota) checks the answer against origin: a
+PR whose branch is on origin at another sha means the board trails GitHub,
+and a PR whose branch isn't on origin is treated as a fork. A repo whose
+answer is `stale: true`, fails, can't be read (a field not in the shape GitHub
+would send, such as labels that aren't plain names), trails origin, or has a
+PR on a base other than the default branch (the board only marks mergeability
+unknown after a push to the default branch), or whose origin isn't a
+Catalyst-Shift repo on GitHub, reads GitHub's list above instead, with one
+line (`open PRs in <repo> come from GitHub this tick: <why>`). A board that
+gives no HTTP answer at all is not asked again that tick (each call can wait
+20 seconds). No token, or `prs github` in repos.conf (the rollback), is one
+line for the tick and every repo reads GitHub. The board is never trusted for
+a merge decision: pushes, comments, labels, `gh pr merge --auto` and the merge
+rule's founder-gate check at the head all go to GitHub.
 
 A repo GitHub doesn't answer for gets one journal line (`listing open PRs
 failed in <repo>; no conflict, CI or review sessions there this tick: …`). A

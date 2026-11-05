@@ -67,9 +67,12 @@
 # card reviewer turns on auto-merge by that stage: 2 = Low, 3 = Low and Medium,
 # 4 = any risk. Without the board it falls back to the cache, then to the old
 # CLAUDE.md line `Factory stage: 2`; "stages claude-md" in repos.conf skips the board.
+# It also reads each repo's open PRs from the board (CAT-1542; GET
+# /api/factory/prs), and GitHub's list only when that answer is stale or fails;
+# "prs github" in repos.conf skips the board.
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
-#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...", "model <job> <model>", "stages board|claude-md")
+#   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...", "model <job> <model>", "stages board|claude-md", "prs board|github")
 #   stages: claude-factory-dispatch merge-rule <repo> <risk> --pr <number> --dry-run   (whether a reviewer may self-merge that PR now: its stage, its founder gate and its deep paths; changes nothing)
 #   pause:  touch ~/.local/state/claude-factory/paused
 #   retros: claude-factory-dispatch retro --since 7d   (clean, accepted, rejected and structural retros, and touches, per repo)
@@ -210,7 +213,7 @@ waiting() {
   echo "$n"
 }
 
-repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]]|update[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
+repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]]|prs[[:space:]]|update[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
 
 # A finished session's worktree goes once nothing in it would be lost. Each
 # worktree has the name of the unit that uses it: factory-<card key> (builder),
@@ -900,7 +903,8 @@ open_prs_rest() {
 OPEN_PRS_SHAPE='[.[] | {number, headRefOid: .head.sha, headRefName: .head.ref, baseRefName: .base.ref,
   isDraft: (.draft == true), author: {login: (.user.login // "")}, labels: [(.labels // [])[] | {name}],
   isCrossRepository: ((.head.repo.full_name // "") != (.base.repo.full_name // "")),
-  body: (.body // ""), url: .html_url, updatedAt: .updated_at, mergeable: ($m[.number | tostring] // "UNKNOWN")}]'
+  reviewedAtHead: ((.head.sha // "") as $sha | $sha != "" and ((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b"))),
+  url: .html_url, updatedAt: .updated_at, mergeable: ($m[.number | tostring] // "UNKNOWN")}]'
 open_prs_fetch() {
   local raw
   raw=$(open_prs_rest "$1") || return 1
@@ -948,6 +952,15 @@ open_prs_mergeable() {
     fi
     echo "$number $m" >>"$into"
   done <<<"$prs"
+  etag_prune "$cache" "${!open[@]}"
+}
+
+# The cached reads under <cache> of PRs not among the open numbers given go.
+etag_prune() {
+  local cache=$1 f number
+  local -A open=()
+  shift
+  for number; do open[$number]=1; done
   for f in "$cache"/pr-* "$cache"/checks-* "$cache"/green-*; do
     [ -e "$f" ] || continue
     number=${f##*/}; number=${number#*-}; number=${number%%.*}
@@ -955,19 +968,161 @@ open_prs_mergeable() {
   done
 }
 
+# CAT-1542: the board keeps every factory PR's state from GitHub's webhooks
+# (CAT-1541, CAT-1560) and serves a repo's open PRs at
+# GET /api/factory/prs?repo=<name>, read with the machine token the way
+# stages_fetch reads /api/factory/stages. A fresh answer replaces the GitHub
+# list and every per-PR mergeability read for that repo, so a tick costs no
+# GitHub quota there. The board is only ever a list to sweep from: every write
+# (push, comment, label, gh pr merge --auto) and the merge rule's founder-gate
+# check at the head still go to GitHub, and a session re-reads its PR's head
+# before it pushes or stamps. "prs github" in repos.conf skips the board (the
+# rollback): every repo is read from GitHub as before (CAT-1540, CAT-1545).
+PRS_URL=${CLAUDE_FACTORY_PRS_URL:-https://os.catalystshift.ai/api/factory/prs}
+PRS_MODE=$(awk '$1 == "prs" { print $2; exit }' "$CONF")
+case "$PRS_MODE" in
+  ''|board) PRS_MODE=board ;;
+  github) ;;
+  *) echo "ignoring 'prs $PRS_MODE' in $CONF: it is board or github" >&2; PRS_MODE=board ;;
+esac
+
+# The board's answer in the shape the sweeps read (open_prs_rest's, through
+# OPEN_PRS_SHAPE). The board has no body and no fork flag: reviewedAtHead is
+# its own read of the `Reviewed: <head sha>` line, and a PR whose head branch
+# is not on origin counts as a fork (the sweeps then leave it alone). $tips maps
+# each origin branch to its tip, $web is the repo's GitHub page.
+BOARD_PRS_SHAPE='[.prs[] | {number, headRefOid: .headSha, headRefName: .headRef, baseRefName: .baseRef,
+  isDraft: (.draft == true), author: {login: (.author // "")}, labels: [(.labels // [])[] | {name: .}],
+  isCrossRepository: ($tips[.headRef] == null), reviewedAtHead: (.reviewedAtHead == true),
+  url: "\($web)/pull/\(.number)", updatedAt: .updatedAt,
+  mergeable: ((.mergeable // "") | ascii_upcase | if . == "MERGEABLE" or . == "CONFLICTING" then . else "UNKNOWN" end),
+  checksState: (.checks.state // null)}]'
+
+# What open_prs_board checks before it trusts an answer: the repo it asked
+# about, and every field a sweep splits on whitespace or sends to GitHub in a
+# shape GitHub itself could have sent (plain refs and logins, string labels,
+# a known check state), so a bad answer reads GitHub instead of dropping a
+# no-factory-review label or shifting a sweep's fields.
+BOARD_PRS_VALID='type == "object" and (.repo | type) == "string" and (.repo | ascii_downcase) == ($r | ascii_downcase)
+  and (.stale | type) == "boolean" and (.prs | type) == "array"
+  and all(.prs[]; type == "object" and (.number | type) == "number" and .number > 0 and .number == (.number | floor)
+    and (.headSha | type) == "string" and (.headSha | test("^[0-9a-f]{40}$"))
+    and (.headRef | type) == "string" and (.headRef | test("^[A-Za-z0-9._/@+-]+$"))
+    and (.baseRef | type) == "string" and (.baseRef | test("^[A-Za-z0-9._/-]+$"))
+    and ((.author // "") | type) == "string" and ((.author // "") | test("^[A-Za-z0-9._/\\[\\]-]*$"))
+    and ((.labels // []) | type) == "array" and all((.labels // [])[]; type == "string" and (test("[[:cntrl:]]") | not))
+    and ((.updatedAt // "") | type) == "string" and ((.updatedAt // "") | test("^[^[:space:]]*$"))
+    and (.checks.state // null | . == null or . == "pending" or . == "green" or . == "red"))'
+
+# The org the board serves (its ALLOWED_OWNERS): a repo whose origin is
+# elsewhere, such as a personal fork with the same name, reads GitHub.
+PRS_OWNER=Catalyst-Shift
+
+# The repo's GitHub page from its origin (https or ssh); fails for any other
+# host, or an owner other than PRS_OWNER.
+repo_web() {
+  local u
+  u=$(git -C "$1" remote get-url origin 2>/dev/null </dev/null) || return 1
+  u=${u%/}; u=${u%.git}
+  case $u in
+    git@github.com:*) u=${u#git@github.com:} ;;
+    ssh://git@github.com/*) u=${u#ssh://git@github.com/} ;;
+    https://github.com/*) u=${u#https://github.com/} ;;
+    *) return 1 ;;
+  esac
+  [[ $u =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 1
+  local owner=${u%%/*}
+  [ "${owner,,}" = "${PRS_OWNER,,}" ] || return 1
+  printf 'https://github.com/%s' "$u"
+}
+
+# Writes <into> from the board's answer for a repo and returns 0, or prints why
+# it can't be used (a stale answer, a failed call, an answer it can't read, a
+# PR head the board is behind on, or a PR on a base other than the default
+# branch) and returns 1, so the caller reads GitHub. It returns 2 when the
+# board could not be reached at all (no HTTP answer), so the tick stops asking
+# it: each call can wait 20 seconds, and seven of them would outlast the tick.
+# The head check is one git ls-remote, which costs no API quota: a PR whose
+# branch is on origin at another sha means the board missed or hasn't yet had
+# that push, and the whole answer is set aside for this tick. The board marks
+# mergeability unknown only after a push to the default branch, so a PR
+# stacked on another branch could keep a stale answer: such a repo reads GitHub.
+open_prs_board() {
+  local dir=$1 into=$2 name code heads tips web behind def stacked
+  name=$(repo_name "$dir")
+  web=$(repo_web "$dir") || { echo "its origin is not a $PRS_OWNER repo on GitHub"; return 1; }
+  code=$(control_call "$into.board" "$PRS_URL?repo=$(jq -rn --arg r "$name" '$r | @uri')")
+  if [ "$code" != 200 ]; then
+    echo "the board answered ${code:-nothing}$(jq -r 'if type == "object" and (.code | type) == "string" then " " + .code else empty end' "$into.board" 2>/dev/null || true)"
+    rm -f "$into.board"
+    [[ ${code:-000} =~ ^[1-9][0-9][0-9]$ ]] || return 2
+    return 1
+  fi
+  if ! jq -e --arg r "$name" "$BOARD_PRS_VALID" "$into.board" >/dev/null 2>&1; then
+    echo "the board's answer could not be read"
+    rm -f "$into.board"
+    return 1
+  fi
+  if [ "$(jq -r .stale "$into.board")" = true ]; then
+    echo "the board says its list is stale"
+    rm -f "$into.board"
+    return 1
+  fi
+  heads=$(cd "$dir" && timeout 60 git ls-remote --heads origin </dev/null 2>/dev/null) || {
+    echo "git ls-remote could not read origin's branches to check the board against"
+    rm -f "$into.board"
+    return 1
+  }
+  tips=$(jq -Rn '[inputs | split("\t") | select(length == 2) | select(.[0] | test("^[0-9a-f]{40}$"))
+    | {key: (.[1] | ltrimstr("refs/heads/")), value: .[0]}] | from_entries' <<<"$heads") || tips='{}'
+  behind=$(jq -r --argjson tips "$tips" '[.prs[] | select($tips[.headRef] != null and $tips[.headRef] != .headSha) | "#\(.number)"] | join(", ")' "$into.board")
+  if [ -n "$behind" ]; then
+    echo "the board is behind origin on $behind"
+    rm -f "$into.board"
+    return 1
+  fi
+  def=$(git -C "$dir" symbolic-ref --short refs/remotes/origin/HEAD </dev/null 2>/dev/null || true)
+  def=${def#origin/}
+  stacked=$(jq -r --arg def "${def:-main}" '[.prs[] | select(.baseRef != $def) | "#\(.number)"] | join(", ")' "$into.board")
+  if [ -n "$stacked" ]; then
+    echo "$stacked target a branch other than ${def:-main}, whose mergeability the board doesn't follow"
+    rm -f "$into.board"
+    return 1
+  fi
+  if ! jq --argjson tips "$tips" --arg web "$web" "$BOARD_PRS_SHAPE" "$into.board" >"$into.tmp" 2>/dev/null; then
+    echo "the board's answer could not be read"
+    rm -f "$into.board" "$into.tmp"
+    return 1
+  fi
+  rm -f "$into.board"
+  mv "$into.tmp" "$into"
+}
+
 # Once per tick, before the sweeps: state/open-prs/<repo slug>.json for each
 # repo GitHub answered for. A repo it didn't gets one line, and no conflict, CI
 # or review session this tick. A spent quota gets one line for the whole tick,
 # naming when it resets (rate_limit costs no quota), and the repos after it are
 # not asked.
+#
+# CAT-1542: each repo is asked of the board first (open_prs_board), and read
+# from GitHub only when the board's answer can't be used, with one line saying
+# why. No token or "prs github" is one line for the tick, and every repo reads
+# GitHub.
 OPEN_PRS_TICK=
 OPEN_PRS_LIMITED=
 open_prs_refresh() {
-  local dir _ slug f raw merge reset when
+  local dir _ slug f raw merge reset when why rc board=1
   local -A seen=()
   rm -rf "$STATE/open-prs"
   mkdir -p "$STATE/open-prs"
   OPEN_PRS_TICK=1
+  if [ "$PRS_MODE" = github ]; then
+    board=
+    echo "open PRs come from GitHub this tick: 'prs github' in repos.conf"
+  elif [ -z "$INGEST_TOKEN" ]; then
+    board=
+    echo "open PRs come from GitHub this tick: no machine token for the board"
+  fi
   while read -r dir _; do
     slug=$(reposlug "$dir")
     f=$STATE/open-prs/$slug.json
@@ -979,6 +1134,20 @@ open_prs_refresh() {
       continue
     fi
     seen[$slug]=$dir
+    if [ -n "$board" ]; then
+      rc=0
+      why=$(open_prs_board "$dir" "$f") || rc=$?
+      if [ "$rc" = 0 ]; then
+        etag_prune "$ETAGS/$slug" $(jq -r '.[].number' "$f")
+        continue
+      fi
+      if [ "$rc" = 2 ]; then
+        board=
+        echo "open PRs in $dir and the repos after it come from GitHub this tick: $why"
+      else
+        echo "open PRs in $dir come from GitHub this tick: $why"
+      fi
+    fi
     if raw=$(open_prs_rest "$dir" 2>"$STATE/gh-pr-list.err"); then
       mkdir -p "$ETAGS/$slug"
       open_prs_mergeable "$dir" "$raw" "$ETAGS/$slug" "$f.merge"
@@ -1251,23 +1420,26 @@ required_checks() {
 # reviewer, conflict or CI session running on it, or a required check still
 # running (the failing set isn't final yet).
 ci_fixes() {
-  local dir _ slug json prs number sha branch base draft called optout conflictcall mergeable key checks fails links pending list
+  local dir _ slug json prs number sha branch base draft called optout conflictcall mergeable board key checks fails links pending list
   while read -r dir _; do
     slug=$(reposlug "$dir")
     mkdir -p "$STATE/ci/$slug"
     json=$(open_prs "$dir") || continue
     if ! prs=$(jq -r '.[] | select(.isCrossRepository | not) | [.labels[].name] as $l
-        | "\(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \(.isDraft) \($l | index("needs-ci-call") != null) \($l | index("no-factory-review") != null) \($l | index("needs-conflict-call") != null) \(.mergeable) \(.updatedAt // "")"' <<<"$json"); then
+        | "\(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \(.isDraft) \($l | index("needs-ci-call") != null) \($l | index("no-factory-review") != null) \($l | index("needs-conflict-call") != null) \(.mergeable) \(.checksState // "-") \(.updatedAt // "")"' <<<"$json"); then
       echo "could not read the open PRs in $dir; no CI sessions there this tick"
       continue
     fi
-    while read -r number sha branch base draft called optout conflictcall mergeable updated; do
+    while read -r number sha branch base draft called optout conflictcall mergeable board updated; do
       [[ $number =~ ^[0-9]+$ && $sha =~ ^[0-9a-f]{40}$ ]] || continue
       # Only branches this machine launched ("?": an older line with no key).
       key=$(launched | awk -v d="$dir" -v b="$branch" '$1 == d && $2 == b && !k { k = ($3 != "" ? $3 : "?") } END { print k }')
       [ -n "$key" ] || continue
       [ "$key" = "?" ] && key=$(cardkey "$branch" || true)
       [ "$called" = true ] && rm -f "$STATE/ci/$slug/$number-"*
+      # CAT-1542: the board saw every check at this head finish and none fail,
+      # so no required check is red: no GitHub read.
+      [ "$board" = green ] && continue
       checks=$(required_checks "$dir" "$number" "$sha $updated" "$ETAGS/$slug/checks-$number")
       # No required checks is not red. Any other failure to read them is said,
       # so a red PR never passes for green in silence.
@@ -1317,9 +1489,9 @@ reviews() {
     active "factory-conflict-$(reposlug "$dir")-pr-$number" && continue
     # So is a CI session (CAT-1479).
     active "factory-ci-$(reposlug "$dir")-pr-$number" && continue
-    # CAT-1545: the body comes from the same list, not one more read per PR.
-    body=$(jq -r --argjson n "$number" 'first(.[] | select(.number == $n)) | .body // ""' <<<"$json" 2>/dev/null) || continue
-    grep -qE "^Reviewed: $sha\b" <<<"$body" && continue
+    # CAT-1545, CAT-1542: whether the head is stamped comes from the same list
+    # (GitHub's body, or the board's own read of it), not one more read per PR.
+    [ "$(jq -r --argjson n "$number" 'first(.[] | select(.number == $n)) | .reviewedAtHead == true' <<<"$json" 2>/dev/null)" = false ] || continue
     # One reviewer per head sha. If it ran and left no stamp, a person looks;
     # one that was cut off is started once more (CAT-1481).
     retry=
@@ -1432,7 +1604,7 @@ pr_reviews() {
     json=$(open_prs "$dir") || continue
     if ! prs=$(jq -r '.[] | select(.isDraft | not)
         | select([.labels[].name] | index("no-factory-review") | not)
-        | .headRefOid as $sha | select((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b") | not)
+        | select(.reviewedAtHead != true) | .headRefOid as $sha
         | "\(.number) \($sha) \(.author.login) \(.headRefName) \(.isCrossRepository)"' <<<"$json"); then
       echo "could not read the open PRs in $dir; no reviews there this tick"
       continue
@@ -1637,8 +1809,8 @@ factory_pr() {
   memo=$STATE/open-prs/pr-$key
   if [ -n "$OPEN_PRS_TICK" ] && [ -f "$memo" ]; then cat "$memo"; return 0; fi
   if [ -n "$OPEN_PRS_TICK" ] && json=$(open_prs "$1"); then
-    out=$(jq -r --arg b "$2" 'first(.[] | select(.headRefName == $b) | select(.isCrossRepository | not)) | .headRefOid as $sha
-      | "\(.number) OPEN \((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b")) \(.url)"' <<<"$json" 2>/dev/null) || out=
+    out=$(jq -r --arg b "$2" 'first(.[] | select(.headRefName == $b) | select(.isCrossRepository | not))
+      | "\(.number) OPEN \(.reviewedAtHead == true) \(.url)"' <<<"$json" 2>/dev/null) || out=
   fi
   if [ -z "$out" ]; then
     out=$(gh_etag "$1" "repos/{owner}/{repo}/pulls?head={owner}:$(jq -rn --arg b "$2" '$b | @uri')&state=all&per_page=1" \
@@ -2623,11 +2795,26 @@ waiting_now=$(waiting)
 REVIEW_WAITING=$waiting_now
 # Paused from the board: reviews, conflict and CI sessions above still ran; nothing new is claimed.
 if [ -n "$CTL_PAUSED_UNTIL" ]; then exit 0; fi
-# CAT-1540: rate limited, the waiting count can't be read, so nothing new starts.
+# CAT-1540: rate limited, the waiting count can't be read. CAT-1557: the count
+# from the last tick that could read it stands in for up to WAITING_COUNT_MAX_AGE
+# seconds (the waiting cap applies to it as usual); missing or older, nothing
+# new starts.
+WAITING_COUNT_MAX_AGE=600
 if [ -n "$OPEN_PRS_LIMITED" ]; then
-  echo "GitHub is rate limiting, so the PRs waiting on review can't be counted; no new pickups"
-  PASS_RESULT="holding: GitHub rate limited"
-  exit 0
+  stored_at= stored_n=
+  [ ! -f "$STATE/waiting-count" ] || read -r stored_at stored_n _ <"$STATE/waiting-count" || true
+  now_s=$(date +%s)
+  if [[ $stored_at =~ ^[0-9]+$ && $stored_n =~ ^[0-9]+$ ]] && [ "$stored_at" -le "$now_s" ] && [ $((now_s - stored_at)) -le "$WAITING_COUNT_MAX_AGE" ]; then
+    echo "GitHub rate limited; using the review-queue count from $(date -d "@$stored_at" +%H:%M:%S) ($stored_n waiting)"
+    waiting_now=$stored_n
+    REVIEW_WAITING=$waiting_now
+  else
+    echo "GitHub is rate limiting, so the PRs waiting on review can't be counted; no new pickups"
+    PASS_RESULT="holding: GitHub rate limited"
+    exit 0
+  fi
+else
+  printf '%s %s\n' "$(date +%s)" "$waiting_now" >"$STATE/waiting-count.tmp" && mv "$STATE/waiting-count.tmp" "$STATE/waiting-count" || true
 fi
 if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
   echo "$waiting_now factory PRs waiting on review (cap $WAITING_CAP); no new pickups"
