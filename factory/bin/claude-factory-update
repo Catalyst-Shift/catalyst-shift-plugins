@@ -256,7 +256,7 @@ refresh() {
     if [ "$branch" != "${def#origin/}" ]; then say "repo $dir: skipped (on ${branch:-a detached HEAD}, not ${def#origin/})"; continue; fi
     if timeout 120 git -C "$dir" pull --ff-only --quiet </dev/null >/dev/null 2>&1; then say "repo $dir: at $(short "$(git -C "$dir" rev-parse HEAD)")"
     else say "repo $dir: git pull --ff-only failed"; fi
-  done < <([ -f "$CONF" ] && grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]]|prs[[:space:]]|update[[:space:]])' "$CONF")
+  done < <([ -f "$CONF" ] && grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]]|prs[[:space:]]|parallel[[:space:]]|update[[:space:]])' "$CONF")
 }
 
 # The installed scripts still parse: the boot check reads systemd only, and a

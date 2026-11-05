@@ -52,6 +52,20 @@ the branch if it is already on origin. A second cut-off, a stop from the
 board, or a worktree still not salvaged after 30 minutes goes to Blocked
 (CAT-1485; `requeued/<card key>` records it).
 
+**Repos side by side (CAT-1547):** each tick works on its repos in parallel,
+one background job per repo: first every repo's sweeps (conflicts, CI fixes,
+reviews, settles, merges, retros), then, after the review-queue check, every
+repo's pickup. At most `parallel <n>` jobs run at once (repos.conf, 1 to 16,
+default 4; `parallel 1` is one repo after another, as before). The running cap
+still holds across all of them: a job takes a free slot under a lock in the
+state folder (`slots.lock`, `slots/`) before it starts a session, and a pickup
+takes it before its pick claims a card, so a card is never claimed without a
+slot to run in. Each job's log lines start with `[<repo folder>]`. A repo whose
+job fails is named in one line and in the heartbeat's pass result
+(`error (failed in <repo>); …`); the other repos' jobs go on. A repo whose sweeps
+failed claims no new card that tick, and two repo lines for one Linear project
+pick once.
+
 **Two machines, same projects:** Kevin's and Keith's machines can both list
 every project. Each picks Ready For Factory cards that are assigned to its
 owner or unassigned, never cards assigned to the other person, and it re-checks
