@@ -652,7 +652,15 @@ Scratch files: write every file you make only to pass to a command (a PR or card
   # The session's --model goes in the unit's description, for status.
   for a in "$@"; do [ "$prev" = --model ] && model=$a; prev=$a; done
   if streaming; then
-    cmd=("$NODE" "$STREAM" run --unit "$unit" --card "$card" --repo "$repo" -- "$CLAUDE" "$@")
+    # CAT-1510: what the session is for. Each launch site sets RUN_KIND (build,
+    # review, conflict, ci or retro) and RUN_PR on its run_unit call; an
+    # outside-PR review adds RUN_AUTHOR and RUN_DEP.
+    cmd=("$NODE" "$STREAM" run --unit "$unit" --card "$card" --repo "$repo")
+    [ -z "${RUN_KIND:-}" ] || cmd+=(--kind "$RUN_KIND")
+    [ -z "${RUN_PR:-}" ] || cmd+=(--pr "$RUN_PR")
+    [ -z "${RUN_AUTHOR:-}" ] || cmd+=(--author "$RUN_AUTHOR")
+    [ "${RUN_DEP:-}" != true ] || cmd+=(--dependency true)
+    cmd+=(-- "$CLAUDE" "$@")
   else
     unset_env+=" FACTORY_INGEST_TOKEN"
   fi
@@ -679,7 +687,7 @@ launch() {
     echo "could not record $id's launch; a cut-off will send it to Blocked" >&2
     launched=
   }
-  run_unit "factory-$key" "$dir" "$STATE/$key.log" "$id" "$(basename "$dir")" "$launched" \
+  RUN_KIND=build run_unit "factory-$key" "$dir" "$STATE/$key.log" "$id" "$(basename "$dir")" "$launched" \
     -p --model "$model" --permission-mode auto -w "factory-$key" --output-format text \
     "You are an unattended factory session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
@@ -721,7 +729,7 @@ review() {
   git -C "$dir" worktree add --quiet --detach "$wt" "$sha" </dev/null
   if [ -n "$retry" ]; then prev=$(cat "$rec" 2>/dev/null || true); fi
   mark_started "$rec" "$retry"
-  run_unit "factory-review-$key" "$wt" "$STATE/review-$key.log" "$id" "$(basename "$dir")" "$rec" \
+  RUN_KIND=review RUN_PR=$number run_unit "factory-review-$key" "$wt" "$STATE/review-$key.log" "$id" "$(basename "$dir")" "$rec" \
     -p --model "$MODEL_REVIEW" --permission-mode auto --output-format text \
     "You are an unattended factory reviewer on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
 
@@ -804,7 +812,7 @@ resolve() {
   # No card (""), the repo folder and the marker: run_unit shifts them off before the claude args.
   if [ -n "$retry" ]; then prev=$(cat "$rec" 2>/dev/null || true); fi
   mark_started "$rec" "$retry"
-  run_unit "$name" "$wt" "$STATE/conflict-$slug-pr-$number.log" "" "$(basename "$dir")" "$rec" \
+  RUN_KIND=conflict RUN_PR=$number run_unit "$name" "$wt" "$STATE/conflict-$slug-pr-$number.log" "" "$(basename "$dir")" "$rec" \
     -p --permission-mode auto --output-format text \
     --disallowedTools="Bash(git push -f*),Bash(git push --force*),Bash(git push *--force*),Bash(git push * -f*),Bash(git push *+*),Bash(git push *--delete*),Bash(git push * :*),Bash(git push *--mirror*),Bash(git push *--all*),Bash(git push *:$base),Bash(git push *:$base'),Bash(git push *:refs/heads/$base*),Bash(git -* push*),Bash(git pull*),Bash(git rebase*),Bash(git -* rebase*),Bash(gh pr merge*),Bash(gh -* pr merge*),Bash(gh api*)" \
     "You are an unattended factory conflict session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
@@ -997,7 +1005,7 @@ fix_ci() {
   # the first attempt's, on a retry), so it is retried.
   if [ -n "$retry" ]; then prev=$(cat "$rec" 2>/dev/null || true); fi
   mark_started "$rec" "$retry"
-  run_unit "$name" "$wt" "$STATE/ci-$slug-pr-$number.log" "$id" "$(basename "$dir")" "$rec" \
+  RUN_KIND=ci RUN_PR=$number run_unit "$name" "$wt" "$STATE/ci-$slug-pr-$number.log" "$id" "$(basename "$dir")" "$rec" \
     -p --model "$MODEL_BUILD_MEDIUM" --permission-mode auto --output-format text --add-dir "$basewt" \
     --disallowedTools="Bash(git push -f*),Bash(git push --force*),Bash(git push *--force*),Bash(git push * -f*),Bash(git push *+*),Bash(git push *--delete*),Bash(git push * :*),Bash(git push *--mirror*),Bash(git push *--all*),Bash(git push *:$base),Bash(git push *:$base'),Bash(git push *:refs/heads/$base*),Bash(git -* push*),Bash(git pull*),Bash(git rebase*),Bash(git -* rebase*),Bash(git commit --amend*),Bash(git commit *--amend*),Bash(gh pr edit *--body*),Bash(gh pr edit * -b*),Bash(gh pr edit * -F*),Bash(gh pr edit *--title*),Bash(gh pr edit * -t*),Bash(gh -* pr edit*),Bash(gh pr merge*),Bash(gh -* pr merge*),Bash(gh api*)" \
     "You are an unattended factory CI session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.
@@ -1193,7 +1201,7 @@ You did not write this code. PR #$number on branch $branch was opened by $author
   rec=$STATE/reviewed/$(reposlug "$dir")/$number-$sha
   if [ -n "$retry" ]; then prev=$(cat "$rec" 2>/dev/null || true); fi
   mark_started "$rec" "$retry"
-  run_unit "$name" "$wt" "$STATE/review-$(reposlug "$dir")-pr-$number.log" "" "$(basename "$dir")" "$rec" \
+  RUN_KIND=review RUN_PR=$number RUN_AUTHOR=$author RUN_DEP=$dep run_unit "$name" "$wt" "$STATE/review-$(reposlug "$dir")-pr-$number.log" "" "$(basename "$dir")" "$rec" \
     -p --model "$model" "${perms[@]}" --output-format text "$prompt" || {
     unmark "$rec" "$prev"
     echo "PR #$number in $dir: could not start unit $name; trying again next tick"
@@ -1771,7 +1779,7 @@ reflect() {
     return 0
   }
   # A unit that fails to start leaves the worktree for cleanup and no marker, so it is retried.
-  run_unit "$name" "$wt" "$STATE/retro-$key.log" "$id" "$(basename "$dir")" \
+  RUN_KIND=retro RUN_PR=$number run_unit "$name" "$wt" "$STATE/retro-$key.log" "$id" "$(basename "$dir")" \
     -p --model "$MODEL_RETRO" --permission-mode auto --output-format text \
     --disallowedTools="Bash(git push -f*),Bash(git push --force*),Bash(git push *--force*),Bash(git push * -f*),Bash(git push *+*),Bash(git push *--delete*),Bash(git push * :*),Bash(git push *--mirror*),Bash(git push *--all*),Bash(git push *:$def),Bash(git push *:refs/heads/$def*),Bash(git push origin $def*),Bash(git -* push*),Bash(git pull*),Bash(git rebase*),Bash(git -* rebase*),Bash(gh pr merge*),Bash(gh -* pr merge*),Bash(gh api*)" \
     "You are an unattended factory retro session on $HOST (the Claude dev factory). Nobody is watching and nobody can answer a question.

@@ -4,7 +4,9 @@
 // https://os.catalystshift.ai/api/ingest/events, the route CAT-1446 built in
 // catalyst_os), with `Authorization: Bearer $FACTORY_INGEST_TOKEN`.
 //
-//   claude-factory-stream run --unit <unit> [--card CAT-1] [--repo <folder>] -- claude <args>
+//   claude-factory-stream run --unit <unit> [--card CAT-1] [--repo <folder>]
+//       [--kind build|review|conflict|ci|retro] [--pr <n>] [--author <login>]
+//       [--dependency true] -- claude <args>
 //       Runs one session. Its stream-json lines go to stdout (the unit's log)
 //       as they come, and, cleaned (see sanitizeEvent), to the board in batches
 //       of up to 50 events every 2 seconds. Every batch is written to
@@ -642,6 +644,21 @@ function unitCard(unit) {
   return m ? m[1].toUpperCase() : null;
 }
 
+const KINDS = ["build", "review", "conflict", "ci", "retro"];
+
+/** What a session is for (CAT-1510): --kind if it is a known kind, else from the unit name, else build. */
+function kindOf(kind, unit) {
+  const k = String(kind ?? "").toLowerCase();
+  if (KINDS.includes(k)) return k;
+  const m = String(unit).match(/^factory-(review|conflict|ci|retro)-/);
+  return m ? m[1] : "build";
+}
+
+/** The PR number from --pr, or null. */
+function prOf(v) {
+  return /^[0-9]+$/.test(String(v ?? "")) ? Number(v) : null;
+}
+
 const exitCode = (code, sig) => code ?? (sig ? 128 + (os.constants.signals[sig] || 0) : 1);
 
 /** Runs the command as is, nothing streamed (no token, or streaming could not start). */
@@ -671,7 +688,9 @@ async function run(opts, rest, env = process.env) {
   if (!token) return runPlain(rest, childEnv);
 
   const unit = opts.unit || "factory-session";
-  const role = /^factory-review-/.test(unit) ? "review" : "build";
+  const kind = kindOf(opts.kind, unit);
+  const pr = prOf(opts.pr);
+  const role = kind === "review" ? "review" : "build";
   const card = opts.card ? opts.card.toUpperCase() : unitCard(unit);
   const sessionId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
@@ -692,10 +711,23 @@ async function run(opts, rest, env = process.env) {
   let lastWrite = 0;
   const writeState = (ended = false) =>
     safely("write the stream state", () =>
-      writeJson(stateFile, { unit, card, repo: opts.repo || null, sessionId, startedAt, pid: ended ? null : process.pid, bootId: bootId(), lastSeq: box.lastSeq, spoolEvents: box.spoolEvents }),
+      writeJson(stateFile, { unit, card, kind, pr, repo: opts.repo || null, sessionId, startedAt, pid: ended ? null : process.pid, bootId: bootId(), lastSeq: box.lastSeq, spoolEvents: box.spoolEvents }),
     );
-  let stage = role === "review" ? "review" : "start";
-  const status = (st, note) => box.push({ type: "status", at: new Date().toISOString(), card, stage: st, note });
+  let stage = role === "review" ? "review" : kind === "conflict" ? "conflict" : "start";
+  // The first status event also says what the session is for.
+  let first = true;
+  const status = (st, note) => {
+    const ev = { type: "status", at: new Date().toISOString(), card, stage: st, note };
+    if (first) {
+      first = false;
+      ev.kind = kind;
+      if (pr != null) ev.pr = pr;
+      if (opts.repo) ev.repo = opts.repo;
+      if (kind === "review" && opts.author) ev.author = String(opts.author).slice(0, 100);
+      if (kind === "review" && opts.dependency === "true") ev.dependency = true;
+    }
+    box.push(ev);
+  };
   try {
     box = new Outbox({
       url: env.FACTORY_INGEST_URL || DEFAULT_URL,
@@ -973,7 +1005,7 @@ function heartbeatSnapshot(env = process.env) {
     try {
       s = JSON.parse(fs.readFileSync(path.join(streamDir(env), `${unit}.json`), "utf8"));
     } catch {}
-    return { card: typeof s.card === "string" ? s.card : unitCard(unit), repo: typeof s.repo === "string" ? s.repo : null, startedAt: typeof s.startedAt === "string" ? s.startedAt : null };
+    return { card: typeof s.card === "string" ? s.card : unitCard(unit), kind: kindOf(s.kind, unit), pr: typeof s.pr === "number" ? s.pr : null, repo: typeof s.repo === "string" ? s.repo : null, startedAt: typeof s.startedAt === "string" ? s.startedAt : null };
   });
   const n = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const str = (v) => (typeof v === "string" ? v.slice(0, 200) : null);
@@ -1065,7 +1097,7 @@ async function main(argv) {
   return 2;
 }
 
-module.exports = { sanitizeEvent, scrub, clip, stageOf, skillsUsed, installedInfo, childArgs, secretValues, heartbeatSnapshot, unitCard, machineName, Outbox, MAX_FIELD_BYTES };
+module.exports = { sanitizeEvent, scrub, clip, stageOf, skillsUsed, installedInfo, childArgs, secretValues, heartbeatSnapshot, unitCard, kindOf, machineName, Outbox, MAX_FIELD_BYTES };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(
