@@ -46,6 +46,14 @@
 # rollback): only that CLAUDE.md line counts, so at most Low PRs self-merge.
 # stages claude-md
 #
+# Where each tick reads a repo's open PRs (CAT-1542). board (the default) asks
+# the Factory Board (GET /api/factory/prs, kept from GitHub's webhooks) with
+# the machine token, and reads GitHub only for a repo whose answer is stale,
+# fails, or trails origin's branches, with one line saying so. github ignores
+# the board (the rollback): every repo's list comes from GitHub, as before.
+# Pushes, comments, labels, auto-merge and the founder gate always go to GitHub.
+# prs github
+#
 # ~/Projects/catalyst-shift catalyst-shift-site
 # ~/Projects/lbl-nextjs lbl-nextjs
 # ~/Projects/nourish-enablement nourish-rep-enablement
