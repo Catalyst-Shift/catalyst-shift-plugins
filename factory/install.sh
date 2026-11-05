@@ -28,7 +28,7 @@ if [ ! -x "$CHROME" ]; then
 fi
 
 echo "== Installing from $SRC"
-for f in claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck; do
+for f in claude-factory-dispatch claude-factory-stream claude-factory-mark-done claude-factory-bootcheck claude-factory-update; do
   install -Dm755 "$SRC/bin/$f" "$BIN/$f"
   echo "  $BIN/$f"
 done
@@ -124,16 +124,20 @@ for old in "$UNITS"/claude-rc-*.service; do
 done
 
 # CAT-1487: what this machine runs, for the heartbeat (the board's Plugin page and Fleet versions).
+# CAT-1562: source is the clone it ran from, where claude-factory-update pulls
+# (the heartbeat never sends it).
 if command -v jq >/dev/null; then
   REPO=$(dirname "$SRC")
   pv() { jq -r '.version // empty' "$REPO/$1/.claude-plugin/plugin.json" 2>/dev/null || true; }
   GSTACK_DIR=${GSTACK_DIR:-$HOME/.claude/skills/gstack}
   jq -n \
     --arg factorySha "$(git -C "$REPO" rev-parse HEAD 2>/dev/null || true)" \
+    --arg source "$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null || true)" \
     --arg installedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg ops "$(pv catalyst-ops)" --arg design "$(pv design-skill)" \
     --arg gstack "$(git -C "$GSTACK_DIR" rev-parse HEAD 2>/dev/null || true)" \
     '{factorySha: ($factorySha | if . == "" then null else . end), installedAt: $installedAt,
+      source: ($source | if . == "" then null else . end),
       plugins: {"catalyst-ops": ($ops | if . == "" then null else . end), "design-skill": ($design | if . == "" then null else . end), gstack: ($gstack | if . == "" then null else . end)}}' \
     > "$STATE/installed.json.tmp" && mv "$STATE/installed.json.tmp" "$STATE/installed.json"
   ok "$STATE/installed.json written"

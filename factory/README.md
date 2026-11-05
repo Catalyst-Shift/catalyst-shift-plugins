@@ -10,8 +10,10 @@ this folder; Keith's setup follows this README.
 ## Daily use
 
 ```bash
-# install or update (safe to re-run; enables nothing by itself)
+# install or update (safe to re-run; enables nothing by itself). After the first
+# install the machine updates itself when main moves (see Self-update).
 git -C ~/Projects/catalyst-shift-plugins pull && ~/Projects/catalyst-shift-plugins/factory/install.sh
+tail ~/.local/state/claude-factory/update.log     # what the last self-update did
 
 touch ~/.local/state/claude-factory/paused      # pause: no new sessions or reviews
 rm ~/.local/state/claude-factory/paused         # resume
@@ -472,6 +474,52 @@ dispatcher ignores control and the usual caps apply.
 
 ---
 
+## Self-update
+
+The machine updates itself when plugins `main` moves (CAT-1562). It pulls:
+nothing on the web calls into it, and only merged `main` installs, so nothing
+lands without a person's merge.
+
+- **Check.** At most every 10 minutes the tick runs
+  `claude-factory-update check`: `git fetch origin main` in the clone install.sh
+  last ran from (`source` in `installed.json`). When `origin/main` is a
+  fast-forward of the installed `factorySha` and changes something under
+  `factory/`, an update is due. A non-fast-forward, a clone with uncommitted
+  changes or not on `main`, or a boot check that is already failing installs
+  nothing and logs one `update: skipped (<reason>)` line.
+- **Wait.** The update waits for a tick with no session starting (a
+  `factory-*` unit activating, or active for under 60 seconds). Running
+  builders and reviewers keep running on the code they started with; the
+  update never stops a session.
+- **Apply.** The tick starts `claude-factory-update apply` as its own unit,
+  `claude-factory-update.service`, and ends; ticks hold while it runs. It runs
+  `git pull --ff-only` and `factory/install.sh`, then
+  `claude-factory-bootcheck --summary`. Anything but `boot: ok` checks out the
+  previous `factorySha`, re-runs its install.sh and logs `update: rolled back
+  to <sha> (<reason>)`; that `main` sha is not tried again.
+- **Refresh.** The same unit, at most hourly, runs `claude plugin marketplace
+  update` and `claude plugin update` for catalyst-ops and design-skill,
+  `gstack-upgrade`, and `git pull --ff-only` in every repo clone in repos.conf
+  that is clean and on its default branch (one with uncommitted changes is
+  skipped and logged). Brain notes reach sessions through those clones.
+- **Code only.** It never writes repos.conf, caps, tokens or environment files.
+- **Heartbeat.** `update: {checkedAt, latestSha, state, reason, boot}`, where
+  state is `current`, `behind`, `skipped` or `rolled-back`.
+  `claude-factory-dispatch status` shows the same in one line. The log is
+  `~/.local/state/claude-factory/update.log`.
+
+**Canary order.** `update after kevin-omarchy` in Keith's repos.conf makes his
+machine update only once kevin-omarchy's heartbeat has shown the same
+`factorySha` with `boot: ok` on 3 of its ticks. The machine reads that
+heartbeat from the board (`GET /api/machines`) with its token; until the board
+answers it, the machine waits and says why in `update.reason`.
+
+**Turn it off.** Add `update off` to `~/.config/claude-factory/repos.conf`; the
+next tick stops checking (`update: skipped (update off in repos.conf)`). From
+the board, Hold updates (`updatesHeld`, CAT-1563) does the same remotely, and
+Update now (`updateRequested`) checks on the next tick without the canary wait.
+Remove the line to turn it back on.
+
 ## First install
 
 1. Prerequisites (install.sh checks each and prints what's missing): Chrome
@@ -679,6 +727,7 @@ changes nothing.
 | `bin/claude-factory-stream` (node 18+) | `~/.local/bin/` |
 | `bin/claude-factory-mark-done` | `~/.local/bin/` |
 | `bin/claude-factory-bootcheck` | `~/.local/bin/` |
+| `bin/claude-factory-update` | `~/.local/bin/` |
 | `systemd/claude-factory.service`, `.timer` | `~/.config/systemd/user/` |
 | `systemd/claude-factory-heartbeat.service` | `~/.config/systemd/user/` |
 | `systemd/claude-rc@.service` | `~/.config/systemd/user/` |

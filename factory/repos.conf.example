@@ -46,6 +46,14 @@
 # rollback): only that CLAUDE.md line counts, so at most Low PRs self-merge.
 # stages claude-md
 #
+# Self-update (CAT-1562): the machine pulls plugins main and runs install.sh
+# when factory/ changes, and rolls back when the boot check fails (see the
+# README, Self-update). "update off" turns it off. "update after <machine>"
+# waits until that machine has run the same version with boot: ok for 3 ticks;
+# Keith's machine uses:
+# update after kevin-omarchy
+# update off
+#
 # ~/Projects/catalyst-shift catalyst-shift-site
 # ~/Projects/lbl-nextjs lbl-nextjs
 # ~/Projects/nourish-enablement nourish-rep-enablement
