@@ -632,9 +632,13 @@ test("every builder and reviewer session passes --model, and Linear calls use th
     assert.match(body, /-p --model "\$/, fn);
   }
   assert.doesNotMatch(s, /--model haiku/);
-  // The pick, settle, linear_issue, the retro report, (CAT-1441) the stop step's
-  // Blocked move, and (CAT-1485) settle's re-queue of a cut-off builder.
-  assert.equal(s.split('--model "$MODEL_HOUSEKEEPING"').length - 1, 6);
+  // Every housekeeping call (the pick, settle, linear_issue, the retro report, the
+  // stop step, the re-queue...) names the housekeeping model on its own line. No
+  // exact count is pinned: each card that adds a call raised the number, so two
+  // open PRs always conflicted on this line (CAT-1441, CAT-1485).
+  const calls = s.split("\n").filter((l) => /timeout \d+ "\$CLAUDE" -p\b/.test(l));
+  assert.ok(calls.length >= 3, "found the housekeeping call sites");
+  for (const l of calls) assert.match(l, /--model "\$MODEL_HOUSEKEEPING"/, `a housekeeping call without the housekeeping model: ${l.trim()}`);
 });
 
 test("install.sh's boot check skips label, offset, review-authors, model and stages lines like the dispatcher does", () => {
