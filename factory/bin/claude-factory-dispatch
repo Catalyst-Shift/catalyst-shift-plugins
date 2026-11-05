@@ -70,10 +70,10 @@
 # Everything runs on the Claude subscription (claude.ai login), never an API key.
 #
 #   config: ~/.config/claude-factory/repos.conf   ("<repo folder> <Linear project>", plus "label <machine label>", "offset <seconds>", "review-authors <github login>...", "model <job> <model>", "stages board|claude-md")
-#   stages: claude-factory-dispatch merge-rule <repo> <risk> --dry-run   (whether a reviewer may self-merge that risk now; changes nothing)
+#   stages: claude-factory-dispatch merge-rule <repo> <risk> --pr <number> --dry-run   (whether a reviewer may self-merge that PR now: its stage and its founder gate; changes nothing)
 #   pause:  touch ~/.local/state/claude-factory/paused
 #   retros: claude-factory-dispatch retro --since 7d   (clean, accepted, rejected and structural retros, and touches, per repo)
-#   status: claude-factory-dispatch status   (ends with the boot check in one line; --json: running cards, last seq sent, spool length)
+#   status: claude-factory-dispatch status   (ends with the boot check in one line; --json: running cards, last seq sent, spool length, PRs waiting_for_founder)
 #   watch:  systemctl --user list-units 'factory-*'; logs in ~/.local/state/claude-factory/
 set -euo pipefail
 
@@ -741,7 +741,7 @@ You did not write this code. Another session built card $id and opened PR #$numb
 4. When done, put exactly one stamp line in the PR body. Read the body with gh pr view $number --json body --jq .body, remove any existing line starting with 'Reviewed:', add this line, and write it back with gh pr edit $number --body-file <file>:
    Reviewed: <full 40-character head sha after your own pushes, from git rev-parse HEAD once pushed> — /review
    (write '— /review, /cso' if you ran /cso). Check that the sha equals gh pr view $number --json headRefOid --jq .headRefOid.
-5. Never merge the PR yourself, and never use --admin. Stage rule: this repo is at factory stage $stage (from $stage_src; the dispatcher gives the stage, so ignore any 'Factory stage:' line in CLAUDE.md). Stage $stage lets you self-merge risk: $(stage_risks "$stage"). After you have stamped it, run gh pr merge $number --auto --squash --match-head-commit <the stamped sha> only if all of these hold: (a) the PR's base is the repo's default branch; (b) the card's Risk section names exactly one risk (Low, Medium or High) and it is one stage $stage allows (missing, mixed or unclear fails); (c) $([ "$stage" = 4 ] && echo "stage 4 allows code-owner paths, so this one holds" || echo "no file in gh pr diff $number --name-only matches a path in the base branch's .github/CODEOWNERS (read as in step 2; if you can't read it, this fails)"); (d) you stamped it and the stamp's sha still equals the PR head (--match-head-commit makes GitHub refuse if it moved); (e) right before the gh pr merge, $DISPATCH_SELF merge-rule $(repo_name "$dir") <that risk> --dry-run prints 'self-merge allowed' (a founder's veto on the board shows there from the next tick; 'no self-merge' or an error fails). GitHub then merges it once CI is green. If any of these fails, or you did not stamp, never turn on auto-merge. $([ "$stage" = 4 ] && echo "(f) Stage 4 with Risk High: once (a) to (e) hold and before the gh pr merge, add the existing label 'post-merge-review' to the card (keep all its other labels) and comment on the card exactly 'post-merge review due $(next_working_day)'; if either fails, never turn on auto-merge, and if the gh pr merge then fails, take the label off again. The card then stays In Review until a founder clears that label. ")Say in your card comment whether you turned it on and why.
+5. Never merge the PR yourself, and never use --admin. Stage rule: this repo is at factory stage $stage (from $stage_src; the dispatcher gives the stage, so ignore any 'Factory stage:' line in CLAUDE.md). Stage $stage lets you self-merge risk: $(stage_risks "$stage"). After you have stamped it, run gh pr merge $number --auto --squash --match-head-commit <the stamped sha> only if all of these hold: (a) the PR's base is the repo's default branch; (b) the card's Risk section names exactly one risk (Low, Medium or High) and it is one stage $stage allows (missing, mixed or unclear fails); (c) $([ "$stage" = 4 ] && echo "stage 4 allows code-owner paths, so this one holds" || echo "no file in gh pr diff $number --name-only matches a path in the base branch's .github/CODEOWNERS (read as in step 2; if you can't read it, this fails)"); (d) you stamped it and the stamp's sha still equals the PR head (--match-head-commit makes GitHub refuse if it moved); (e) right before the gh pr merge, $DISPATCH_SELF merge-rule $(repo_name "$dir") <that risk> --pr $number --dry-run exits 0 and its first line says 'self-merge allowed' (a founder's veto on the board shows there from the next tick, and it checks the PR's founder gate check at its head: missing on a gated repo, pending or red is 'no self-merge'; 'no self-merge' or an error fails). If it says the founder gate is pending, run timeout 600 gh pr checks $number --watch once and then the merge-rule again; still pending is 'no self-merge'. A red founder gate means Kevin or Keith reads the proof and merges by hand: never turn on auto-merge past it, and say so in your card comment. Any other red check is fixed, never merged past. GitHub then merges it once CI is green. If any of these fails, or you did not stamp, never turn on auto-merge. $([ "$stage" = 4 ] && echo "(f) Stage 4 with Risk High: once (a) to (e) hold and before the gh pr merge, add the existing label 'post-merge-review' to the card (keep all its other labels) and comment on the card exactly 'post-merge review due $(next_working_day)'; if either fails, never turn on auto-merge, and if the gh pr merge then fails, take the label off again. The card then stays In Review until a founder clears that label. ")Say in your card comment whether you turned it on and why.
 6. Hard stops: production databases, customer data, credentials, spending, pricing or public product claims, anything sent outside the team, weakening a rule (CI, review, deep paths, tests, CLAUDE.md). If a finding can only be fixed by one of these, do not do it: comment on the card and the PR saying exactly what is needed, move the card to Blocked in Linear, do not stamp the PR, and end.
 7. Finish with a comment on the card: what you ran, what you fixed, what you answered, and the stamp." || {
     unmark "$rec" "$prev"
@@ -1656,31 +1656,132 @@ next_working_day() {
   date -d "$base +$d day" +%F
 }
 
-# claude-factory-dispatch merge-rule <repo> <risk> [--dry-run]: whether the
-# reviewer may turn on auto-merge for a PR of that risk in that repo, from the
-# stage the last tick settled on. It never merges or changes anything (so
-# --dry-run changes nothing either); it exits 0 when self-merge is allowed.
-merge_rule() {
-  local want=$1 risk=${2:-} dir= d _ stage src risks
-  # Only a repo in repos.conf: by its folder path, its GitHub name or its folder name.
-  while read -r d _; do
-    if [ "$want" = "$d" ] || [ "${want,,}" = "$(repo_name "$d" | tr '[:upper:]' '[:lower:]')" ]; then dir=$d; break; fi
-  done < <(repos)
-  if [ -z "$dir" ]; then
-    while read -r d _; do
-      if [ "${want,,}" = "$(basename "$d" | tr '[:upper:]' '[:lower:]')" ]; then dir=$d; break; fi
-    done < <(repos)
+# CAT-1512: the PR's `founder gate` check at a head sha, the one test every
+# factory merge goes through. Prints "<verdict><TAB><reason>" and returns 0
+# only for pass. A founder gate that concluded success passes. No founder gate
+# check at all passes only while the base branch has no .github/deep-paths (a
+# repo from before the gate keeps today's behaviour). Anything else (pending,
+# failed, cancelled, neutral, skipped, missing on a gated repo, or GitHub not
+# answering) is not a pass: red gates wait for Kevin or Keith to merge by hand.
+founder_gate_at() {
+  local dir=$1 sha=$2 base=$3 runs err rc=0 red pending ref
+  if ! [[ $sha =~ ^[0-9a-f]{40}$ ]] || [ -z "$base" ]; then printf 'error\tno head sha or base branch to check\n'; return 1; fi
+  ref=$(jq -rn --arg b "$base" '$b | @uri')
+  runs=$(cd "$dir" && timeout 60 gh api "repos/{owner}/{repo}/commits/$sha/check-runs?check_name=founder%20gate&filter=latest&per_page=100" \
+    --jq '[.check_runs[] | {status, conclusion, reason: ([.output.title, .output.summary] | map(select(. != null and . != "")) | first // "")}]' \
+    </dev/null 2>/dev/null) && jq -e 'type == "array"' <<<"$runs" >/dev/null 2>&1 || {
+    printf 'error\tcould not read the founder gate check at %s\n' "${sha:0:7}"
+    return 1
+  }
+  if [ "$(jq length <<<"$runs")" = 0 ]; then
+    err=$(cd "$dir" && timeout 60 gh api "repos/{owner}/{repo}/contents/.github/deep-paths?ref=$ref" --silent </dev/null 2>&1 >/dev/null) || rc=$?
+    if [ "$rc" = 0 ]; then
+      printf 'missing\tno founder gate check at %s, but %s has .github/deep-paths\n' "${sha:0:7}" "$base"
+      return 1
+    fi
+    if grep -q 'HTTP 404' <<<"$err"; then
+      printf 'pass\tno founder gate check and no .github/deep-paths on %s (a repo from before the gate)\n' "$base"
+      return 0
+    fi
+    printf 'error\tcould not tell whether %s has .github/deep-paths\n' "$base"
+    return 1
   fi
-  if [ -z "$dir" ]; then echo "merge-rule: $want is not a repo in $CONF" >&2; return 2; fi
+  red=$(jq -r '[.[] | select(.status == "completed" and .conclusion != "success")] | first // empty
+    | if .reason != "" then .reason else "concluded \(.conclusion // "with no conclusion")" end' <<<"$runs")
+  if [ -n "$red" ]; then printf 'red\t%s\n' "$(gate_words "$red")"; return 1; fi
+  pending=$(jq -r '[.[] | select(.status != "completed")] | length' <<<"$runs")
+  if [ "$pending" != 0 ]; then printf 'pending\tthe founder gate is still running at %s\n' "${sha:0:7}"; return 1; fi
+  printf 'pass\t%s\n' "$(gate_words "$(jq -r '[.[].reason | select(. != "")] | first // "founder gate passed"' <<<"$runs")")"
+  return 0
+}
+
+# A check's own words on one line, with the phrase the reviewer acts on
+# ("self-merge allowed") defused, so a gate summary that quotes a PR can't
+# put it in a refusal.
+gate_words() { printf '%s' "$1" | tr '\n\r\t' '   ' | sed 's/ *$//; s/self-merge allowed/self-merge [quoted]/Ig'; }
+
+# The founder gate of an open PR, at its current head.
+founder_gate() {
+  local dir=$1 number=$2 pr sha= base= def
+  if ! [[ $number =~ ^[0-9]+$ ]]; then printf 'error\tno PR number\n'; return 1; fi
+  pr=$(cd "$dir" && timeout 60 gh pr view "$number" --json headRefOid,baseRefName --jq '"\(.headRefOid) \(.baseRefName)"' </dev/null 2>/dev/null) || {
+    printf 'error\tcould not read PR #%s\n' "$number"
+    return 1
+  }
+  read -r sha base <<<"$pr"
+  # The factory self-merges only into the default branch, whose deep-paths
+  # file is the one that counts; any other base is a person's call.
+  def=$(cd "$dir" && timeout 60 gh repo view --json defaultBranchRef --jq .defaultBranchRef.name </dev/null 2>/dev/null) || def=
+  if [ -z "$def" ]; then printf 'error\tcould not read the default branch\n'; return 1; fi
+  if [ "$base" != "$def" ]; then printf 'error\tPR #%s targets %s, not the default branch %s\n' "$number" "$base" "$def"; return 1; fi
+  founder_gate_at "$dir" "$sha" "$base"
+}
+
+# A repo folder in repos.conf, by its folder path, its GitHub name or its folder name.
+conf_repo() {
+  local want=$1 d _
+  while read -r d _; do
+    if [ "$want" = "$d" ] || [ "${want,,}" = "$(repo_name "$d" | tr '[:upper:]' '[:lower:]')" ]; then printf '%s' "$d"; return 0; fi
+  done < <(repos)
+  while read -r d _; do
+    if [ "${want,,}" = "$(basename "$d" | tr '[:upper:]' '[:lower:]')" ]; then printf '%s' "$d"; return 0; fi
+  done < <(repos)
+  return 1
+}
+
+# CAT-1512: open PRs whose founder gate is red at their head, in every repo in
+# repos.conf, Dependabot's included: they wait for Kevin or Keith to read the
+# proof and merge by hand. A repo GitHub doesn't answer for is listed under
+# waiting_for_founder_unread instead of being dropped silently.
+waiting_for_founder_json() {
+  local dir _ prs number url sha base out verdict reason unread=()
+  {
+    while read -r dir _; do
+      prs=$(cd "$dir" && timeout 60 gh pr list --state open --limit 200 --json number,url,headRefOid,baseRefName,isDraft \
+        --jq '.[] | select(.isDraft | not) | "\(.number) \(.url) \(.headRefOid) \(.baseRefName)"' </dev/null 2>/dev/null) || {
+        unread+=("$(repo_name "$dir")")
+        continue
+      }
+      while read -r number url sha base; do
+        [ -n "$number" ] || continue
+        out=$(founder_gate_at "$dir" "$sha" "$base" || true)
+        verdict=${out%%$'\t'*}
+        reason=${out#*$'\t'}
+        # A gate GitHub didn't answer for, or missing on a gated repo: named, never dropped.
+        case $verdict in error | missing) unread+=("$(repo_name "$dir")#$number") ;; esac
+        [ "$verdict" = red ] || continue
+        jq -cn --arg repo "$(repo_name "$dir")" --argjson number "$number" --arg url "$url" --arg reason "$reason" \
+          '{repo: $repo, number: $number, url: $url, reason: $reason}'
+      done <<<"$prs"
+    done < <(repos)
+    printf '%s\n' "${unread[@]}" | jq -R 'select(. != "") | {unread: .}' -c
+  } | jq -s '{waiting_for_founder: [.[] | select(has("url"))], waiting_for_founder_unread: [.[] | select(has("unread")) | .unread]}'
+}
+
+# claude-factory-dispatch merge-rule <repo> <risk> --pr <number> [--dry-run]:
+# whether the reviewer may turn on auto-merge for that PR of that risk in that
+# repo: the stage the last tick settled on allows the risk, and the PR's
+# founder gate passes at its head (CAT-1512). It never merges or changes
+# anything (so --dry-run changes nothing either); it exits 0 only when
+# self-merge is allowed.
+merge_rule() {
+  local want=$1 risk=${2:-} number=${3:-} dir= stage src risks gate
+  dir=$(conf_repo "$want") || { echo "merge-rule: $want is not a repo in $CONF" >&2; return 2; }
   read -r stage src < <(stage_of "$dir")
   risks=$(stage_risks "$stage")
   case ${risk,,} in low) risk=Low ;; medium) risk=Medium ;; high) risk=High ;; *) risk=${risk:-unknown} ;; esac
-  if stage_allows "$stage" "$risk"; then
-    echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: self-merge allowed (stage $stage allows $risks), with a current stamp, green CI, --match-head-commit$([ "$stage" = 4 ] || echo ' and no code-owner paths')$([ "$stage:$risk" != 4:High ] || echo ", and a post-merge review due $(next_working_day)")"
-    return 0
+  if ! stage_allows "$stage" "$risk"; then
+    echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: no self-merge (stage $stage allows $risks)"
+    return 1
   fi
-  echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: no self-merge (stage $stage allows $risks)"
-  return 1
+  # CAT-1512: never past a founder gate that isn't green at the PR's head.
+  if ! gate=$(founder_gate "$dir" "$number"); then
+    echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: no self-merge (founder gate ${gate%%$'\t'*}: ${gate#*$'\t'}; Kevin or Keith merges by hand)"
+    return 1
+  fi
+  echo "$(repo_name "$dir"): stage $stage (from $src), risk $risk: self-merge allowed (stage $stage allows $risks), with a current stamp, green CI, --match-head-commit$([ "$stage" = 4 ] || echo ' and no code-owner paths')$([ "$stage:$risk" != 4:High ] || echo ", and a post-merge review due $(next_working_day)")"
+  echo "founder gate on PR #$number: ${gate#*$'\t'}"
+  return 0
 }
 
 # A card id in stop[]: stop its session, move the card to Blocked with the
@@ -1946,7 +2047,8 @@ unitcard() {
 status_json() {
   local unit since f paused=false control
   [ -e "$STATE/paused" ] && paused=true
-  # CAT-1441: the control settings in effect, as the last tick left them (no network call here).
+  # CAT-1441: the control settings in effect, as the last tick left them (no network call for these;
+  # only waiting_for_founder below asks GitHub).
   control_load
   control=$(jq -c --arg c "$(jq -r '.control // "off"' "$STATE/pass.json" 2>/dev/null || echo off)" -n \
     --argjson v "$CTL_VERSION" --arg until "$CTL_PAUSED_UNTIL" --argjson rc "$CTL_RUNNING_CAP" --argjson vc "$CTL_REVIEW_CAP" --argjson cap "$CAP" --argjson wcap "$WAITING_CAP" \
@@ -1962,8 +2064,8 @@ status_json() {
         '(input? // {}) as $s | {unit: $unit, card: ($s.card // (if $card == "" then null else $card end)), repo: ($s.repo // null),
           since: $since, sessionId: ($s.sessionId // null), lastSeq: ($s.lastSeq // null), spool: ($s.spoolEvents // null)}' "$f"
     done | jq -s --argjson cap "$CAP" --argjson paused "$paused" --argjson streaming "$(streaming && echo true || echo false)" --argjson control "$control" \
-      --argjson stages "$(stages_json)" \
-      '{paused: $paused, cap: $cap, streaming: $streaming, control: $control, stages: $stages, running: .}'
+      --argjson stages "$(stages_json)" --argjson founder "$(waiting_for_founder_json)" \
+      '{paused: $paused, cap: $cap, streaming: $streaming, control: $control, stages: $stages, running: .} + $founder'
 }
 
 # CAT-1486: each repo's stage and where it came from (board, cache or
@@ -1983,9 +2085,22 @@ if [ "${1:-}" = "status" ]; then
 fi
 
 if [ "${1:-}" = "merge-rule" ]; then
-  [ $# -ge 3 ] || { echo "usage: claude-factory-dispatch merge-rule <repo> <risk> [--dry-run]" >&2; exit 2; }
+  # CAT-1512: the PR number is required, so no answer skips its founder gate.
+  usage="usage: claude-factory-dispatch merge-rule <repo> <risk> --pr <number> [--dry-run]"
+  [ $# -ge 3 ] || { echo "$usage" >&2; exit 2; }
+  mr_repo=$2 mr_risk=$3 mr_pr=
+  shift 3
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --pr) [ $# -ge 2 ] || { echo "$usage" >&2; exit 2; }; mr_pr=$2; shift ;;
+      --dry-run) ;;
+      *) echo "$usage" >&2; exit 2 ;;
+    esac
+    shift
+  done
+  [[ $mr_pr =~ ^[0-9]+$ ]] || { echo "$usage" >&2; exit 2; }
   rc=0
-  merge_rule "$2" "$3" || rc=$?
+  merge_rule "$mr_repo" "$mr_risk" "$mr_pr" || rc=$?
   exit "$rc"
 fi
 

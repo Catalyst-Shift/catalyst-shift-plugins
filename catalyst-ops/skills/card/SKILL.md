@@ -68,7 +68,10 @@ Optional: what's out of scope, the test target (a non-production database only),
    Linear "blocked by" relation, not a sentence. The dispatcher won't pick a
    card while anything it's blocked by is unfinished.
 5. **Risk is set by what the change will touch**: the High list above and the
-   repo's CODEOWNERS deep paths, not how big it feels.
+   repo's deep paths (`.github/deep-paths`, or `.github/CODEOWNERS` where
+   the repo has no such file yet), not how big it feels. Below stage 4, a High
+   or deep-path card turns the PR's `founder gate` check red, so Kevin or
+   Keith merges it by hand.
 6. **Show the card**, then save it. A new card gets the format as its
    description. On an existing card, the description changes only when the
    person running `/card` asked for that card to be fixed: then rewrite it
