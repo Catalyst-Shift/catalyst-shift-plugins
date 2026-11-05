@@ -31,6 +31,9 @@ R=$(cd "$(dirname "$0")/.." && pwd)
 echo "install $(git -C "$R" rev-parse HEAD)" >>"$HOME/install.log"
 mkdir -p "$HOME/.local/state/claude-factory"
 printf '{"factorySha":"%s","source":"%s"}\\n' "$(git -C "$R" rev-parse HEAD)" "$R" >"$HOME/.local/state/claude-factory/installed.json"
+# Installed like the real one, so the smoke check parses it.
+cp "$R/factory/dispatch" "$HOME/.local/bin/claude-factory-dispatch"
+[ "$(git -C "$R" rev-parse HEAD)" = "\${FAIL_SHA:-none}" ] && exit 1
 exit "\${INSTALL_EXIT:-0}"
 `;
 
@@ -116,13 +119,93 @@ test("a fast-forward that changes factory/ is pulled and installed, and the boot
     assert.equal(x.head(), sha);
     assert.deepEqual(x.installs(), [`install ${prev}`, `install ${sha}`]);
     assert.deepEqual({ ...x.upd(), checkedAt: null }, { checkedAt: null, latestSha: sha, state: "current", reason: `installed ${sha.slice(0, 7)}`, boot: "boot: ok" });
-    // The same step refreshed the plugins and gstack (from $HOME, so it certifies no project).
+    // The refresh is its own run ("apply -"): plugins and gstack (from $HOME, so it certifies no project).
+    assert.doesNotMatch(x.calls(), /^claude plugin/m);
+    assert.equal(x.run(["apply", "-"]).status, 0);
     const c = x.calls();
     assert.match(c, /^claude plugin marketplace update catalyst-shift-plugins$/m);
     assert.match(c, /^claude plugin update catalyst-ops@catalyst-shift-plugins$/m);
     assert.match(c, /^claude plugin update design-skill@catalyst-shift-plugins$/m);
     assert.match(c, new RegExp(`^gstack-upgrade in ${x.home}$`, "m"));
     assert.doesNotMatch(c, /-y\b|--yes/, "never accepts a marketplace-declared command unattended");
+  } finally {
+    x.done();
+  }
+});
+
+test("apply installs the sha the check approved, not a main that moved since", () => {
+  const x = rig();
+  try {
+    const sha = x.commit("factory/dispatch", "v2\n");
+    assert.equal(x.decision(x.run(["check", "--force"])), `=> apply ${sha}`);
+    const later = x.commit("factory/dispatch", "v3\n");
+    x.git(x.clone, "fetch", "-q", "origin", "main");
+    const a = x.run(["apply", sha]);
+    assert.equal(a.status, 0, a.stderr);
+    assert.equal(x.head(), sha);
+    assert.equal(x.upd().latestSha, sha);
+    assert.notEqual(x.head(), later);
+  } finally {
+    x.done();
+  }
+});
+
+test("rollback: an install.sh that fails, or scripts that don't parse, go back to the previous factorySha", () => {
+  const x = rig();
+  try {
+    const prev = x.head();
+    let sha = x.commit("factory/dispatch", "v2\n");
+    x.run(["check", "--force"]);
+    let a = x.run(["apply", sha], { FAIL_SHA: sha });
+    assert.match(a.stdout, new RegExp(`^update: rolled back to ${prev.slice(0, 7)} \\(install\\.sh failed \\(exit 1\\)\\)$`, "m"));
+    assert.equal(x.head(), prev);
+    assert.equal(JSON.parse(read(join(x.state, "installed.json"))).factorySha, prev, "installed.json is back on the previous sha");
+    // A dispatcher that no longer parses, with a boot check that says ok.
+    sha = x.commit("factory/dispatch", "if then fi (\n");
+    x.run(["check", "--force"]);
+    a = x.run(["apply", sha]);
+    assert.match(a.stdout, new RegExp(`^update: rolled back to ${prev.slice(0, 7)} \\(claude-factory-dispatch does not parse \\(bash -n\\)\\)$`, "m"));
+    assert.equal(read(join(x.home, ".local/bin/claude-factory-dispatch")), "v1\n");
+    // A clone dirtied between the check and the apply installs nothing.
+    sha = x.commit("factory/dispatch", "v4\n");
+    x.run(["check", "--force"]);
+    writeFileSync(join(x.clone, "README.md"), "edit\n");
+    const before = x.installs().length;
+    a = x.run(["apply", sha]);
+    assert.match(a.stdout, /^update: skipped \(the plugins clone has uncommitted changes\)$/m);
+    assert.equal(x.installs().length, before);
+  } finally {
+    x.done();
+  }
+});
+
+test("an untracked file under factory/ counts as a dirty clone; a refresh waits while a session runs", () => {
+  const x = rig();
+  try {
+    x.commit("factory/dispatch", "v2\n");
+    writeFileSync(join(x.clone, "factory/stray.service"), "x\n");
+    assert.deepEqual(x.lines(x.run(["check", "--force"])), ["update: skipped (the plugins clone has untracked files under factory/)", "=> none"]);
+    rmSync(join(x.clone, "factory/stray.service"));
+    // Current, refresh due, but a session runs: no refresh.
+    const y = rig();
+    try {
+      assert.equal(x.decision(y.run(["check", "--busy"])), "=> none");
+      assert.equal(x.decision(y.run(["check", "--force"])), "=> refresh");
+    } finally {
+      y.done();
+    }
+  } finally {
+    x.done();
+  }
+});
+
+test("update.reason names no local path", () => {
+  const x = rig();
+  try {
+    x.git(x.clone, "remote", "set-url", "origin", join(x.t, "gone.git"));
+    const r = x.run(["check", "--force"]);
+    assert.deepEqual(x.lines(r), ["update: skipped (git fetch origin main failed in the plugins clone)", "=> none"]);
+    assert.doesNotMatch(read(join(x.state, "update.json")), new RegExp(x.t));
   } finally {
     x.done();
   }
@@ -281,6 +364,33 @@ test("canary order: update after <machine> waits for 3 of its ticks on the same 
   }
 });
 
+test("canary: a commit outside factory/ after the leader's install neither stalls the follower nor resets its count", () => {
+  const x = rig();
+  try {
+    const a = x.commit("factory/dispatch", "v2\n");
+    writeFileSync(x.conf, "label keith-omarchy\nupdate after kevin-omarchy\n");
+    const fleet = join(x.t, "fleet.json");
+    const beat = (s, pass) => writeFileSync(fleet, JSON.stringify({ machines: [
+      { machine: "kevin-omarchy", heartbeat: { installed: { factorySha: s }, update: { boot: "boot: ok" }, lastPassAt: pass } },
+    ] }));
+    const check = () => x.run(["check", "--fleet", fleet], { CLAUDE_FACTORY_UPDATE_EVERY: "0" });
+    beat(a, "2026-11-05T10:00:00Z");
+    assert.match(x.lines(check())[0], /for 1 of 3 ticks/);
+    // A skills commit lands: the leader stays on a (nothing under factory/ changed for it).
+    const b = x.commit("README.md", "r2\n");
+    beat(a, "2026-11-05T10:02:00Z");
+    assert.match(x.lines(check())[0], new RegExp(`behind \\(${b.slice(0, 7)}; waiting: kevin-omarchy has run ${b.slice(0, 7)} with boot: ok for 2 of 3 ticks\\)`));
+    beat(a, "2026-11-05T10:04:00Z");
+    assert.equal(x.decision(check()), `=> apply ${b}`);
+    // The board's answer is data: a sha that isn't a full hex sha never reaches git.
+    const c = x.commit("factory/dispatch", "v3\n");
+    beat("--output=/tmp/x", "2026-11-05T10:06:00Z");
+    assert.match(x.lines(check())[0], new RegExp(`waiting: kevin-omarchy is not on ${c.slice(0, 7)}`));
+  } finally {
+    x.done();
+  }
+});
+
 test("refresh pulls clean repo clones on their default branch, skips dirty ones, and writes no config, cap, token or env file", () => {
   const x = rig();
   try {
@@ -348,6 +458,9 @@ test("the heartbeat carries update next to installed", () => {
     assert.equal(hb.update.latestSha, x.head());
     assert.equal(hb.update.boot, "boot: ok");
     assert.ok(Object.keys(hb).indexOf("update") === Object.keys(hb).indexOf("installed") + 1);
+    // installed.json's source (the clone's path) stays on the machine.
+    assert.ok(JSON.parse(read(join(x.state, "installed.json"))).source);
+    assert.equal("source" in hb.installed, false);
     // An unknown state is not sent.
     writeFileSync(join(x.state, "update.json"), '{"state":"weird","reason":"x"}');
     assert.equal(heartbeatSnapshot({ HOME: x.home, FACTORY_MACHINE: "kevin-omarchy" }).update, null);
@@ -433,6 +546,27 @@ test("dispatcher: the board's updatesHeld skips; updateRequested checks now, onc
   } finally {
     x.done();
   }
+});
+
+test("dispatcher: update after <machine> with no board answer holds and starts nothing", () => {
+  const x = rig();
+  try {
+    x.commit("factory/dispatch", "v2\n");
+    writeFileSync(x.conf, "label keith-omarchy\nupdate after kevin-omarchy\n");
+    const r = tick(x);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /waiting: can't read kevin-omarchy's heartbeat from the board/);
+    assert.doesNotMatch(x.calls(), /claude-factory-update/);
+  } finally {
+    x.done();
+  }
+});
+
+test("the real install.sh records the clone it ran from as installed.json source", () => {
+  const s = read(join(ROOT, "factory", "install.sh"));
+  assert.match(s, /--arg source "\$\(git -C "\$REPO" rev-parse --show-toplevel/);
+  assert.match(s, /source: \(\$source \| if \. == "" then null else \. end\)/);
+  assert.match(s, /^for f in [^\n]* claude-factory-update[ ;]/m);
 });
 
 test("every systemd-run in the dispatcher's update step reads stdin from /dev/null", () => {

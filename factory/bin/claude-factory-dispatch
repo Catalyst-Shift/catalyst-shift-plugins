@@ -2472,8 +2472,10 @@ update_step() {
   fi
   starting=$(starting_unit)
   [ -z "$starting" ] || args+=(--hold "$starting is starting")
+  # Any session running holds the plugin and gstack refresh (not the install).
+  [ "$(running)" = 0 ] || args+=(--busy)
   # The canary's heartbeat, from the board with the machine token. No answer
-  # means the check holds (it never updates without the canary).
+  # means the check holds, unless Update now (--force) skips the canary wait.
   leader=$(awk '$1 == "update" && $2 == "after" { print $3; exit }' "$CONF")
   rm -f "$STATE/update/fleet.json"
   if [ -n "$leader" ] && [ -n "$INGEST_TOKEN" ] && mkdir -p "$STATE/update" &&
@@ -2496,8 +2498,9 @@ update_step() {
   esac
   local target=-
   [ "$decision" = refresh ] || target=${decision#apply }
+  # RuntimeMaxSec: a hung install must not hold every tick (install.sh itself has 600 s, twice with a rollback).
   if systemd-run --user --quiet --unit=claude-factory-update --collect --description="Claude factory self-update (CAT-1562)" \
-    --setenv=PATH="$PATH" \
+    --setenv=PATH="$PATH" --property=RuntimeMaxSec=1800 \
     --property=UnsetEnvironment="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN FACTORY_INGEST_TOKEN" \
     --property=StandardOutput="append:$STATE/update.log" --property=StandardError="append:$STATE/update.log" \
     "$UPDATER" apply "$target" </dev/null; then
