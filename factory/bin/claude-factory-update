@@ -1,0 +1,320 @@
+#!/usr/bin/env bash
+# Claude factory self-update (CAT-1562). The machine pulls its own updates: the
+# dispatcher asks this script on its tick, and nothing on the web calls in.
+# Only merged plugins `main` installs, and a person merges every plugins PR.
+#
+#   claude-factory-update check [--force] [--held] [--hold <why>] [--busy] [--fleet <file>]
+#       Run by the dispatcher, at most every 10 minutes (--force: the board's
+#       "Update now", which also skips the canary wait). It runs `git fetch
+#       origin main` in the plugins clone that install.sh last ran from
+#       (installed.json `source`) and decides:
+#         current      origin/main is the installed factorySha, or changes
+#                      nothing under factory/ since it;
+#         skipped      `update off` in repos.conf, held from the board (--held),
+#                      not a fast-forward, a dirty clone or one not on main, or a
+#                      boot check that is not ok before the update;
+#         behind       an update is due, but waits: for a session that is
+#                      starting (--hold), or for the canary machine (`update
+#                      after <machine>` in repos.conf; --fleet is the board's
+#                      latest heartbeats, which the dispatcher fetched);
+#         rolled-back  origin/main is the sha whose install, boot check or
+#                      smoke check failed last.
+#       It writes state/update.json for the heartbeat, one "update: ..." line per
+#       check, and a last line the dispatcher acts on:
+#         "=> apply <sha>"  install that sha;
+#         "=> refresh"      refresh the plugins, gstack and repo clones (hourly,
+#                           and only when no session runs: --busy holds it);
+#         "=> wait"         due, but held by --hold (an "Update now" stays pending);
+#         "=> none"         nothing to do.
+#   claude-factory-update apply <sha|->
+#       Run by the dispatcher as its own unit (claude-factory-update.service), so
+#       the tick that started it is not the one being replaced. Given a sha, it
+#       fast-forwards the plugins clone to exactly that sha (`git merge
+#       --ff-only <sha>`: the one the check and the canary approved, never a
+#       main that moved since), runs factory/install.sh and
+#       `claude-factory-bootcheck --summary`, and checks the installed scripts
+#       still parse. Anything but "boot: ok" and parsing scripts checks out the
+#       previous factorySha, re-runs install.sh from it and writes "update:
+#       rolled back to <sha> (<reason>)". It never stops a session: a running
+#       builder or reviewer keeps the scripts it started with. Given "-", it
+#       refreshes the plugins (claude plugin marketplace update, claude plugin
+#       update), gstack (gstack-upgrade) and every clean repo clone in
+#       repos.conf (git pull --ff-only).
+# It installs code only: it never writes repos.conf, caps, tokens or environment
+# files (install.sh keeps repos.conf as it is).
+set -uo pipefail
+
+STATE=$HOME/.local/state/claude-factory
+UPD=$STATE/update
+CONF=${CLAUDE_FACTORY_CONF:-$HOME/.config/claude-factory/repos.conf}
+INSTALLED=$STATE/installed.json
+BOOTCHECK=${CLAUDE_FACTORY_BOOTCHECK:-$HOME/.local/bin/claude-factory-bootcheck}
+CLAUDE=${CLAUDE_BIN:-$(command -v claude || true)}
+GSTACK_DIR=${GSTACK_DIR:-$HOME/.claude/skills/gstack}
+MARKETPLACE=catalyst-shift-plugins
+PLUGINS="catalyst-ops design-skill"
+CHECK_EVERY=${CLAUDE_FACTORY_UPDATE_EVERY:-600}
+REFRESH_EVERY=${CLAUDE_FACTORY_REFRESH_EVERY:-3600}
+# The canary machine's heartbeat must show the new sha with boot ok on this
+# many of its own ticks (distinct lastPassAt) before this machine follows.
+CANARY_TICKS=3
+# install.sh waits on gh, claude and claude mcp list; a hang must not hold every tick.
+INSTALL_TIMEOUT=${CLAUDE_FACTORY_INSTALL_TIMEOUT:-600}
+
+# Everything runs from main(), which bash has read whole before it starts: when
+# install.sh replaces this file mid-run, the running copy is unaffected.
+main() {
+  mkdir -p "$UPD" || { echo "update: could not make $UPD" >&2; return 1; }
+  case "${1:-}" in
+    check) shift; check "$@" ;;
+    apply) [ $# -ge 2 ] || { echo "usage: claude-factory-update apply <sha|->" >&2; return 2; }; apply "$2" ;;
+    *) echo "usage: claude-factory-update check [--force] [--held] [--hold <why>] [--busy] [--fleet <file>] | apply <sha|->" >&2; return 2 ;;
+  esac
+}
+
+say() { echo "update: $*"; }
+short() { printf '%s' "${1:0:7}"; }
+# Whether file $1 was touched less than $2 seconds ago.
+fresh() { [ -e "$1" ] && [ $(($(date +%s) - $(stat -c %Y "$1"))) -lt "$2" ]; }
+conf_lines() { [ -f "$CONF" ] && awk '$1 == "update"' "$CONF"; }
+update_off() { conf_lines | awk '$2 == "off" { f = 1 } END { exit !f }'; }
+leader() { conf_lines | awk '$2 == "after" && $3 != "" { print $3; exit }'; }
+
+# state/update.json: what the heartbeat sends as `update` (CAT-1562).
+write_state() {
+  local state=$1 latest=$2 reason=$3 boot=${4:-}
+  jq -n --arg at "$(date -Is)" --arg latest "$latest" --arg state "$state" --arg reason "$reason" --arg boot "$boot" \
+    '{checkedAt: $at, latestSha: (if $latest == "" then null else $latest end), state: $state,
+      reason: (if $reason == "" then null else $reason end), boot: (if $boot == "" then null else $boot end)}' \
+    >"$STATE/update.json.tmp" 2>/dev/null && mv "$STATE/update.json.tmp" "$STATE/update.json" ||
+    echo "update: could not write $STATE/update.json" >&2
+}
+
+installed_sha() { jq -r '.factorySha // empty' "$INSTALLED" 2>/dev/null || true; }
+# The plugins clone install.sh last ran from, or CLAUDE_FACTORY_CLONE.
+clone_dir() {
+  local d
+  d=$(jq -r '.source // empty' "$INSTALLED" 2>/dev/null || true)
+  printf '%s' "${d:-${CLAUDE_FACTORY_CLONE:-}}"
+}
+boot_summary() {
+  if [ -x "$BOOTCHECK" ]; then "$BOOTCHECK" --summary </dev/null 2>/dev/null | tail -1; else echo "boot: unknown (no $BOOTCHECK)"; fi
+}
+
+# Why the clone can't be fast-forwarded safely, or nothing when it can.
+clone_problem() {
+  local c=$1 latest=$2 branch
+  # Reasons go to the board in the heartbeat: they name no local path.
+  [ -d "$c" ] && git -C "$c" rev-parse --git-dir >/dev/null 2>&1 || { echo "the plugins clone named in installed.json is not a git clone"; return; }
+  if [ "$(git -C "$c" rev-parse --path-format=absolute --git-dir 2>/dev/null)" != "$(git -C "$c" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" ]; then
+    echo "install.sh last ran from a linked worktree; run it once from the main clone"; return
+  fi
+  branch=$(git -C "$c" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "a detached HEAD")
+  [ "$branch" = main ] || { echo "the plugins clone is on $branch, not main"; return; }
+  [ -z "$(git -C "$c" status --porcelain --untracked-files=no 2>/dev/null)" ] || { echo "the plugins clone has uncommitted changes"; return; }
+  # install.sh copies every file in factory/'s unit and env folders: an untracked one there would be installed.
+  [ -z "$(git -C "$c" status --porcelain --untracked-files=all -- factory/ 2>/dev/null)" ] || { echo "the plugins clone has untracked files under factory/"; return; }
+  git -C "$c" merge-base --is-ancestor HEAD "$latest" 2>/dev/null || { echo "the plugins clone has commits that are not on origin/main"; return; }
+}
+
+# Whether the canary machine has run $2's factory/ with boot ok for CANARY_TICKS
+# ticks: its installed sha is $2, or an ancestor of $2 with the same factory/
+# (a machine installs only on a factory/ change, so it stays on the last one).
+# Prints why not. state/update/canary keeps "<sha> <lastPassAt>" per tick seen.
+canary_ok() {
+  local c=$1 latest=$2 lead=$3 fleet=$4 row sha boot pass result n key
+  if [ -z "$fleet" ] || ! row=$(jq -ce --arg m "$lead" 'first(.machines[]? | select(.machine == $m) | .heartbeat) // empty' "$fleet" 2>/dev/null); then
+    echo "can't read $lead's heartbeat from the board"; return 1
+  fi
+  IFS=$'\t' read -r sha boot pass result < <(jq -r '[(.installed.factorySha // "-"), (.update.boot // "-"), (.lastPassAt // "-"), (.lastPassResult // "-")] | @tsv' <<<"$row")
+  # A tick that ended in an error is not a healthy canary tick, whatever the boot check says.
+  if [[ $result == error* ]]; then
+    rm -f "$UPD/canary"
+    echo "$lead's last tick ended in an error ($result)"; return 1
+  fi
+  # The board's answer is data: only a full sha this clone has goes to git.
+  if [[ $sha =~ ^[0-9a-f]{40}$ ]] && [ "$sha" != "$latest" ] && git -C "$c" merge-base --is-ancestor "$sha" "$latest" 2>/dev/null &&
+    git -C "$c" diff --quiet "$sha" "$latest" -- factory/ 2>/dev/null; then
+    sha=$latest
+  fi
+  if [ "$sha" != "$latest" ] || [ "$boot" != "boot: ok" ] || [ "$pass" = - ]; then
+    rm -f "$UPD/canary"
+    echo "$lead is not on $(short "$latest") with boot: ok yet"; return 1
+  fi
+  # Counted per factory/ tree, so a later commit outside factory/ keeps the count.
+  key=$(git -C "$c" rev-parse --verify --quiet "$latest:factory" 2>/dev/null || echo "$latest")
+  grep -qxF "$key $pass" "$UPD/canary" 2>/dev/null || echo "$key $pass" >>"$UPD/canary"
+  n=$(grep -c "^$key " "$UPD/canary" 2>/dev/null || true)
+  [ "${n:-0}" -ge "$CANARY_TICKS" ] && return 0
+  echo "$lead has run $(short "$latest") with boot: ok for ${n:-0} of $CANARY_TICKS ticks"; return 1
+}
+
+check() {
+  local force= held= hold= fleet= busy= c installed latest why boot lead bad badtree refresh=
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --force) force=1 ;;
+      --held) held=1 ;;
+      --hold) hold=${2:-}; shift ;;
+      --fleet) fleet=${2:-}; shift ;;
+      --busy) busy=1 ;;
+    esac
+    shift
+  done
+  if update_off; then
+    say "skipped (update off in repos.conf)"; write_state skipped "" "update off in repos.conf"; echo "=> none"; return 0
+  fi
+  if [ -n "$held" ]; then
+    say "skipped (held from the board)"; write_state skipped "" "held from the board"; echo "=> none"; return 0
+  fi
+  if [ -z "$force" ] && fresh "$UPD/checked" "$CHECK_EVERY"; then echo "=> none"; return 0; fi
+  touch "$UPD/checked"
+  fresh "$UPD/refreshed" "$REFRESH_EVERY" || refresh=1
+  # One "update: skipped (<reason>)" line and nothing installed.
+  skip() { say "skipped ($1)"; write_state skipped "${latest:-}" "$1" "${boot:-}"; echo "=> none"; }
+  # Nothing to install: a refresh when one is due and no session runs (--busy):
+  # plugins and gstack change files a running session may still read.
+  idle() {
+    if [ -n "$refresh" ] && [ -z "$hold" ] && [ -z "$busy" ]; then echo "=> refresh"; else echo "=> none"; fi
+  }
+  c=$(clone_dir)
+  [ -n "$c" ] || { skip "installed.json names no plugins clone (run factory/install.sh once by hand)"; return 0; }
+  installed=$(installed_sha)
+  [ -n "$installed" ] || { skip "installed.json has no factorySha (run factory/install.sh once by hand)"; return 0; }
+  if ! timeout 120 git -C "$c" fetch --quiet origin main </dev/null 2>/dev/null; then
+    skip "git fetch origin main failed in the plugins clone"; return 0
+  fi
+  latest=$(git -C "$c" rev-parse --verify --quiet origin/main 2>/dev/null) || { skip "no origin/main in the plugins clone"; return 0; }
+  boot=$(boot_summary)
+  # update/bad is "<sha> <factory/ tree> <reason>" of the last rollback. Read
+  # first: a failed rollback install can leave installed.json on the bad sha.
+  # Keyed by the tree too, so a later commit outside factory/ doesn't re-install
+  # the same broken factory/.
+  if [ -s "$UPD/bad" ]; then
+    IFS=$'\t' read -r bad badtree why <"$UPD/bad"
+    if [ "$latest" = "$bad" ] || [ "$(git -C "$c" rev-parse --verify --quiet "$latest:factory" 2>/dev/null)" = "$badtree" ]; then
+      say "rolled-back ($why; waiting for a factory/ change on origin/main)"; write_state rolled-back "$latest" "$why" "$boot"; idle; return 0
+    fi
+  fi
+  if [ "$latest" = "$installed" ]; then
+    say "current ($(short "$installed"))"; write_state current "$latest" "" "$boot"; idle; return 0
+  fi
+  if ! git -C "$c" merge-base --is-ancestor "$installed" "$latest" 2>/dev/null; then
+    skip "origin/main $(short "$latest") is not a fast-forward of the installed $(short "$installed")"; return 0
+  fi
+  why=$(clone_problem "$c" "$latest")
+  [ -z "$why" ] || { skip "$why"; return 0; }
+  if git -C "$c" diff --quiet "$installed" "$latest" -- factory/ 2>/dev/null; then
+    say "current (nothing under factory/ changed since $(short "$installed"))"
+    write_state current "$latest" "nothing under factory/ changed since $(short "$installed")" "$boot"; idle; return 0
+  fi
+  # A machine whose boot check already fails would install, fail it and roll back every time.
+  [ "$boot" = "boot: ok" ] || { skip "the boot check is not ok before the update: $boot"; return 0; }
+  lead=$(leader)
+  if [ -n "$lead" ] && [ -z "$force" ] && ! why=$(canary_ok "$c" "$latest" "$lead" "$fleet"); then
+    say "behind ($(short "$latest"); waiting: $why)"; write_state behind "$latest" "waiting: $why" "$boot"; echo "=> none"; return 0
+  fi
+  if [ -n "$hold" ]; then
+    # Checked again next tick, not in 10 minutes.
+    rm -f "$UPD/checked"
+    say "behind ($(short "$latest"); waiting: $hold)"; write_state behind "$latest" "waiting: $hold" "$boot"; echo "=> wait"; return 0
+  fi
+  say "behind ($(short "$latest"); installing)"; write_state behind "$latest" "installing" "$boot"
+  echo "=> apply $latest"
+}
+
+# Plugins, gstack and every repo clone in repos.conf (CAT-1562 checklist 4).
+refresh() {
+  local p dir _ c branch def out
+  touch "$UPD/refreshed"
+  if [ -n "$CLAUDE" ]; then
+    if out=$(timeout 300 "$CLAUDE" plugin marketplace update "$MARKETPLACE" </dev/null 2>&1); then say "marketplace $MARKETPLACE updated"
+    else say "marketplace $MARKETPLACE: update failed: $(tail -1 <<<"$out")"; fi
+    for p in $PLUGINS; do
+      if out=$(timeout 300 "$CLAUDE" plugin update "$p@$MARKETPLACE" </dev/null 2>&1); then say "plugin $p: $(tail -1 <<<"$out")"
+      else say "plugin $p: update failed: $(tail -1 <<<"$out")"; fi
+    done
+  else
+    say "claude not found; plugins not updated"
+  fi
+  # gstack's own upgrade command, from $HOME so it certifies no project.
+  if [ -x "$GSTACK_DIR/bin/gstack-upgrade" ]; then
+    if out=$(cd "$HOME" && timeout 600 "$GSTACK_DIR/bin/gstack-upgrade" </dev/null 2>&1); then say "gstack: $(tail -1 <<<"$out")"
+    else say "gstack: upgrade refused or failed: $(tail -1 <<<"$out")"; fi
+  else
+    say "gstack: no $GSTACK_DIR/bin/gstack-upgrade"
+  fi
+  c=$(clone_dir)
+  while read -r dir _; do
+    dir=${dir/#\~/$HOME}
+    # The plugins clone moves only with an install, in apply.
+    if [ -n "$c" ] && [ "$(cd "$dir" 2>/dev/null && pwd -P)" = "$(cd "$c" 2>/dev/null && pwd -P)" ]; then continue; fi
+    if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then say "repo $dir: skipped (not a git clone)"; continue; fi
+    if [ -n "$(git -C "$dir" status --porcelain --untracked-files=no 2>/dev/null)" ]; then say "repo $dir: skipped (uncommitted changes)"; continue; fi
+    branch=$(git -C "$dir" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+    def=$(git -C "$dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)
+    if [ "$branch" != "${def#origin/}" ]; then say "repo $dir: skipped (on ${branch:-a detached HEAD}, not ${def#origin/})"; continue; fi
+    if timeout 120 git -C "$dir" pull --ff-only --quiet </dev/null >/dev/null 2>&1; then say "repo $dir: at $(short "$(git -C "$dir" rev-parse HEAD)")"
+    else say "repo $dir: git pull --ff-only failed"; fi
+  done < <([ -f "$CONF" ] && grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]]|prs[[:space:]]|parallel[[:space:]]|update[[:space:]])' "$CONF")
+}
+
+# The installed scripts still parse: the boot check reads systemd only, and a
+# dispatcher that no longer runs could never pull its own fix. Prints the first
+# failure, or nothing.
+smoke() {
+  local f bin
+  bin=$(dirname "$BOOTCHECK")
+  for f in claude-factory-dispatch claude-factory-update claude-factory-bootcheck claude-factory-mark-done; do
+    [ ! -e "$bin/$f" ] || bash -n "$bin/$f" 2>/dev/null || { echo "$f does not parse (bash -n)"; return; }
+  done
+  if [ -e "$bin/claude-factory-stream" ] && command -v node >/dev/null; then
+    node --check "$bin/claude-factory-stream" >/dev/null 2>&1 || echo "claude-factory-stream does not parse (node --check)"
+  fi
+}
+
+apply() {
+  local target=$1 c prev now why rc boot reason
+  # "-": the hourly refresh alone. A sha: the factory install alone.
+  if [ "$target" = - ]; then refresh; return 0; fi
+  c=$(clone_dir)
+  prev=$(installed_sha)
+  if [ -z "$c" ] || [ -z "$prev" ]; then say "skipped (installed.json names no clone or factorySha)"; write_state skipped "$target" "installed.json names no clone or factorySha"; return 0; fi
+  # The clone may have changed since the check.
+  why=$(clone_problem "$c" "$target")
+  [ -z "$why" ] || { say "skipped ($why)"; write_state skipped "$target" "$why"; return 0; }
+  git -C "$c" merge-base --is-ancestor "$prev" "$target" 2>/dev/null || {
+    say "skipped (not a fast-forward of $(short "$prev"))"; write_state skipped "$target" "not a fast-forward of $(short "$prev")"; return 0; }
+  # The sha the check approved (and the canary ran), never a main that moved
+  # since: check already fetched it, so this needs no network.
+  if ! git -C "$c" merge --ff-only --quiet "$target" </dev/null; then
+    say "skipped (git merge --ff-only $(short "$target") failed)"; write_state skipped "$target" "git merge --ff-only $(short "$target") failed"; return 0
+  fi
+  now=$(git -C "$c" rev-parse HEAD)
+  say "installing $(short "$now") over $(short "$prev")"
+  rc=0
+  timeout "$INSTALL_TIMEOUT" "$c/factory/install.sh" </dev/null || rc=$?
+  boot=$(boot_summary)
+  why=$(smoke)
+  if [ "$rc" = 0 ] && [ "$boot" = "boot: ok" ] && [ -z "$why" ]; then
+    rm -f "$UPD/bad" "$UPD/canary"
+    say "installed $(short "$now") (boot: ok)"; write_state current "$now" "installed $(short "$now")" "$boot"
+    return 0
+  fi
+  if [ "$rc" != 0 ]; then reason="install.sh failed (exit $rc)"
+  elif [ "$boot" != "boot: ok" ]; then reason="boot check said: $boot"
+  else reason=$why; fi
+  # Roll back: the previous factorySha, installed from itself.
+  if git -C "$c" reset --quiet --keep "$prev" && timeout "$INSTALL_TIMEOUT" "$c/factory/install.sh" </dev/null; then
+    boot=$(boot_summary)
+  else
+    reason="$reason; the rollback install failed too"
+    boot=$(boot_summary)
+  fi
+  printf '%s\t%s\trolled back to %s (%s)\n' "$now" "$(git -C "$c" rev-parse --verify --quiet "$now:factory" 2>/dev/null || echo -)" "$(short "$prev")" "$reason" >"$UPD/bad"
+  say "rolled back to $(short "$prev") ($reason)"
+  write_state rolled-back "$now" "rolled back to $(short "$prev") ($reason)" "$boot"
+  return 0
+}
+
+main "$@"; exit $?

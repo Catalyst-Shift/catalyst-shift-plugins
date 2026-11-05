@@ -10,8 +10,10 @@ this folder; Keith's setup follows this README.
 ## Daily use
 
 ```bash
-# install or update (safe to re-run; enables nothing by itself)
+# install or update (safe to re-run; enables nothing by itself). After the first
+# install the machine updates itself when main moves (see Self-update).
 git -C ~/Projects/catalyst-shift-plugins pull && ~/Projects/catalyst-shift-plugins/factory/install.sh
+tail ~/.local/state/claude-factory/update.log     # what the last self-update did
 
 touch ~/.local/state/claude-factory/paused      # pause: no new sessions or reviews
 rm ~/.local/state/claude-factory/paused         # resume
@@ -508,6 +510,64 @@ dispatcher ignores control and the usual caps apply.
 
 ---
 
+## Self-update
+
+The machine updates itself when plugins `main` moves (CAT-1562). It pulls:
+nothing on the web calls into it, and only merged `main` installs, so nothing
+lands without a person's merge.
+
+- **Check.** At most every 10 minutes the tick runs
+  `claude-factory-update check`: `git fetch origin main` in the clone install.sh
+  last ran from (`source` in `installed.json`). When `origin/main` is a
+  fast-forward of the installed `factorySha` and changes something under
+  `factory/`, an update is due. A non-fast-forward, a clone with uncommitted
+  changes (or untracked files under `factory/`) or not on `main`, or a boot
+  check that is already failing installs
+  nothing and logs one `update: skipped (<reason>)` line.
+- **Wait.** The update waits for a tick with no session starting (a
+  `factory-*` unit activating, or active for under 60 seconds). Running
+  builders and reviewers keep running on the scripts they started with (only
+  `claude-factory-mark-done`, which a session runs as it stops, is the new
+  one); the update never stops a session. The check runs first in the tick,
+  so a version that breaks a later step still pulls its own fix.
+- **Apply.** The tick starts `claude-factory-update apply <sha>` as its own
+  unit, `claude-factory-update.service` (30 minutes at most), and ends; ticks
+  hold while it runs. It fast-forwards the clone to exactly the sha the check
+  (and the canary) approved, the same result as `git pull --ff-only` without
+  picking up a commit merged since, runs `factory/install.sh`, then
+  `claude-factory-bootcheck --summary`, and checks the installed scripts still
+  parse (`bash -n`, `node --check`). Anything but `boot: ok` and parsing
+  scripts checks out the previous `factorySha`, re-runs its install.sh and logs
+  `update: rolled back to <sha> (<reason>)`; that `factory/` is not tried again
+  until a commit changes it.
+- **Refresh.** The same unit, at most hourly and only on a tick with no session
+  running (plugins and gstack change files a running session may still read),
+  runs `claude plugin marketplace update` and `claude plugin update` for
+  catalyst-ops and design-skill, `gstack-upgrade`, and `git pull --ff-only` in
+  every repo clone in repos.conf that is clean and on its default branch (one
+  with uncommitted changes is skipped and logged). Brain notes reach sessions
+  through those clones.
+- **Pause.** A pause (the `paused` file or the board's) stops new cards, not
+  updates; use `update off` or Hold updates for that.
+- **Code only.** It never writes repos.conf, caps, tokens or environment files.
+- **Heartbeat.** `update: {checkedAt, latestSha, state, reason, boot}`, where
+  state is `current`, `behind`, `skipped` or `rolled-back`.
+  `claude-factory-dispatch status` shows the same in one line. The log is
+  `~/.local/state/claude-factory/update.log`.
+
+**Canary order.** `update after kevin-omarchy` in Keith's repos.conf makes his
+machine update only once kevin-omarchy's heartbeat has shown the same
+`factorySha` (or an older one with the same `factory/`) with `boot: ok` on 3
+of its ticks; a tick that ended in an error starts the count again. The machine reads that
+heartbeat from the board (`GET /api/machines`) with its token; until the board
+answers it, the machine waits and says why in `update.reason`.
+
+**Turn it off.** Add `update off` to `~/.config/claude-factory/repos.conf`; the
+next tick stops checking (`update: skipped (update off in repos.conf)`). From
+the board, Hold updates (`updatesHeld`, CAT-1563) does the same remotely, and
+Update now (`updateRequested`) checks on the next tick without the canary wait.
+Remove the line to turn it back on.
+
 ## First install
 
 1. Prerequisites (install.sh checks each and prints what's missing): Chrome
@@ -715,6 +775,7 @@ changes nothing.
 | `bin/claude-factory-stream` (node 18+) | `~/.local/bin/` |
 | `bin/claude-factory-mark-done` | `~/.local/bin/` |
 | `bin/claude-factory-bootcheck` | `~/.local/bin/` |
+| `bin/claude-factory-update` | `~/.local/bin/` |
 | `systemd/claude-factory.service`, `.timer` | `~/.config/systemd/user/` |
 | `systemd/claude-factory-heartbeat.service` | `~/.config/systemd/user/` |
 | `systemd/claude-rc@.service` | `~/.config/systemd/user/` |
@@ -725,8 +786,11 @@ State and logs live in `~/.local/state/claude-factory/`: `launched` (the branche
 it started), `launched-boot/` (the boot each builder started in), `reviewed/`,
 `settled/`, `requeued/`, `settle-wait/`, `merge/`, `pick-<project>.log`, `settle.log`,
 `merge.log`, `cat-NNN.log`, `review-cat-NNN.log`, `review-<repo>-pr-<n>.log`,
-`pass.json` (how the last tick ended), and with streaming on, `spool/` and
-`stream/<unit>.json`.
+`pass.json` (how the last tick ended), `installed.json` (what install.sh put
+here), `update.json` and `update.log` (the self-update's last check and what
+its unit did), `update/` (`checked` and `refreshed` stamps, `canary` ticks
+seen, `bad`: the `main` sha that rolled back, `requested`: the last Update now
+acted on), and with streaming on, `spool/` and `stream/<unit>.json`.
 
 The dispatcher finds `claude` with `command -v claude` on the service's PATH
 (`~/.local/share/mise/shims`, `~/.local/bin`, `/usr/local/bin`, `/usr/bin`).

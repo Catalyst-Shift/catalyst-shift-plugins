@@ -988,6 +988,19 @@ function installedInfo(env = process.env) {
   }
 }
 
+const UPDATE_STATES = ["current", "behind", "skipped", "rolled-back"];
+/** state/update.json as claude-factory-update wrote it (CAT-1562), or null. */
+function updateInfo(env = process.env) {
+  try {
+    const v = JSON.parse(fs.readFileSync(path.join(stateDir(env), "update.json"), "utf8"));
+    if (!isObj(v) || !UPDATE_STATES.includes(v.state)) return null;
+    const s = (x, n) => (typeof x === "string" ? x.slice(0, n) : null);
+    return { checkedAt: s(v.checkedAt, 40), latestSha: s(v.latestSha, 64), state: v.state, reason: s(v.reason, 300), boot: s(v.boot, 100) };
+  } catch {
+    return null;
+  }
+}
+
 /** What the heartbeat says, without its time. Only allowlisted fields: no env values or tokens. */
 function heartbeatSnapshot(env = process.env) {
   const st = stateDir(env);
@@ -1024,6 +1037,8 @@ function heartbeatSnapshot(env = process.env) {
     reviewCap: n(pass.reviewCap),
     // What install.sh put on this machine (CAT-1487); null on a machine that has not run it.
     installed: installedInfo(env),
+    // The self-update's last check (CAT-1562); null before the first one.
+    update: updateInfo(env),
     // Where the dispatcher's settings came from (CAT-1441): "live" (the board
     // answered on the last tick), "stale" (it did not; the last settings stay in
     // force) or "local" (no token, or no pass yet).
@@ -1097,7 +1112,7 @@ async function main(argv) {
   return 2;
 }
 
-module.exports = { sanitizeEvent, scrub, clip, stageOf, skillsUsed, installedInfo, childArgs, secretValues, heartbeatSnapshot, unitCard, kindOf, machineName, Outbox, MAX_FIELD_BYTES };
+module.exports = { sanitizeEvent, scrub, clip, stageOf, skillsUsed, installedInfo, updateInfo, childArgs, secretValues, heartbeatSnapshot, unitCard, kindOf, machineName, Outbox, MAX_FIELD_BYTES };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(

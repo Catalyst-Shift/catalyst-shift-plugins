@@ -46,6 +46,14 @@
 # rollback): only that CLAUDE.md line counts, so at most Low PRs self-merge.
 # stages claude-md
 #
+# Self-update (CAT-1562): the machine pulls plugins main and runs install.sh
+# when factory/ changes, and rolls back when the boot check fails (see the
+# README, Self-update). "update off" turns it off. "update after <machine>"
+# waits until that machine has run the same version with boot: ok for 3 ticks;
+# Keith's machine uses:
+# update after kevin-omarchy
+# update off
+#
 # Where each tick reads a repo's open PRs (CAT-1542). board (the default) asks
 # the Factory Board (GET /api/factory/prs, kept from GitHub's webhooks) with
 # the machine token, and reads GitHub only for a repo whose answer is stale,
