@@ -55,7 +55,7 @@ if [ -f "$CONF" ]; then
     else
       miss "$unit not enabled" "systemctl --user enable --now $unit"
     fi
-  done < <(grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]]|prs[[:space:]])' "$CONF" || true)
+  done < <(grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]]|prs[[:space:]]|update[[:space:]])' "$CONF" || true)
 fi
 
 if [ "$summary" = 1 ]; then

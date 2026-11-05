@@ -213,7 +213,7 @@ waiting() {
   echo "$n"
 }
 
-repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]]|prs[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
+repos() { grep -vE '^[[:space:]]*(#|$|label[[:space:]]|offset[[:space:]]|review-authors[[:space:]]|model[[:space:]]|stages[[:space:]]|prs[[:space:]]|update[[:space:]])' "$CONF" | while read -r dir project; do echo "${dir/#\~/$HOME} $project"; done; }
 
 # A finished session's worktree goes once nothing in it would be lost. Each
 # worktree has the name of the unit that uses it: factory-<card key> (builder),
@@ -2548,6 +2548,9 @@ status() {
   printf '%s' "$open"
   # CAT-1486: the stage each repo's reviewer merges by.
   jq -r '"Stages: " + ([.repos[] | "\(.repo) \(.stage) (\(.source))"] | join(", "))' <<<"$(stages_json)"
+  # CAT-1562: the self-update's last check.
+  jq -r '"update: \(.state)" + (if .reason then " (\(.reason))" else "" end) + ", checked \(.checkedAt)"' "$STATE/update.json" 2>/dev/null ||
+    echo "update: not checked yet"
   if [ -e "$STATE/paused" ]; then echo "Paused: yes (rm $STATE/paused to resume)"; else echo "Paused: no"; fi
   if [ -n "$CTL_PAUSED_UNTIL" ]; then echo "Paused by the board until $CTL_PAUSED_UNTIL (control version $CTL_VERSION)"; fi
   # CAT-1483: will it all come back after a reboot? Read-only, one line.
@@ -2600,6 +2603,85 @@ stages_json() {
     jq -cn --arg repo "$(repo_name "$dir")" --argjson stage "$stage" --arg source "$src" '{repo: $repo, stage: $stage, source: $source}'
   done < <(repos) | jq -s --arg at "$(jq -r '.fetchedAt // empty' "$STATE/stages.json" 2>/dev/null || true)" --arg mode "$STAGES_MODE" \
     '{mode: $mode, boardAnsweredAt: (if $at == "" then null else $at end), repos: .}'
+}
+
+# CAT-1562: self-update. claude-factory-update (installed beside this script)
+# decides; this tick only feeds it what it can't read itself (the board's hold
+# and "Update now", the canary machine's heartbeat, which needs the token) and
+# starts its apply as its own unit, claude-factory-update.service, which is not
+# a factory-* session and never stops one. "update off" in repos.conf turns it
+# off; "update after <machine>" waits for that machine (the canary).
+UPDATER=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/claude-factory-update
+FLEET_URL=${CLAUDE_FACTORY_FLEET_URL:-https://os.catalystshift.ai/api/machines}
+# A session whose unit became active less than this many seconds ago is still
+# starting (claude loads its plugins and skills then); the update waits for it.
+UPDATE_START_GRACE=${CLAUDE_FACTORY_UPDATE_START_GRACE:-60}
+update_running() { systemctl --user is-active --quiet claude-factory-update.service </dev/null 2>/dev/null; }
+# The first factory session still starting, or nothing.
+starting_unit() {
+  local unit _load act at ts now
+  now=$(date +%s)
+  while read -r unit _load act _; do
+    [ -n "$unit" ] || continue
+    if [ "$act" = activating ]; then printf '%s' "${unit%.service}"; return 0; fi
+    at=$(systemctl --user show "$unit" -p ActiveEnterTimestamp --value </dev/null 2>/dev/null || true)
+    ts=$(date -d "$at" +%s 2>/dev/null) || continue
+    if [ $((now - ts)) -lt "$UPDATE_START_GRACE" ]; then printf '%s' "${unit%.service}"; return 0; fi
+  done < <(systemctl --user list-units --type=service --state=active,activating --no-legend --plain 'factory-*' </dev/null 2>/dev/null)
+  return 0
+}
+update_step() {
+  local -a args=(check)
+  local starting leader out decision ver
+  [ -x "$UPDATER" ] || return 0
+  # The board's switches (CAT-1563): updatesHeld turns updates off; a new
+  # control version with updateRequested checks now and skips the canary wait.
+  if jq -e '.updatesHeld == true' "$STATE/control.json" >/dev/null 2>&1; then args+=(--held); fi
+  ver=$(jq -r '.version | if type == "number" then tostring else "null" end' "$STATE/control.json" 2>/dev/null || echo null)
+  if [[ $ver =~ ^[0-9]+$ ]] && jq -e '.updateRequested | . == true or (type == "string" and . != "")' "$STATE/control.json" >/dev/null 2>&1 &&
+    [ "$(cat "$STATE/update/requested" 2>/dev/null || true)" != "$ver" ]; then
+    args+=(--force)
+  fi
+  starting=$(starting_unit)
+  [ -z "$starting" ] || args+=(--hold "$starting is starting")
+  # Any session running holds the plugin and gstack refresh (not the install).
+  [ "$(running)" = 0 ] || args+=(--busy)
+  # The canary's heartbeat, from the board with the machine token. No answer
+  # means the check holds, unless Update now (--force) skips the canary wait.
+  leader=$(awk '$1 == "update" && $2 == "after" { print $3; exit }' "$CONF")
+  rm -f "$STATE/update/fleet.json"
+  if [ -n "$leader" ] && [ -n "$INGEST_TOKEN" ] && mkdir -p "$STATE/update" &&
+    [ "$(control_call "$STATE/update/fleet.new" "$FLEET_URL")" = 200 ] &&
+    jq -e '(.machines | type) == "array"' "$STATE/update/fleet.new" >/dev/null 2>&1; then
+    mv "$STATE/update/fleet.new" "$STATE/update/fleet.json"
+    args+=(--fleet "$STATE/update/fleet.json")
+  fi
+  rm -f "$STATE/update/fleet.new"
+  out=$("$UPDATER" "${args[@]}" </dev/null 2>&1) || true
+  grep -v '^=> ' <<<"$out" || true
+  decision=$(sed -n 's/^=> //p' <<<"$out" | tail -1)
+  # An "Update now" is used up once a check ran without a session holding it.
+  if [[ " ${args[*]} " == *" --force "* ]] && [ "$decision" != wait ]; then
+    mkdir -p "$STATE/update" && printf '%s\n' "$ver" >"$STATE/update/requested"
+  fi
+  case $decision in
+    "apply "*|refresh) ;;
+    *) return 0 ;;
+  esac
+  local target=-
+  [ "$decision" = refresh ] || target=${decision#apply }
+  # RuntimeMaxSec: a hung install or refresh must not hold every tick (install.sh
+  # has 600 s, twice with a rollback; a refresh's own timeouts add up to about 25 minutes plus 2 per repo).
+  if systemd-run --user --quiet --unit=claude-factory-update --collect --description="Claude factory self-update (CAT-1562)" \
+    --setenv=PATH="$PATH" --property=RuntimeMaxSec=3600 \
+    --property=UnsetEnvironment="ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN FACTORY_INGEST_TOKEN" \
+    --property=StandardOutput="append:$STATE/update.log" --property=StandardError="append:$STATE/update.log" \
+    "$UPDATER" apply "$target" </dev/null; then
+    echo "update: started claude-factory-update ($decision; log $STATE/update.log); this tick ends here"
+    PASS_RESULT="updating: $decision"
+    exit 0
+  fi
+  echo "update: could not start claude-factory-update; the next check tries again"
 }
 
 if [ "${1:-}" = "status" ]; then
@@ -2657,6 +2739,20 @@ pass_done() {
   write_pass "$result"
 }
 trap pass_done EXIT
+
+# CAT-1562: while the self-update unit runs, a tick does nothing (its git pulls
+# and install.sh must not race this tick's git work or session starts).
+if update_running; then
+  echo "update: claude-factory-update is running; this tick waits for it"
+  PASS_RESULT="holding: updating"
+  exit 0
+fi
+# CAT-1562: the machine updates itself when plugins main moves, first thing in
+# the tick: before it starts any session, and before any step a bad version
+# could fail in, so a broken dispatcher still pulls its own fix. It reads the
+# board's control.json as the last tick left it (control_fetch comes later,
+# and only it applies the caps). Starting the update ends the tick.
+update_step
 
 while read -r dir project; do cleanup "$dir"; done < <(repos)
 scratch_sweep

@@ -18,7 +18,9 @@ const GH_REST = join(ROOT, "tests", "support");
 const INSTALL = join(FACTORY, "install.sh");
 const MARK_DONE = join(FACTORY, "bin", "claude-factory-mark-done");
 const BOOTCHECK = join(FACTORY, "bin", "claude-factory-bootcheck");
-const SCRIPTS = [DISPATCH, INSTALL, MARK_DONE, BOOTCHECK];
+// CAT-1562: the self-update the dispatcher starts as its own unit.
+const UPDATE = join(FACTORY, "bin", "claude-factory-update");
+const SCRIPTS = [DISPATCH, INSTALL, MARK_DONE, BOOTCHECK, UPDATE];
 const read = (f) => readFileSync(f, "utf8");
 // CAT-1481: a line for systemd-run stubs. It runs the unit's ExecStopPost at
 // once, as systemd would when the session exits ($SESSION_EXIT, default 0), so
@@ -660,10 +662,12 @@ test("every builder and reviewer session passes --model, and Linear calls use th
   for (const l of calls) assert.match(l, /--model "\$MODEL_HOUSEKEEPING"/, `a housekeeping call without the housekeeping model: ${l.trim()}`);
 });
 
-test("install.sh's boot check skips label, offset, review-authors, model, stages and prs lines like the dispatcher does", () => {
-  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\|stages\[\[:space:\]\]\|prs\[\[:space:\]\]\)'/;
+test("install.sh's boot check skips label, offset, review-authors, model, stages, prs and update lines like the dispatcher does", () => {
+  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\|stages\[\[:space:\]\]\|prs\[\[:space:\]\]\|update\[\[:space:\]\]\)'/;
   assert.match(read(BOOTCHECK), skip);
   assert.match(read(DISPATCH), skip);
+  // CAT-1562: the self-update's repo refresh reads the same repo lines.
+  assert.match(read(UPDATE), skip);
 });
 
 // CAT-1483: the boot check. loginctl and systemctl are stubbed: they log every
