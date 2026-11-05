@@ -54,6 +54,11 @@
 # Pushes, comments, labels, auto-merge and the founder gate always go to GitHub.
 # prs github
 #
+# Each tick works on the repos side by side, one background job per repo, at
+# most this many at once (CAT-1547; 1 to 16, default 4). parallel 1 goes back
+# to one repo after another. The running cap still holds across all of them.
+# parallel 4
+#
 # ~/Projects/catalyst-shift catalyst-shift-site
 # ~/Projects/lbl-nextjs lbl-nextjs
 # ~/Projects/nourish-enablement nourish-rep-enablement

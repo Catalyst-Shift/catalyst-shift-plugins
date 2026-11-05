@@ -660,8 +660,8 @@ test("every builder and reviewer session passes --model, and Linear calls use th
   for (const l of calls) assert.match(l, /--model "\$MODEL_HOUSEKEEPING"/, `a housekeeping call without the housekeeping model: ${l.trim()}`);
 });
 
-test("install.sh's boot check skips label, offset, review-authors, model, stages and prs lines like the dispatcher does", () => {
-  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\|stages\[\[:space:\]\]\|prs\[\[:space:\]\]\)'/;
+test("install.sh's boot check skips label, offset, review-authors, model, stages, prs and parallel lines like the dispatcher does", () => {
+  const skip = /grep -vE '\^\[\[:space:\]\]\*\(#\|\$\|label\[\[:space:\]\]\|offset\[\[:space:\]\]\|review-authors\[\[:space:\]\]\|model\[\[:space:\]\]\|stages\[\[:space:\]\]\|prs\[\[:space:\]\]\|parallel\[\[:space:\]\]\)'/;
   assert.match(read(BOOTCHECK), skip);
   assert.match(read(DISPATCH), skip);
 });
@@ -2261,8 +2261,9 @@ esac
   };
   const running = "factory-cat-12.service\nfactory-review-cat-13.service\nfactory-conflict-my-repo-pr-27.service\n";
   const set = "lint, typecheck, test, build";
-  // The step runs right after the conflict sweep, before any reviewer starts.
-  assert.match(read(DISPATCH), /^conflicts\nci_fixes\nreviews\n/m);
+  // The step runs right after the conflict sweep, before any reviewer starts
+  // (in each repo's job, CAT-1547).
+  assert.match(read(DISPATCH), /^ *conflicts\n *ci_fixes\n *reviews\n/m);
 
   try {
     writeFileSync(units, running);
