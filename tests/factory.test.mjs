@@ -22,6 +22,17 @@ const read = (f) => readFileSync(f, "utf8");
 // once, as systemd would when the session exits ($SESSION_EXIT, default 0), so
 // a session the stub "starts" has its marker rewritten to done unless a test
 // says it was cut off. NO_STOP_POST=1 skips it (a crash: no hook ran at all).
+// CAT-1529: a reviewer prompt's step 2 (the /cso trigger) reads the base
+// branch's .github/deep-paths first and .github/CODEOWNERS only when there is
+// none, and runs /cso when it can read neither.
+const assertDeepPathsFirst = (prompt, label) => {
+  const step2 = prompt.slice(prompt.indexOf("\n2. Run gstack /review"), prompt.indexOf("\n3. "));
+  const dp = step2.indexOf("git show origin/<base branch>:.github/deep-paths");
+  const co = step2.indexOf("git show origin/<base branch>:.github/CODEOWNERS");
+  assert.ok(dp > 0 && co > dp, `${label}: step 2 must name .github/deep-paths, then .github/CODEOWNERS:\n${step2}`);
+  assert.match(step2, /only when the base branch has no \.github\/deep-paths, read its \.github\/CODEOWNERS/, label);
+  assert.match(step2, /never read either from the PR head; if you can't read either, run \/cso anyway\), also run gstack \/cso\./, label);
+};
 const STOP_POST = `[ -n "$NO_STOP_POST" ] || for a; do case $a in --property=ExecStopPost=*) EXIT_CODE=exited EXIT_STATUS=\${SESSION_EXIT:-0} bash -c "\${a#--property=ExecStopPost=}";; esac; done`;
 
 for (const f of SCRIPTS) {
@@ -118,7 +129,7 @@ test("only the card reviewer may turn on auto-merge, and only under the stage ru
   assert.match(rule, /gh pr merge \$number --auto --squash --match-head-commit <the stamped sha> only if all of these hold/);
   assert.match(rule, /base is the repo's default branch/);
   assert.match(rule, /Risk section names exactly one risk \(Low, Medium or High\) and it is one stage \$stage allows \(missing, mixed or unclear fails\)/);
-  assert.match(rule, /no file in gh pr diff \$number --name-only matches a path in the base branch's \.github\/CODEOWNERS/);
+  assert.match(rule, /no file in gh pr diff \$number --name-only matches a deep path of the base branch: its \.github\/deep-paths when it has one, else its \.github\/CODEOWNERS \(read as in step 2; if you can't read either, this fails\)/);
   assert.match(rule, /you stamped it and the stamp's sha still equals the PR head/);
   assert.match(rule, /merge-rule \$\(repo_name "\$dir"\) <that risk> --pr \$number --dry-run exits 0 and its first line says 'self-merge allowed'/);
   // CAT-1512: never auto-merge past a red founder gate, and never merge past any other red check.
@@ -564,6 +575,10 @@ case \${!#} in *"Ready For Factory"*) echo "pick $m" >>"${calls}"; echo "\${PICK
   assert.equal(r.status, 0, r.stderr);
   assert.equal(modelOf("factory-review-cat-9"), sonnet);
   assert.match(r.stdout, /started review of CAT-9 .*model claude-sonnet-5-5,/);
+  // CAT-1529: the generated card-reviewer prompt reads deep-paths, then CODEOWNERS, in step 2 and in rule (c).
+  const cardPrompt = read(`${units}.factory-review-cat-9.args`);
+  assertDeepPathsFirst(cardPrompt, "card reviewer");
+  assert.match(cardPrompt, /\(c\) no file in gh pr diff 9 --name-only matches a deep path of the base branch: its \.github\/deep-paths when it has one, else its \.github\/CODEOWNERS \(read as in step 2; if you can't read either, this fails\);/);
   assert.equal(modelOf("factory-cat-1"), sonnet);
   assert.match(r.stdout, /started CAT-1 .*model claude-sonnet-5-5 for risk Low,/);
   assert.match(read(calls), /^pick haiku$/m);
@@ -839,6 +854,8 @@ exit 0
   // Never: the draft, dependabot, the opted-out PR, the stamped one, the factory branch.
   assert.deepEqual(reviewed(), [`1-${sha("1")}`, `4-${sha("4")}`, `8-${sha("8")}`]);
   assert.match(read(`${units}.factory-review-my-repo-pr-4`), /git push origin 'HEAD:b\/4'/);
+  // CAT-1529: the generated outside-PR reviewer prompt reads deep-paths, then CODEOWNERS, for its /cso trigger.
+  assertDeepPathsFirst(read(`${units}.factory-review-my-repo-pr-4`), "outside-PR reviewer");
 
   // A fork PR (login in another case) is reviewed but told to push nothing; a
   // branch name that isn't plain is skipped; a failed checkout leaves no marker
@@ -2867,9 +2884,17 @@ case "$1 $2" in
   "repo view") echo main; exit 0;;
   "pr view") jq -r "$q" "${t}/pr.json"; exit;;
   "pr list") [ -e "${t}/list-fail" ] && exit 1; jq -r "$q" "${t}/list.json"; exit;;
+  # CAT-1529: the files a PR changes, from files.json.
+  "api --paginate") case $3 in *pulls/7/files*) jq -r "$q" "${t}/files.json"; exit;; esac; exit 1;;
 esac
 if [ "$1" = api ]; then
   case $2 in
+    # CAT-1529: deep "file" serves the raw .github/deep-paths the test wrote.
+    *deep-paths*)
+      case $(cat "${t}/deep") in
+        file) jq -n --rawfile c "${t}/deep-paths" '{type: "file", encoding: "base64", content: ($c | @base64 | .[0:20] + "\\n" + .[20:])}' | jq -r "$q"; exit;;
+        dir) echo '[{"type":"file","name":"x"}]' | jq -r "$q"; exit;;
+      esac;;&
     *check-runs*)
       [ -e "${t}/runs-fail" ] && { echo "gh: Bad Gateway (HTTP 502)" >&2; exit 1; }
       sha=$(printf '%s' "$2" | sed 's|.*/commits/||; s|/.*||')
@@ -3006,6 +3031,142 @@ test("CAT-1512: no founder gate check passes only on a repo with no .github/deep
     r = rule();
     assert.equal(r.status, 1);
     assert.match(r.stdout, /founder gate error: could not tell whether main has \.github\/deep-paths/);
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+// CAT-1529: a repo that moved from CODEOWNERS to .github/deep-paths (catalyst_os,
+// the site): rule (c) reads deep-paths, so a PR that touches no deep path can
+// self-merge below stage 4, and merge-rule checks (c) itself. The rig is put
+// at stage 3 through the board's cached answer.
+function deepRig() {
+  const g = gateRig();
+  const { t, head, checkRuns, gate } = g;
+  const home = join(t, "home"), state = join(home, ".local/state/claude-factory");
+  writeFileSync(join(home, ".config/claude-factory/repos.conf"), `label kevin-omarchy\n${join(t, "gate-repo")} proj\n`);
+  const stage = (n) => {
+    writeFileSync(join(state, "stages.json"), JSON.stringify({ fetchedAt: "2026-11-05T00:00:00Z", repos: [{ repo: "gate-repo", stage: n }] }));
+    writeFileSync(join(state, "stages-source"), "cache\n");
+  };
+  stage(3);
+  // The catalyst_os list, trimmed: anchored folders, a file at any depth, a glob, and an exception.
+  writeFileSync(join(t, "deep"), "file");
+  writeFileSync(join(t, "deep-paths"), "# Deep paths\n/.github/\nCLAUDE.md\n/prisma/\n/src/lib/auth.ts\n/.env*\n/infra/**/secrets.yml\n\n!/.claude/skills/verify-board/\n/.claude/\n!/.claude/skills/verify-board/\n");
+  const files = (list) => {
+    writeFileSync(join(t, "files.json"), JSON.stringify(list.map((f) => (typeof f === "string" ? { filename: f } : f))));
+    writeFileSync(join(t, "pr.json"), JSON.stringify({ number: 7, headRefOid: head, baseRefName: "main", changedFiles: list.length }));
+  };
+  // The gate is green: no High risk and no deep path, so only (c) decides.
+  checkRuns(head, [gate("completed", "success", "No High risk, no deep path")]);
+  const rule = (risk = "Medium") => g.run(["merge-rule", "gate-repo", risk, "--pr", "7", "--dry-run"]);
+  return { ...g, stage, files, rule };
+}
+
+test("CAT-1529: with .github/deep-paths and no CODEOWNERS, stage 3 Medium: (c) holds for a diff off the deep paths and fails for one on them", () => {
+  const { t, files, rule, calls } = deepRig();
+  try {
+    // No deep path: (c) holds and the dry run says so.
+    files(["src/app/page.tsx", "docs/notes.md", ".claude/skills/verify-board/SKILL.md", "src/lib/authz.ts"]);
+    let r = rule();
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^Gate-Repo: stage 3 \(from cache\), risk Medium: self-merge allowed \(stage 3 allows Low or Medium\)/m);
+    assert.match(r.stdout, /^deep paths on PR #7: \(c\) holds: no file PR #7 changes is in \.github\/deep-paths on main$/m);
+    // It read deep-paths from the base branch (a file, decoded) and asked GitHub for the PR's files.
+    assert.match(calls(), /gh api repos\/\{owner\}\/\{repo\}\/contents\/\.github\/deep-paths\?ref=main --jq if type == "object" and \.type == "file"/);
+    assert.match(calls(), /gh api --paginate repos\/\{owner\}\/\{repo\}\/pulls\/7\/files\?per_page=100/);
+
+    // A deep path: (c) fails, no self-merge, and it names the glob and the file.
+    files(["src/app/page.tsx", "prisma/schema.prisma"]);
+    r = rule();
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stdout, /^Gate-Repo: stage 3 \(from cache\), risk Medium: no self-merge \(\(c\) fails: deep path: prisma\/ \(prisma\/schema\.prisma\); Kevin or Keith merges by hand\)$/m);
+    assert.doesNotMatch(r.stdout, /self-merge allowed/);
+
+    // The glob forms the founder gate reads: x at any depth, /x* within the root, /dir/ the folder, and !x back off the list.
+    for (const [path, deep] of [
+      ["CLAUDE.md", true], ["apps/web/CLAUDE.md", true], ["CLAUDE.md.bak", false], ["CLAUDExmd", false],
+      ["infra/prod/eu/secrets.yml", true], ["infra/prod/secretsxyml", false],
+      [".env.local", true], ["src/.env.local", false],
+      ["src/lib/auth.ts", true], ["src/lib/auth.tsx", false],
+      [".github/workflows/ci.yml", true], [".githubx", false],
+      [".claude/settings.json", true], [".claude/skills/verify-board/SKILL.md", false],
+    ]) {
+      files([path]);
+      assert.equal(rule().status, deep ? 1 : 0, path);
+    }
+    // A deep-path file named with the reviewer's go-word can't put it in the refusal.
+    files(["prisma/self-merge allowed.sql"]);
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.doesNotMatch(r.stdout, /self-merge allowed/);
+    assert.match(r.stdout, /\(c\) fails: deep path: prisma\/ \(prisma\/self-merge \[quoted\]\.sql\)/);
+    // A path with a backslash or tab reaches the matcher as GitHub gave it.
+    files(["prisma/a\\b.sql"]);
+    assert.match(rule().stdout, /\(c\) fails: deep path: prisma\/ \(prisma\/a\\b\.sql\)/);
+    // A rename out of a deep path counts too.
+    files([{ filename: "src/schema.prisma", previous_filename: "prisma/schema.prisma" }]);
+    assert.match(rule().stdout, /\(c\) fails: deep path: prisma\/ \(prisma\/schema\.prisma\)/);
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test("CAT-1529: merge-rule's (c) fails closed, stays out of stage 4, and leaves a CODEOWNERS-only repo as before", () => {
+  const { t, files, rule, stage, run } = deepRig();
+  try {
+    files(["src/app/page.tsx"]);
+    assert.equal(rule().status, 0);
+    // GitHub listed fewer files than the PR changes: can't tell, so it fails.
+    writeFileSync(join(t, "pr.json"), JSON.stringify({ number: 7, headRefOid: "7".repeat(40), baseRefName: "main", changedFiles: 3001 }));
+    let r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /no self-merge \(\(c\) fails: too many files to check \(3001\)/);
+    // A list with no deep paths in it: fails.
+    files(["src/app/page.tsx"]);
+    writeFileSync(join(t, "deep-paths"), "# nothing yet\n!/docs/\n");
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /\(c\) fails: \.github\/deep-paths on main lists no deep paths/);
+    // deep-paths can't be read (not a 404): (c) fails.
+    writeFileSync(join(t, "deep"), "error");
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /no self-merge \(\(c\) error: could not read \.github\/deep-paths on main;/);
+    // deep-paths is a folder, not a file: (c) fails, it never reads as an empty match.
+    writeFileSync(join(t, "deep"), "dir");
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /no self-merge \(\(c\) error: could not read \.github\/deep-paths on main;/);
+    // The file list can't be read: fails.
+    writeFileSync(join(t, "deep"), "file");
+    writeFileSync(join(t, "deep-paths"), "/prisma/\n");
+    writeFileSync(join(t, "files.json"), "not json");
+    r = rule();
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /\(c\) error: could not read the files PR #7 changes/);
+
+    // Stage 4 allows deep paths: (c) is not checked.
+    files(["prisma/schema.prisma"]);
+    stage(4);
+    r = rule();
+    assert.equal(r.status, 0, r.stdout);
+    assert.doesNotMatch(r.stdout, /deep paths on PR|\(c\)/);
+    stage(3);
+
+    // No .github/deep-paths on the base (a CODEOWNERS repo): merge-rule decides as before
+    // and leaves (c) to the reviewer's CODEOWNERS reading.
+    writeFileSync(join(t, "deep"), "absent");
+    r = rule();
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(r.stdout, /self-merge allowed/);
+    assert.match(r.stdout, /^deep paths on PR #7: \(c\) none: no \.github\/deep-paths on main, so \(c\) reads its \.github\/CODEOWNERS as the review prompt says$/m);
+
+    // The founder gate rule (e) is unchanged: red or pending is never self-merged, whatever (c) says.
+    writeFileSync(join(t, "deep"), "file");
+    files(["src/app/page.tsx"]);
+    for (const [status, conclusion, words] of [["completed", "failure", "founder gate red"], ["in_progress", null, "founder gate pending"]]) {
+      writeFileSync(join(t, "runs", `${"7".repeat(40)}.json`), JSON.stringify({ check_runs: [{ name: "founder gate", status, conclusion, output: { title: "x", summary: null } }] }));
+      r = run(["merge-rule", "gate-repo", "Medium", "--pr", "7", "--dry-run"]);
+      assert.equal(r.status, 1, words);
+      assert.match(r.stdout, new RegExp(`no self-merge \\(${words}`), words);
+    }
   } finally { rmSync(t, { recursive: true, force: true }); }
 });
 
