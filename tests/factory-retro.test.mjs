@@ -94,6 +94,7 @@ p=\${!#}
 id=$(printf '%s' "$p" | grep -oE 'issue [A-Z]+-[0-9]+' | head -1); id=\${id#issue }
 case $p in
   *"REPORT done"*) echo "$SECONDS" >/dev/null; cat "${t}/report.txt" || exit 1; echo "REPORT done";;
+  *"'human-edits:"*) n=$(printf '%s' "$p" | grep -oE "line: 'human-edits: [0-9]+'" | grep -oE '[0-9]+'); echo "human $id $n $tools" >>"${calls}"; [ "$id" = "$FAILH" ] && echo "no Linear" || echo "HUMAN-EDITS done";;
   *"'retro: clean'"*) echo "clean $id $tools" >>"${calls}"; [ "$id" = "$FAIL" ] && echo "no Linear" || echo "RETRO clean";;
   *"stateHistory"*) echo "touch $id $tools" >>"${calls}"; echo "TOUCH checked";;
   *) echo NONE;;
@@ -161,6 +162,49 @@ test("retros: a clean merged PR gets `retro: clean` and no session; one with fri
   assert.equal(existsSync(join(state, "retro", "cat-7-7")), false);
 });
 
+test("human-edits: every merged card gets `human-edits: <n>` (non-merge commits without the Claude trailer), once", () => {
+  const { run, asked, record, state } = rig();
+  const r = run();
+  assert.equal(r.status, 0, r.stderr);
+  const human = Object.fromEntries(asked().filter((c) => c.startsWith("human ")).map((c) => c.split(" ")).map((p) => [p[1], p[2]]));
+  // Claude-only commits: 0. A clean PR (1) and a bot-only comment (4) get it as well as `retro: clean`.
+  assert.equal(human["CAT-1"], "0");
+  assert.equal(human["CAT-4"], "0");
+  assert.equal(human["CAT-2"], "0", "a reviewer fix commit carries the Claude trailer");
+  assert.equal(human["CAT-3"], "1", "one commit without the trailer");
+  assert.equal(human["CAT-9"], "0", "a merge commit is not a human edit");
+  // Not merged, unreadable or old: nothing written.
+  for (const id of ["CAT-6", "CAT-7", "CAT-8"]) assert.equal(human[id], undefined, id);
+  assert.match(r.stdout, /CAT-3: merged PR counted; commented human-edits: 1/);
+  assert.equal(read(join(state, "human-edits", "cat-3-3")).trim(), "1");
+  assert.equal(record("cat-1-1"), "clean");
+
+  // A second pass adds no second comment.
+  const r2 = run();
+  assert.equal(r2.status, 0, r2.stderr);
+  assert.deepEqual(asked().filter((c) => c.startsWith("human ")), []);
+});
+
+test("human-edits: an unconfirmed comment is retried and holds that card's retro back", () => {
+  const { run, asked, record } = rig();
+  let r = run([], { FAILH: "CAT-1" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(record("cat-1-1"), null, "retro: clean must wait for the human-edits comment");
+  asked();
+  r = run();
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(asked().filter((c) => c.startsWith("human ")).map((c) => c.split(" ")[1]), ["CAT-1"]);
+  assert.equal(record("cat-1-1"), "clean");
+});
+
+test("human-edits: the comment's first line is what the board's parseHumanEdits reads", () => {
+  const s = read(DISPATCH);
+  const m = s.match(/exactly this one line: '(human-edits: \$n)'/);
+  assert.ok(m, "the dispatcher names the exact line");
+  // catalyst_os src/lib/factory/autonomy.ts: firstLine(body).match(/^human-edits:\s*(\d+)\s*$/i)
+  assert.match(m[1].replace("$n", "3"), /^human-edits:\s*(\d+)\s*$/i);
+});
+
 test("retros: an unconfirmed clean comment is retried; a full cap holds the session back and names why", () => {
   const { run, asked, unitsStarted, record } = rig();
   let r = run([], { FAIL: "CAT-1", CLAUDE_FACTORY_CAP: "0" });
@@ -219,11 +263,14 @@ test("retro --since: clean, accepted, rejected, structural and touches per repo,
     "COMMENT CAT-3 retro: 1 accepted, 0 rejected | structural: 0 sent to /correct",
     "COMMENT CAT-4 touch: kevin In Progress [2026-11-04T10:00:00Z]",
     "COMMENT CAT-4 touch: keith Ready For Factory [2026-11-04T11:00:00Z]",
+    "COMMENT CAT-1 human-edits: 0",
+    "COMMENT CAT-3 human-edits: 1",
+    "COMMENT CAT-2 human-edits: 2",
     "some chatter the model added",
   ].join("\n") + "\n");
   let r = run(["retro", "--since", "7d"]);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout.trim(), "My_Repo (last 7d): clean 1, accepted 3, rejected 3, structural 1, touches 2");
+  assert.equal(r.stdout.trim(), "My_Repo (last 7d): clean 1, accepted 3, rejected 3, structural 1, touches 2, human-edits 3");
   r = run(["retro"]);
   assert.match(r.stdout, /last 7d/);
   r = run(["retro", "--since", "soon"]);
@@ -235,7 +282,7 @@ test("retro --since says so when Linear can't be read, and counts zero when ther
   const { run, report, t } = rig();
   report("");
   let r = run(["retro", "--since", "30d"]);
-  assert.equal(r.stdout.trim(), "My_Repo (last 30d): clean 0, accepted 0, rejected 0, structural 0, touches 0");
+  assert.equal(r.stdout.trim(), "My_Repo (last 30d): clean 0, accepted 0, rejected 0, structural 0, touches 0, human-edits 0");
   rmSync(join(t, "report.txt"));
   r = run(["retro", "--since", "7d"]);
   assert.match(r.stdout, /My_Repo: could not read the retro comments from Linear/);
