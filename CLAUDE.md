@@ -20,6 +20,7 @@ purpose: the block is byte-identical across surfaces and ends the file.
 | A `factory-reflect` or `/correct` PR never touches a gate (`.github/`, rulesets, CODEOWNERS, required checks, the Ways of Working block, the ways-of-working skill) | `validate` step "A factory-reflect or /correct PR touches no gate", `scripts/retro-guard.mjs`, `tests/retro-guard.test.mjs` | CAT-1433 |
 | A running-cap check in the dispatcher asks `-lt "$CAP"`, so a non-numeric cap holds sessions back instead of starting them | `tests/factory.test.mjs` "every running-cap check … asks -lt" | CAT-1478 |
 | A merged factory PR is retro'd once: `retro: clean` or a `/reflect` session | `tests/factory-retro.test.mjs` | CAT-1433 |
+| The heartbeat test pins only the long-stable fields; a card that adds a heartbeat field tests it in its own test, so parallel PRs don't conflict on one exact-body line | `tests/factory-stream.test.mjs` "the heartbeat carries the machine's state" (`STABLE` list) | CAT-1487 |
 | Every dispatcher housekeeping model call names `$MODEL_HOUSEKEEPING` on its own line (no pinned call count, so parallel PRs don't conflict) | `tests/factory.test.mjs` "every builder and reviewer session passes --model" | CAT-1441 |
 
 ## Ways of Working — Catalyst Shift
