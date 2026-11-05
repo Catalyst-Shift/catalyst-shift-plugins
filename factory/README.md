@@ -155,16 +155,37 @@ slot (<running>/<cap>)`), and PRs whose mergeability GitHub still shows as
 
 **One open-PR list per repo per tick (CAT-1540):** the conflict, CI and review
 sweeps read one shared list of each repo's open PRs, fetched once per tick
-before them (`gh pr list --state open --limit 100` with only the fields they
-read) into `~/.local/state/claude-factory/open-prs/<repo>.json`. GitHub's
+before them into `~/.local/state/claude-factory/open-prs/<repo>.json`. GitHub's
 GraphQL quota is 5,000 points an hour per user, shared with the board and every
 session on the same login, and a 2-minute tick that listed each repo three
-times spent it within the hour. A repo GitHub doesn't answer for gets one
-journal line (`gh pr list failed in <repo>; no conflict, CI or review sessions
-there this tick: …`). A spent quota gets one line for the whole tick, naming
-the reset time read over REST (`gh api rate_limit`, no GraphQL cost):
-`GitHub GraphQL quota spent (resets at <time>); no conflict, CI or review
-sessions this tick`, and the repos after it are not asked. A secondary (burst)
+times spent it within the hour.
+
+**PR reads over REST with ETags (CAT-1545):** that list is
+`GET /repos/{owner}/{repo}/pulls?state=open&per_page=100` (`gh api -i`), which
+spends REST's own 5,000-an-hour quota instead of GraphQL's. Each read sends
+`If-None-Match` with the ETag of the last one, kept with its body in
+`state/etag/<repo>/list`; GitHub answers `304 Not Modified` when nothing
+changed, which costs no quota, and the cached body is used. Mergeability is
+only in one PR's own read (`pulls/<n>`, also with its ETag): it is read again
+only when the PR's head, its `updated_at` or its base branch's tip (one
+`git ls-remote` per repo, no API quota) moved, or while GitHub hasn't computed
+it. A PR's required checks (`gh pr checks`, still GraphQL: REST can't say which
+are required) and the merges sweep's "CI green" answer are kept once every
+check has finished, while the head and `updated_at` stay the same, for at most
+30 minutes. Merges, retros, touches and settle answer an open PR from the list
+and ask over REST, with its ETag, only for a branch whose PR is no longer open.
+A fresh machine with no `state/etag` does a plain first read. Measured on
+omarchy over 7 repos: the first tick 26 REST reads, each idle tick after it 7
+reads that all came back 304 (no quota) and no GraphQL. When the board's
+webhook feed (CAT-1541/1542) lands it replaces this list read, and the ETag
+path becomes its fallback.
+
+A repo GitHub doesn't answer for gets one journal line (`listing open PRs
+failed in <repo>; no conflict, CI or review sessions there this tick: …`). A
+spent quota gets one line for the whole tick, naming the reset time
+(`gh api rate_limit`, which costs nothing): `GitHub REST quota spent (resets at
+<time>); no conflict, CI or review sessions this tick`, and the repos after it
+are not asked. A secondary (burst)
 rate limit gets one line with no reset time (`GitHub secondary rate limit hit;
 …`). Either way the tick picks up no new card, since it can't count the PRs
 waiting on review (`GitHub is rate limiting, so the PRs waiting on review can't
@@ -409,8 +430,9 @@ the repos in repos.conf (Dependabot's too) whose `founder gate` check is red at
 its head, each as `{repo, number, url, reason}`, where the reason is the
 check's output title (or summary). A repo GitHub didn't answer for is named in
 `waiting_for_founder_unread`, and so is each PR (`<repo>#<n>`) whose gate
-couldn't be read or is missing on a gated repo. This part calls GitHub (`gh pr list` per repo,
-one check-runs read per open PR).
+couldn't be read or is missing on a gated repo. This part calls GitHub (the
+open-PR list per repo over REST with its ETag, CAT-1545, and one check-runs read
+per open PR).
 
 **Heartbeat:** `claude-factory-heartbeat.service` posts
 `{machine, dispatcher, pausedUntil, lastPassAt, lastPassResult, runningCap, running[], reviewWaiting, reviewCap, control, controlVersion}`

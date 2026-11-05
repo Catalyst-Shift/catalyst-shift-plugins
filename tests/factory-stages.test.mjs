@@ -15,6 +15,8 @@ import { tmpdir } from "node:os";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DISPATCH = join(ROOT, "factory", "bin", "claude-factory-dispatch");
+// CAT-1545: answers the dispatcher's REST PR reads from this file's gh stubs.
+const GH_REST = join(ROOT, "tests", "support");
 const read = (f) => readFileSync(f, "utf8");
 const URL = "http://board.test/api/factory/stages";
 
@@ -91,7 +93,7 @@ exit 0
   setConf();
   const set = (b) => writeFileSync(board, typeof b === "string" ? b : JSON.stringify(b));
   const stages = (...pairs) => set({ repos: pairs.map(([repo, stage]) => ({ repo, stage, cleanSince: "2026-10-23", stageSince: "2026-11-01T00:00:00Z" })) });
-  const env = (extra = {}) => ({ HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), FACTORY_INGEST_TOKEN: "tok-secret",
+  const env = (extra = {}) => ({ HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), FACTORY_INGEST_TOKEN: "tok-secret",
     CLAUDE_FACTORY_CONTROL_URL: "http://board.test/api/machines", CLAUDE_FACTORY_STAGES_URL: URL, CLAUDE_FACTORY_NODE: "/nonexistent",
     CLAUDE_FACTORY_CAP: "9", CLAUDE_FACTORY_WAITING_CAP: "99", ...extra });
   const run = (args = [], extra = {}) => spawnSync("bash", [DISPATCH, ...args], { encoding: "utf8", env: env(extra) });

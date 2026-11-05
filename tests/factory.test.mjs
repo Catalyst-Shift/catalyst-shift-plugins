@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FACTORY = join(ROOT, "factory");
 const DISPATCH = join(FACTORY, "bin", "claude-factory-dispatch");
+// CAT-1545: answers the dispatcher's REST PR reads from this file's gh stubs.
+const GH_REST = join(ROOT, "tests", "support");
 const INSTALL = join(FACTORY, "install.sh");
 const MARK_DONE = join(FACTORY, "bin", "claude-factory-mark-done");
 const BOOTCHECK = join(FACTORY, "bin", "claude-factory-bootcheck");
@@ -169,14 +171,16 @@ printf '%s' "$j" | jq -r "$q"
   writeFileSync(join(state, "launched"), `${t} b/cat-1-x cat-1\n${t} b/cat-2-y cat-2\n${t} b/cat-3-z cat-3\n`);
   const r = spawnSync("bash", [DISPATCH, "status"], {
     encoding: "utf8",
-    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: "/bin/true" },
+    env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: "/bin/true" },
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /cat-1 {2}#1 u1 stamped/);
   assert.match(r.stdout, /cat-2 {2}#2 u2 not stamped/);
   assert.doesNotMatch(r.stdout, /cat-3/);
   assert.match(r.stdout, /Paused: no/);
-  assert.deepEqual(readdirSync(state).sort(), ["launched"], "status wrote state");
+  // CAT-1545: the only thing it may write is the REST read cache (state/etag),
+  // each file replaced whole, so a tick reading it at the same time is safe.
+  assert.deepEqual(readdirSync(state).filter((f) => f !== "etag").sort(), ["launched"], "status wrote state");
 });
 
 // settle (CAT-1317): a finished builder with no PR and a card still In
@@ -223,7 +227,7 @@ esac
   writeFileSync(join(state, "settled", "cat-7"), "earlier\n");
   const tick = (extra = {}) => spawnSync("bash", [DISPATCH], {
     encoding: "utf8",
-    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), ...extra },
+    env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), ...extra },
   });
 
   let r = tick();
@@ -295,7 +299,7 @@ esac
 for a; do case $a in --property=ExecStopPost=*) EXIT_CODE=killed EXIT_STATUS=KILL SERVICE_RESULT=signal bash -c "\${a#--property=ExecStopPost=}";; esac; done
 `, { mode: 0o755 });
   writeFileSync(join(home, ".config/claude-factory/repos.conf"), `${repo} proj\n`);
-  const env = { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+  const env = { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
   const sh = (cmd) => {
     const r = spawnSync("bash", ["-c", cmd], { encoding: "utf8", env });
     assert.equal(r.status, 0, `${cmd}\n${r.stderr}`);
@@ -489,7 +493,7 @@ echo "\${PICK:-NONE}"
     writeFileSync(calls, "");
     return spawnSync("bash", [DISPATCH], {
       encoding: "utf8",
-      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), ...extra },
+      env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), ...extra },
     });
   };
   for (const [offset, warn] of [["", false], ["offset 0", false], ["offset 1", false], ["offset abc", true], ["offset 119", false], ["offset 120", true], ["offset 300", true], ["offset 99999999999999999999", true]]) {
@@ -563,7 +567,7 @@ case \${!#} in *"Ready For Factory"*) echo "pick $m" >>"${calls}"; echo "\${PICK
     writeFileSync(calls, "");
     return spawnSync("bash", [DISPATCH], {
       encoding: "utf8",
-      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "9", CLAUDE_FACTORY_WAITING_CAP: "99", ...(pick ? { PICK: pick } : {}) },
+      env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "9", CLAUDE_FACTORY_WAITING_CAP: "99", ...(pick ? { PICK: pick } : {}) },
     });
   };
   const modelOf = (unit) => read(`${units}.${unit}.args`).match(/\n-p\n--model\n([^\n]+)\n/)[1];
@@ -635,7 +639,7 @@ case \${!#} in *"Ready For Factory"*) echo "pick $m" >>"${calls}"; echo "\${PICK
 
   // status shows each running unit's model.
   writeFileSync(units, "factory-cat-10.service\n");
-  r = spawnSync("bash", [DISPATCH, "status"], { encoding: "utf8", env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude") } });
+  r = spawnSync("bash", [DISPATCH, "status"], { encoding: "utf8", env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude") } });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^ {2}factory-cat-10 {2}model claude-opus-5-5 {2}since then$/m);
 });
@@ -683,7 +687,7 @@ exit 0
     `# ~/Projects/commented proj\nlabel kevin-omarchy\noffset 0\nreview-authors kkreative\nmodel review claude-sonnet-5-5\n\n~/Projects/lumen lumen\n~/Projects/catalyst-shift-plugins catalyst-shift-plugins\n`);
   const run = (args, env = {}) => spawnSync("bash", [BOOTCHECK, ...args], {
     encoding: "utf8",
-    env: { HOME: home, USER: "kev", PATH: `${bin}:/usr/bin:/bin`, LINGER: "no", ENABLED: "", TOKEN: "", ...env },
+    env: { HOME: home, USER: "kev", PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, LINGER: "no", ENABLED: "", TOKEN: "", ...env },
   });
   return { t, home, bin, log, run };
 };
@@ -734,7 +738,7 @@ test("boot check --summary is one line: boot: ok, or boot: <n> missing (run inst
 
 test("status ends with the boot check's one line and enables nothing", () => {
   const { t, home, bin, log } = bootFixture();
-  const env = { HOME: home, USER: "kev", PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: "/bin/true", LINGER: "no", ENABLED: "claude-factory.timer", TOKEN: "" };
+  const env = { HOME: home, USER: "kev", PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: "/bin/true", LINGER: "no", ENABLED: "claude-factory.timer", TOKEN: "" };
   let r = spawnSync("bash", [DISPATCH, "status"], { encoding: "utf8", env });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Paused: no\nboot: 3 missing \(run install\.sh\)\n$/);
@@ -816,7 +820,7 @@ exit 0
   writeFileSync(join(state, "launched"), `${repo} b/cat-7-x cat-7\n`);
   const tick = (cap, extra = {}) => spawnSync("bash", [DISPATCH], {
     encoding: "utf8",
-    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap), ...extra },
+    env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap), ...extra },
   });
   const started = () => read(units).trim().split("\n").filter(Boolean).map((u) => u.replace(/\.service$/, ""));
   const reviewed = () => readdirSync(join(state, "reviewed", "my-repo")).sort();
@@ -931,7 +935,7 @@ test("cleanup removes a finished PR reviewer worktree held only by refs/factory/
   const sh = (cmd) => {
     const r = spawnSync("bash", ["-c", cmd], {
       encoding: "utf8",
-      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: t, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
+      env: { PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, HOME: t, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
     });
     assert.equal(r.status, 0, `${cmd}\n${r.stderr}`);
     return r.stdout;
@@ -963,7 +967,7 @@ exit 3
   const sh = (cmd) => {
     const r = spawnSync("bash", ["-c", cmd], {
       encoding: "utf8",
-      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: t, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
+      env: { PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, HOME: t, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
     });
     assert.equal(r.status, 0, `${cmd}\n${r.stderr}`);
     return r.stdout;
@@ -1026,7 +1030,7 @@ printf 'claude %s\\n' "\${!#}" >>"${calls}"
   const sh = (cmd) => {
     const r = spawnSync("bash", ["-c", cmd], {
       encoding: "utf8",
-      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: t, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
+      env: { PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, HOME: t, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
     });
     assert.equal(r.status, 0, `${cmd}\n${r.stdout}\n${r.stderr}`);
     return r.stdout;
@@ -1380,7 +1384,7 @@ exit 0
     writeFileSync(conf, `label kevin-omarchy\n${authors ? `review-authors ${authors}\n` : ""}${repo} proj\n`);
     return spawnSync("bash", [DISPATCH], {
       encoding: "utf8",
-      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap) },
+      env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap) },
     });
   };
   const started = () => read(units).trim().split("\n").filter(Boolean).map((u) => u.replace(/\.service$/, ""));
@@ -1581,7 +1585,7 @@ if [ "$id" = "$FAIL" ]; then echo "I could not reach Linear."; else printf 'Done
   launch([1, 2, 3, 4, 5, 6]);
   const run = (args, extra = {}) => spawnSync("bash", [DISPATCH, ...args], {
     encoding: "utf8",
-    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), ...extra },
+    env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), ...extra },
   });
   const asked = () => { const c = read(calls); writeFileSync(calls, ""); return c.trim().split("\n").filter(Boolean); };
   const record = (key) => (existsSync(join(state, "merge", key)) ? read(join(state, "merge", key)).trim() : null);
@@ -1771,7 +1775,7 @@ test("install.sh needs Chrome stable, installs environment.d, and keeps the sand
       rmSync(setlog, { force: true });
       const r = spawnSync("bash", [join(src, "install.sh")], {
         encoding: "utf8",
-        env: { HOME: home, USER: "factory", PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: "/bin/false" },
+        env: { HOME: home, USER: "factory", PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: "/bin/false" },
       });
       return { ...r, home };
     };
@@ -1899,7 +1903,7 @@ esac
   writeFileSync(join(state, "launched"), `${repo} b/cat-8-x cat-8\n`);
   const tick = (cap) => spawnSync("bash", [DISPATCH], {
     encoding: "utf8",
-    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap), ...gitEnv },
+    env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap), ...gitEnv },
   });
   const started = () => read(units).trim().split("\n").filter(Boolean).map((u) => u.replace(/\.service$/, ""));
   const conflictUnits = () => started().filter((u) => u.startsWith("factory-conflict-"));
@@ -2112,7 +2116,7 @@ esac
   writeFileSync(join(state, "launched"), `${repo} b/cat-9-x cat-9\n`);
   const tick = (extra = {}) => spawnSync("bash", [DISPATCH], {
     encoding: "utf8",
-    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "9", ...extra },
+    env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "9", ...extra },
   });
   try {
     writeFileSync(fixture, JSON.stringify([
@@ -2241,7 +2245,7 @@ esac
     [8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23].map((n) => `${repo} b/cat-${n}-x cat-${n}`).join("\n") + `\n${repo} b/x;y cat-17\n`);
   const tick = (cap) => spawnSync("bash", [DISPATCH], {
     encoding: "utf8",
-    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap), ...gitEnv },
+    env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: String(cap), ...gitEnv },
   });
   const started = () => read(units).trim().split("\n").filter(Boolean).map((u) => u.replace(/\.service$/, ""));
   const ciUnits = () => started().filter((u) => u.startsWith("factory-ci-"));
@@ -2560,7 +2564,7 @@ esac
   const tick = (extra = {}) => {
     const r = spawnSync("bash", [DISPATCH], {
       encoding: "utf8",
-      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "9", ...gitEnv, ...extra },
+      env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "9", ...gitEnv, ...extra },
     });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     return r;
@@ -2862,7 +2866,7 @@ test("mark-done: done on exit 0, stopped on SIGTERM, untouched otherwise, only s
     const kick = (extra) => {
       writeFileSync(m, "started d1 boot1\n");
       return spawnSync("bash", [MARK_DONE, m], {
-        encoding: "utf8", env: { HOME: t, PATH: `${bin}:/usr/bin:/bin`, EXIT_CODE: "exited", EXIT_STATUS: "0", ...extra },
+        encoding: "utf8", env: { HOME: t, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, EXIT_CODE: "exited", EXIT_STATUS: "0", ...extra },
       });
     };
     assert.equal(kick({}).status, 0);
@@ -2942,7 +2946,7 @@ esac
   writeFileSync(join(bin, "systemctl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   writeFileSync(join(bin, "claude"), "#!/bin/sh\necho NONE\n", { mode: 0o755 });
   const run = (args) => spawnSync("bash", [DISPATCH, ...args], { encoding: "utf8",
-    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_NODE: "/nonexistent" } });
+    env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_NODE: "/nonexistent" } });
   const checkRuns = (sha, list) => writeFileSync(join(runs, `${sha}.json`), JSON.stringify({ total_count: list.length, check_runs: list }));
   const gate = (status, conclusion, title = null, summary = null) => ({ name: "founder gate", status, conclusion, output: { title, summary } });
   const rule = () => run(["merge-rule", "gate-repo", "Low", "--pr", "7", "--dry-run"]);

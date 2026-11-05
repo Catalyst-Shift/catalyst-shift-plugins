@@ -855,31 +855,115 @@ To label the PR for a person (steps 3 and 4): gh pr edit $number --add-label nee
   echo "started ${retry:+second }conflict session for PR #$number ($branch onto $base at ${basesha:0:12}) in $dir (unit $name, log $STATE/conflict-$slug-pr-$number.log)"
 }
 
-# CAT-1540: the one open-PR list call. GraphQL charges by the nodes asked for,
-# and the quota (5,000 points an hour) is per user and shared with the board and
-# every session on this login, so each repo is listed once per tick: at most 100
-# PRs (no factory repo has more), only the fields asked for. Prints a JSON array.
-OPEN_PRS_LIMIT=100
-open_prs_fetch() {
-  local out
-  out=$(cd "$1" && timeout 60 gh pr list --state open --limit "$OPEN_PRS_LIMIT" --json "$2" --jq . </dev/null) || return 1
-  [ -n "$out" ] || out='[]'
-  jq -e 'type == "array"' <<<"$out" >/dev/null 2>&1 || { echo "gh pr list gave no JSON list" >&2; return 1; }
-  printf '%s\n' "$out"
+# CAT-1545: a GitHub REST read with its ETag. gh pr list and gh pr view spend
+# the GraphQL quota (5,000 points an hour, per user, shared with the board and
+# every session on this login). REST has its own 5,000 an hour, and a read that
+# sends If-None-Match with the last ETag and gets 304 Not Modified costs none
+# of it. <cache> (under state/etag, kept across ticks) holds the ETag on its
+# first line and the body after it, in one file, so a reader never pairs one
+# body with another's ETag. Prints the body, fresh or cached; fails on any
+# other answer (gh's error on stderr). gh api exits 1 on a 304.
+ETAGS=$STATE/etag
+gh_etag() {
+  local dir=$1 path=$2 cache=$3 cached= etag= out rc=0 status body tag
+  local -a hdr=()
+  [ -s "$cache" ] && cached=$(cat "$cache" 2>/dev/null) && etag=${cached%%$'\n'*}
+  [ -z "$etag" ] || hdr=(-H "If-None-Match: $etag")
+  out=$(cd "$dir" && timeout 60 gh api -i "${hdr[@]}" "$path" </dev/null) || rc=$?
+  status=$(head -1 <<<"$out" | tr -d '\r' | awk '{ print $2 }')
+  if [ "$status" = 304 ] && [ -n "$etag" ] && [[ $cached == *$'\n'* ]]; then
+    printf '%s\n' "${cached#*$'\n'}"
+    return 0
+  fi
+  [ "$rc" = 0 ] && [[ $status =~ ^2[0-9][0-9]$ ]] || return 1
+  body=$(awk 'b { print; next } /^\r?$/ { b = 1 }' <<<"$out")
+  jq -e . >/dev/null 2>&1 <<<"$body" || { echo "gh api $path gave no JSON" >&2; return 1; }
+  tag=$(grep -im1 '^etag:' <<<"$out" | sed 's/^[^:]*:[[:space:]]*//' | tr -d '\r' || true)
+  mkdir -p "$(dirname "$cache")"
+  printf '%s\n%s\n' "$tag" "$body" >"$cache.$$" && mv "$cache.$$" "$cache" || rm -f "$cache.$$"
+  printf '%s\n' "$body"
 }
 
-# The fields conflicts, ci_fixes and pr_reviews read, and no others.
-OPEN_PRS_FIELDS=number,headRefOid,headRefName,baseRefName,mergeable,isDraft,author,labels,isCrossRepository,body
+# CAT-1540, CAT-1545: the one open-PR list read per repo per tick, over REST
+# with its ETag (state/etag/<repo slug>/list), so a tick where no PR changed
+# costs no quota at all: at most 100 PRs (no factory repo has more). Prints a
+# JSON array in the shape the sweeps read (gh pr list's field names). The list
+# carries no mergeability; open_prs_refresh adds it.
+OPEN_PRS_LIMIT=100
+open_prs_rest() {
+  local out
+  out=$(gh_etag "$1" "repos/{owner}/{repo}/pulls?state=open&per_page=$OPEN_PRS_LIMIT" "$ETAGS/$(reposlug "$1")/list") || return 1
+  jq -e 'type == "array"' <<<"$out" >/dev/null 2>&1 || { echo "GitHub's open-PR list gave no JSON list" >&2; return 1; }
+  printf '%s\n' "$out"
+}
+# $m maps a PR number to MERGEABLE, CONFLICTING or UNKNOWN; a PR it lacks is UNKNOWN.
+OPEN_PRS_SHAPE='[.[] | {number, headRefOid: .head.sha, headRefName: .head.ref, baseRefName: .base.ref,
+  isDraft: (.draft == true), author: {login: (.user.login // "")}, labels: [(.labels // [])[] | {name}],
+  isCrossRepository: ((.head.repo.full_name // "") != (.base.repo.full_name // "")),
+  body: (.body // ""), url: .html_url, updatedAt: .updated_at, mergeable: ($m[.number | tostring] // "UNKNOWN")}]'
+open_prs_fetch() {
+  local raw
+  raw=$(open_prs_rest "$1") || return 1
+  jq --argjson m '{}' "$OPEN_PRS_SHAPE" <<<"$raw"
+}
+
+# CAT-1545: mergeability is only in one PR's own read, so each open, non-draft
+# PR from this repo is read (with its ETag, state/etag/<repo slug>/pr-<n>) only
+# when its head, its updated_at or its base branch's tip moved since the last
+# read (a push to the base changes mergeability but not the PR, so the tips
+# come from one git ls-remote, which costs no API quota), or while GitHub
+# hasn't computed it yet. Writes "<number> <MERGEABLE|CONFLICTING|UNKNOWN>"
+# lines to <into>; a PR it couldn't read is UNKNOWN for this tick, with one line
+# saying so. A base tip it couldn't read means every PR on that base is read.
+# The cached reads of PRs no longer open go.
+open_prs_mergeable() {
+  local dir=$1 raw=$2 cache=$3 into=$4 prs number sha base updated key m out ref tipsha f
+  local -A tip=() open=()
+  : >"$into"
+  for number in $(jq -r '.[].number' <<<"$raw" 2>/dev/null); do open[$number]=1; done
+  prs=$(jq -r '.[] | select(.draft != true) | select((.head.repo.full_name // "") == (.base.repo.full_name // ""))
+    | "\(.number) \(.head.sha) \(.base.ref) \(.updated_at)"' <<<"$raw") || return 0
+  if [ -n "$prs" ]; then
+    while read -r tipsha ref; do
+      if [[ $tipsha =~ ^[0-9a-f]{40}$ ]]; then tip[${ref#refs/heads/}]=$tipsha; fi
+    done < <(cd "$dir" && timeout 60 git ls-remote --heads origin </dev/null 2>/dev/null || true)
+  fi
+  while read -r number sha base updated; do
+    [[ $number =~ ^[0-9]+$ ]] || continue
+    key="$sha $updated ${tip[$base]:-?}"
+    m=
+    if [[ $key != *'?' ]] && [ "$(cat "$cache/pr-$number.seen" 2>/dev/null)" = "$key" ]; then
+      m=$(cat "$cache/pr-$number.state" 2>/dev/null || true)
+    fi
+    if [ "$m" != MERGEABLE ] && [ "$m" != CONFLICTING ]; then
+      if out=$(gh_etag "$dir" "repos/{owner}/{repo}/pulls/$number" "$cache/pr-$number" 2>"$STATE/gh-pr.err"); then
+        m=$(jq -r --arg sha "$sha" 'if .head.sha != $sha then "UNKNOWN" elif .mergeable == true then "MERGEABLE"
+          elif .mergeable == false then "CONFLICTING" else "UNKNOWN" end' <<<"$out" 2>/dev/null || echo UNKNOWN)
+        printf '%s\n' "$m" >"$cache/pr-$number.state"
+        printf '%s\n' "$key" >"$cache/pr-$number.seen"
+      else
+        m=UNKNOWN
+        echo "could not read PR #$number's mergeability in $dir, so it counts as not computed this tick: $(tail -1 "$STATE/gh-pr.err")"
+      fi
+    fi
+    echo "$number $m" >>"$into"
+  done <<<"$prs"
+  for f in "$cache"/pr-* "$cache"/checks-* "$cache"/green-*; do
+    [ -e "$f" ] || continue
+    number=${f##*/}; number=${number#*-}; number=${number%%.*}
+    [ -n "${open[$number]:-}" ] || rm -f "$f"
+  done
+}
 
 # Once per tick, before the sweeps: state/open-prs/<repo slug>.json for each
 # repo GitHub answered for. A repo it didn't gets one line, and no conflict, CI
-# or review session this tick. A spent GraphQL quota gets one line for the whole
-# tick, naming when it resets (read over REST, which costs no GraphQL), and the
-# repos after it are not asked.
+# or review session this tick. A spent quota gets one line for the whole tick,
+# naming when it resets (rate_limit costs no quota), and the repos after it are
+# not asked.
 OPEN_PRS_TICK=
 OPEN_PRS_LIMITED=
 open_prs_refresh() {
-  local dir _ slug f reset when
+  local dir _ slug f raw merge reset when
   local -A seen=()
   rm -rf "$STATE/open-prs"
   mkdir -p "$STATE/open-prs"
@@ -895,10 +979,18 @@ open_prs_refresh() {
       continue
     fi
     seen[$slug]=$dir
-    if open_prs_fetch "$dir" "$OPEN_PRS_FIELDS" >"$f.tmp" 2>"$STATE/gh-pr-list.err"; then
-      mv "$f.tmp" "$f"
-      [ "$(jq length "$f")" -lt "$OPEN_PRS_LIMIT" ] || echo "$OPEN_PRS_LIMIT open PRs in $dir, the most one list reads: PRs past them get no conflict, CI or review session"
-      continue
+    if raw=$(open_prs_rest "$dir" 2>"$STATE/gh-pr-list.err"); then
+      mkdir -p "$ETAGS/$slug"
+      open_prs_mergeable "$dir" "$raw" "$ETAGS/$slug" "$f.merge"
+      merge=$(jq -Rn '[inputs | split(" ") | select(length == 2) | {key: .[0], value: .[1]}] | from_entries' "$f.merge" 2>/dev/null) || merge='{}'
+      rm -f "$f.merge"
+      if jq --argjson m "$merge" \
+        "$OPEN_PRS_SHAPE" <<<"$raw" >"$f.tmp" 2>/dev/null; then
+        mv "$f.tmp" "$f"
+        [ "$(jq length "$f")" -lt "$OPEN_PRS_LIMIT" ] || echo "$OPEN_PRS_LIMIT open PRs in $dir, the most one list reads: PRs past them get no conflict, CI or review session"
+        continue
+      fi
+      echo "GitHub's open-PR list gave no PRs the sweeps can read" >"$STATE/gh-pr-list.err"
     fi
     rm -f "$f.tmp"
     # A secondary (burst) limit clears in minutes, not at the hourly reset.
@@ -908,14 +1000,14 @@ open_prs_refresh() {
       return 0
     fi
     if grep -qi 'rate limit' "$STATE/gh-pr-list.err"; then
-      reset=$(timeout 30 gh api rate_limit --jq .resources.graphql.reset </dev/null 2>/dev/null || true)
+      reset=$(timeout 30 gh api rate_limit --jq .resources.core.reset </dev/null 2>/dev/null || true)
       when=unknown
       [[ $reset =~ ^[0-9]+$ ]] && when=$(date -d "@$reset" -Is)
-      echo "GitHub GraphQL quota spent (resets at $when); no conflict, CI or review sessions this tick"
+      echo "GitHub REST quota spent (resets at $when); no conflict, CI or review sessions this tick"
       OPEN_PRS_LIMITED=1
       return 0
     fi
-    echo "gh pr list failed in $dir; no conflict, CI or review sessions there this tick: $(tail -1 "$STATE/gh-pr-list.err")"
+    echo "listing open PRs failed in $dir; no conflict, CI or review sessions there this tick: $(tail -1 "$STATE/gh-pr-list.err")"
   done < <(repos)
 }
 
@@ -1119,6 +1211,33 @@ To label the PR for a person: gh pr edit $number --add-label needs-ci-call (if t
   echo "started ${retry:+second }CI session for PR #$number ($list) at ${sha:0:12} in $dir (unit $name, model $MODEL_BUILD_MEDIUM, log $STATE/ci-$slug-pr-$number.log)"
 }
 
+# CAT-1545: a PR's required checks at its head, from gh pr checks (GraphQL:
+# REST can't say which checks are required). Once none is still running, the
+# answer is kept (state/etag/<repo slug>/checks-<n>) and reused while the PR's
+# head and updated_at are the ones it was read at (a push, or a body edit such
+# as a stamp, moves them), for at most CHECKS_KEEP_MIN minutes (a re-run check
+# moves neither). An answer with no checks, or one still running, is never kept.
+CHECKS_KEEP_MIN=30
+required_checks() {
+  local dir=$1 number=$2 key=$3 cache=$4 cached checks
+  if [ -n "$(find "$cache" -mmin -"$CHECKS_KEEP_MIN" 2>/dev/null)" ]; then
+    cached=$(cat "$cache" 2>/dev/null || true)
+    if [ "${cached%%$'\n'*}" = "$key" ] && [[ $cached == *$'\n'* ]]; then
+      printf '%s\n' "${cached#*$'\n'}"
+      return 0
+    fi
+  fi
+  # gh exits non-zero while a check fails or runs: read the output, not the exit code.
+  checks=$(cd "$dir" && timeout 60 gh pr checks "$number" --required --json name,bucket,link </dev/null 2>"$STATE/gh-pr-checks.err" || true)
+  if jq -e 'type == "array" and length > 0 and all(.[]; .bucket != "pending")' <<<"$checks" >/dev/null 2>&1; then
+    mkdir -p "$(dirname "$cache")"
+    printf '%s\n%s\n' "$key" "$checks" >"$cache.$$" && mv "$cache.$$" "$cache" || rm -f "$cache.$$"
+  else
+    rm -f "$cache"
+  fi
+  printf '%s\n' "$checks"
+}
+
 # Start a CI session for each open PR from a branch this machine launched whose
 # required checks have a failing conclusion at its head. A `review stamp`
 # failure alone is not one (the review sweeps handle stamps), and a PR with
@@ -1138,19 +1257,18 @@ ci_fixes() {
     mkdir -p "$STATE/ci/$slug"
     json=$(open_prs "$dir") || continue
     if ! prs=$(jq -r '.[] | select(.isCrossRepository | not) | [.labels[].name] as $l
-        | "\(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \(.isDraft) \($l | index("needs-ci-call") != null) \($l | index("no-factory-review") != null) \($l | index("needs-conflict-call") != null) \(.mergeable)"' <<<"$json"); then
+        | "\(.number) \(.headRefOid) \(.headRefName) \(.baseRefName) \(.isDraft) \($l | index("needs-ci-call") != null) \($l | index("no-factory-review") != null) \($l | index("needs-conflict-call") != null) \(.mergeable) \(.updatedAt // "")"' <<<"$json"); then
       echo "could not read the open PRs in $dir; no CI sessions there this tick"
       continue
     fi
-    while read -r number sha branch base draft called optout conflictcall mergeable; do
+    while read -r number sha branch base draft called optout conflictcall mergeable updated; do
       [[ $number =~ ^[0-9]+$ && $sha =~ ^[0-9a-f]{40}$ ]] || continue
       # Only branches this machine launched ("?": an older line with no key).
       key=$(launched | awk -v d="$dir" -v b="$branch" '$1 == d && $2 == b && !k { k = ($3 != "" ? $3 : "?") } END { print k }')
       [ -n "$key" ] || continue
       [ "$key" = "?" ] && key=$(cardkey "$branch" || true)
       [ "$called" = true ] && rm -f "$STATE/ci/$slug/$number-"*
-      # gh exits non-zero while a check fails or runs: read the output, not the exit code.
-      checks=$(cd "$dir" && timeout 60 gh pr checks "$number" --required --json name,bucket,link </dev/null 2>"$STATE/gh-pr-checks.err" || true)
+      checks=$(required_checks "$dir" "$number" "$sha $updated" "$ETAGS/$slug/checks-$number")
       # No required checks is not red. Any other failure to read them is said,
       # so a red PR never passes for green in silence.
       if ! jq -e 'type == "array"' <<<"$checks" >/dev/null 2>&1; then
@@ -1199,7 +1317,8 @@ reviews() {
     active "factory-conflict-$(reposlug "$dir")-pr-$number" && continue
     # So is a CI session (CAT-1479).
     active "factory-ci-$(reposlug "$dir")-pr-$number" && continue
-    body=$(cd "$dir" && gh pr view "$number" --json body --jq .body </dev/null 2>/dev/null) || continue
+    # CAT-1545: the body comes from the same list, not one more read per PR.
+    body=$(jq -r --argjson n "$number" 'first(.[] | select(.number == $n)) | .body // ""' <<<"$json" 2>/dev/null) || continue
     grep -qE "^Reviewed: $sha\b" <<<"$body" && continue
     # One reviewer per head sha. If it ran and left no stamp, a person looks;
     # one that was cut off is started once more (CAT-1481).
@@ -1384,7 +1503,9 @@ settle() {
     [ -e "$STATE/settled/$key" ] && continue
     unit_running "factory-$key" && continue
     active "factory-review-$key" && continue
-    pr=$(cd "$dir" && gh pr list --head "$branch" --state all --json number --jq length </dev/null 2>/dev/null) || continue
+    # CAT-1545: any PR from the branch, open or not, read the way merges reads it.
+    pr=$(factory_pr "$dir" "$branch") || continue
+    if [ -n "$pr" ]; then pr=1; else pr=0; fi
     id=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
     if [ "$pr" = "0" ]; then
       reason=$(cut_off "$key")
@@ -1505,17 +1626,27 @@ Otherwise change nothing, and print exactly one final line: SETTLED <the status 
 # and the launched file only grows, so within a tick the answer is asked once
 # (state/open-prs/pr-<key>, cleared each tick), and an OLD answer is kept a day
 # (state/pr-old/<key>; launch() drops it when the branch is launched again).
+# CAT-1545: an open PR comes from the tick's open-PR list; any other is asked
+# over REST with its ETag (state/etag/<repo slug>/head-<key>), so a branch
+# whose PR didn't change costs no quota.
 factory_pr() {
-  local key memo old out
+  local key memo old out= json
   key=$(pr_key "$1" "$2")
   old=$STATE/pr-old/$key
   if [ -n "$(find "$old" -mmin -1440 2>/dev/null)" ]; then cat "$old"; return 0; fi
   memo=$STATE/open-prs/pr-$key
   if [ -n "$OPEN_PRS_TICK" ] && [ -f "$memo" ]; then cat "$memo"; return 0; fi
-  out=$(cd "$1" && gh pr list --head "$2" --state all --limit 1 --json number,state,closedAt,url,headRefOid,body \
-    --jq '.[0] | select(.) | .headRefOid as $sha
-      | (if .state != "OPEN" and ((.closedAt // "1970-01-01T00:00:00Z") | fromdateiso8601) < now - 604800 then "OLD" else .state end) as $state
-      | "\(.number) \($state) \((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b")) \(.url)"' </dev/null 2>/dev/null) || return 1
+  if [ -n "$OPEN_PRS_TICK" ] && json=$(open_prs "$1"); then
+    out=$(jq -r --arg b "$2" 'first(.[] | select(.headRefName == $b) | select(.isCrossRepository | not)) | .headRefOid as $sha
+      | "\(.number) OPEN \((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b")) \(.url)"' <<<"$json" 2>/dev/null) || out=
+  fi
+  if [ -z "$out" ]; then
+    out=$(gh_etag "$1" "repos/{owner}/{repo}/pulls?head={owner}:$(jq -rn --arg b "$2" '$b | @uri')&state=all&per_page=1" \
+      "$ETAGS/$(reposlug "$1")/head-$key" 2>/dev/null | jq -r '.[0] | select(.) | .head.sha as $sha
+      | (if .merged_at then "MERGED" elif .state == "closed" then "CLOSED" else "OPEN" end) as $state
+      | (if $state != "OPEN" and ((.closed_at // "1970-01-01T00:00:00Z") | fromdateiso8601) < now - 604800 then "OLD" else $state end) as $state
+      | "\(.number) \($state) \((.body // "") | test("(?m)^Reviewed: " + $sha + "\\b")) \(.html_url)"') || return 1
+  fi
   [ -z "$OPEN_PRS_TICK" ] || printf '%s\n' "$out" >"$memo"
   if [[ $out =~ ^[0-9]+\ OLD\  ]]; then mkdir -p "$STATE/pr-old" && printf '%s\n' "$out" >"$old"; fi
   printf '%s\n' "$out"
@@ -1524,8 +1655,28 @@ pr_key() { printf '%s %s' "$1" "$2" | md5sum | cut -c1-16; }
 
 # CI is green when the PR has checks and the latest run of each passed or was
 # skipped (gh pr checks, which ignores runs a later one replaced).
+# CAT-1545: a finished answer is kept the way required_checks keeps one, keyed
+# on the head and updated_at in the tick's open-PR list (no list, no keeping).
 green() {
-  [ "$(cd "$1" && gh pr checks "$2" --json bucket --jq 'length > 0 and all(.[]; .bucket == "pass" or .bucket == "skipping")' </dev/null 2>/dev/null || true)" = true ]
+  local key= cache= cached out
+  if [ -n "$OPEN_PRS_TICK" ]; then
+    key=$(open_prs "$1" | jq -r --argjson n "$2" 'first(.[] | select(.number == $n)) | "\(.headRefOid) \(.updatedAt // "")"' 2>/dev/null || true)
+    cache=$ETAGS/$(reposlug "$1")/green-$2
+  fi
+  if [ -n "$key" ] && [ -n "$(find "$cache" -mmin -"$CHECKS_KEEP_MIN" 2>/dev/null)" ]; then
+    cached=$(cat "$cache" 2>/dev/null || true)
+    if [ "${cached%%$'\n'*}" = "$key" ] && [[ $cached == *$'\n'* ]]; then
+      [ "${cached#*$'\n'}" = true ]
+      return
+    fi
+  fi
+  out=$(cd "$1" && gh pr checks "$2" --json bucket --jq 'if length > 0 and all(.[]; .bucket == "pass" or .bucket == "skipping") then "true"
+    elif any(.[]; .bucket == "pending") or length == 0 then "pending" else "false" end' </dev/null 2>/dev/null || true)
+  if [ -n "$key" ] && { [ "$out" = true ] || [ "$out" = false ]; }; then
+    mkdir -p "${cache%/*}"
+    printf '%s\n%s\n' "$key" "$out" >"$cache.$$" && mv "$cache.$$" "$cache" || rm -f "$cache.$$"
+  fi
+  [ "$out" = true ]
 }
 
 # One cheap haiku call allowed only to read and update a Linear issue. It
@@ -1906,7 +2057,7 @@ waiting_for_founder_json() {
   local dir _ prs number url sha base out verdict reason unread=()
   {
     while read -r dir _; do
-      prs=$(open_prs_fetch "$dir" number,url,headRefOid,baseRefName,isDraft 2>/dev/null |
+      prs=$(open_prs_fetch "$dir" 2>/dev/null |
         jq -r '.[] | select(.isDraft | not) | "\(.number) \(.url) \(.headRefOid) \(.baseRefName)"') || {
         unread+=("$(repo_name "$dir")")
         continue
