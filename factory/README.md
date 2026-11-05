@@ -60,7 +60,9 @@ state folder (`slots.lock`, `slots/`) before it starts a session, and a pickup
 takes it before its pick claims a card, so a card is never claimed without a
 slot to run in. Each job's log lines start with `[<repo folder>]`. A repo whose
 job fails is named in one line and in the heartbeat's pass result
-(`error (failed in <repo>); …`); the other repos' jobs go on.
+(`error (failed in <repo>); …`); the other repos' jobs go on. A repo whose sweeps
+failed claims no new card that tick, and two repo lines for one Linear project
+pick once.
 
 **Two machines, same projects:** Kevin's and Keith's machines can both list
 every project. Each picks Ready For Factory cards that are assigned to its

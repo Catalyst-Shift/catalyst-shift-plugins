@@ -20,7 +20,9 @@ const read = (f) => readFileSync(f, "utf8");
 // systemd-run and systemctl share a file of running units. The pick logs when
 // it starts and ends, and takes PICK_SLEEP seconds, so two picks in flight at
 // once overlap in the log.
-function rig() {
+// A repo's open PRs come from <t>/prs-<repo folder>.json when it has one (gh runs in the
+// repo folder); git is stubbed only when a test needs worktrees.
+function rig({ git = false } = {}) {
   const t = mkdtempSync(join(tmpdir(), "factory-parallel-"));
   const home = join(t, "home"), bin = join(t, "bin"), state = join(home, ".local/state/claude-factory");
   const units = join(t, "units"), calls = join(t, "calls");
@@ -29,15 +31,30 @@ function rig() {
   writeFileSync(units, "");
   writeFileSync(calls, "");
   writeFileSync(join(bin, "gh"), `#!/usr/bin/env bash
-case "$1 $2" in
-  "api user") echo kkreative ;;
+[ "$1 $2" = "api user" ] && { echo kkreative; exit 0; }
+f="${t}/prs-$(basename "$PWD").json"
+[ -f "$f" ] || { echo '[]'; exit 0; }
+sub="$1 $2"; shift 2; n=; h=; q=.
+[ "$sub" = "pr view" ] && { n=$1; shift; }
+while [ $# -gt 0 ]; do case $1 in --head) h=$2; shift;; --jq) q=$2; shift;; esac; shift; done
+case $sub in
+  "pr list") if [ -n "$h" ]; then jq -r "[.[] | select(.headRefName == \\"$h\\")] | $q" "$f"; else jq -r "$q" "$f"; fi ;;
+  "pr view") jq -r ".[] | select(.number == $n) | $q" "$f" ;;
   *) echo '[]' ;;
 esac
 `, { mode: 0o755 });
+  if (git) {
+    writeFileSync(join(bin, "git"), `#!/usr/bin/env bash
+case "$*" in
+  *"worktree add"*) mkdir -p "\${@: -2:1}";;
+esac
+exit 0
+`, { mode: 0o755 });
+  }
   writeFileSync(join(bin, "systemctl"), `#!/usr/bin/env bash
 case "$*" in
   *list-units*) cat "${units}" ;;
-  *is-active*) grep -qxF "\${!#}.service" "${units}" ;;
+  *is-active*) grep -qxF "\${!#}" "${units}"; exit $? ;;
 esac
 exit 0
 `, { mode: 0o755 });
@@ -68,8 +85,53 @@ esac
   };
   const started = () => read(units).trim().split("\n").filter(Boolean);
   const picks = () => read(calls).trim().split("\n").filter(Boolean).map((l) => l.split(" "));
-  return { t, state, units, calls, tick, started, picks };
+  return { t, state, units, calls, repoA, repoB, conf, tick, started, picks };
 }
+
+test("CAT-1547: repo jobs read stdin from /dev/null, so no job can eat the rest of the repo list", () => {
+  assert.match(read(DISPATCH), /repo_job "job-\$n" "\$dir" "\$project" "\$fn" <\/dev\/null &/);
+});
+
+test("CAT-1547: two repo lines for one Linear project pick once, never the same card side by side", () => {
+  const r = rig();
+  const conf = (extra) => `label kevin-omarchy\n${extra}${r.repoA} proj-a\n${r.repoB} proj-a\n`;
+  writeFileSync(r.conf, conf(""));
+  const out = spawnSync("bash", [DISPATCH], {
+    encoding: "utf8",
+    env: { HOME: join(r.t, "home"), PATH: `${GH_REST}:${join(r.t, "bin")}:/usr/bin:/bin`, CLAUDE_FACTORY_NO_KICK: "1", CLAUDE_BIN: join(r.t, "bin", "claude"), CLAUDE_FACTORY_CAP: "4" },
+  });
+  assert.equal(out.status, 0, out.stderr);
+  assert.equal(r.picks().filter(([, , what]) => what === "start").length, 1);
+  assert.deepEqual(r.started(), ["factory-cat-1.service"]);
+});
+
+test("CAT-1547: two repos each have a factory PR needing a reviewer and the cap is 1: exactly one reviewer starts", () => {
+  const r = rig({ git: true });
+  const sha = (c) => c.repeat(40);
+  const pr = (number, branch, c) => ({
+    number, headRefOid: sha(c), headRefName: branch, baseRefName: "main", mergeable: "MERGEABLE", state: "OPEN",
+    isDraft: false, author: { login: "someone-else" }, labels: [], isCrossRepository: false, body: "", url: `https://github.com/o/r/pull/${number}`,
+  });
+  writeFileSync(join(r.t, "prs-repo-a.json"), JSON.stringify([pr(1, "b/cat-1-x", "1")]));
+  writeFileSync(join(r.t, "prs-repo-b.json"), JSON.stringify([pr(2, "b/cat-2-x", "2")]));
+  writeFileSync(join(r.state, "launched"), `${r.repoA} b/cat-1-x cat-1\n${r.repoB} b/cat-2-x cat-2\n`);
+  writeFileSync(join(r.repoA, ".keep-me"), "x");
+  const out = r.tick(1);
+  assert.equal(out.status, 0, out.stderr);
+  assert.ok(existsSync(join(r.repoA, ".keep-me")), "a tick never deletes a file in a repo folder");
+  const reviewers = r.started().filter((u) => u.startsWith("factory-review-"));
+  assert.equal(reviewers.length, 1, `${out.stdout}\n${out.stderr}`);
+  assert.equal(r.started().length, 1, `nothing else starts past the cap: ${r.started()}`);
+  assert.ok(!existsSync(join(r.state, "slots")));
+  // With room for both, both repos' reviewers start.
+  const r2 = rig({ git: true });
+  writeFileSync(join(r2.t, "prs-repo-a.json"), JSON.stringify([pr(1, "b/cat-1-x", "1")]));
+  writeFileSync(join(r2.t, "prs-repo-b.json"), JSON.stringify([pr(2, "b/cat-2-x", "2")]));
+  writeFileSync(join(r2.state, "launched"), `${r2.repoA} b/cat-1-x cat-1\n${r2.repoB} b/cat-2-x cat-2\n`);
+  const out2 = r2.tick(2);
+  assert.equal(out2.status, 0, out2.stderr);
+  assert.deepEqual(r2.started().filter((u) => u.startsWith("factory-review-")).sort(), ["factory-review-cat-1.service", "factory-review-cat-2.service"], out2.stdout);
+});
 
 test("CAT-1547: two repos each want a session and the running cap is 1: exactly one starts", () => {
   const r = rig();
@@ -121,7 +183,7 @@ test("CAT-1547: parallel 1 runs the repos one after another; a bad parallel line
   }
 });
 
-test("CAT-1547: one repo's failing sweep doesn't stop or fail the other repos' sweeps or pickups", () => {
+test("CAT-1547: one repo's failing sweep doesn't stop or fail the other repos' sweeps or pickups; that repo picks nothing", () => {
   for (const parallel of ["parallel 1\n", ""]) {
     const r = rig();
     // repo-a's CI sweep can't make its state folder (a file is in the way):
@@ -135,10 +197,13 @@ test("CAT-1547: one repo's failing sweep doesn't stop or fail the other repos' s
     // repo-b's sweeps ran past the CI sweep to the review sweep; repo-a's stopped before it.
     assert.ok(existsSync(join(r.state, "reviewed", "repo-b")), parallel);
     assert.ok(!existsSync(join(r.state, "reviewed", "repo-a")), parallel);
-    // Both repos still picked and started their card.
-    assert.deepEqual(r.started().sort(), ["factory-cat-1.service", "factory-cat-2.service"], parallel);
+    // repo-b still picked and started its card; repo-a, whose sweeps failed,
+    // claimed none (its builder would likely hit the same fault).
+    assert.deepEqual(r.started(), ["factory-cat-2.service"], parallel);
+    assert.deepEqual(r.picks().filter(([, , what]) => what === "start").map(([, proj]) => proj), ["proj-b"], parallel);
+    assert.match(out.stderr, /^\[repo-a\] its sweeps failed this tick, so no new card is picked there$/m);
     // The heartbeat names the repo whose job failed.
-    assert.match(read(join(r.state, "pass.json")), /"lastPassResult":"error \(failed in repo-a\); ok: started CAT-[12] CAT-[12]"/);
+    assert.match(read(join(r.state, "pass.json")), /"lastPassResult":"error \(failed in repo-a\); ok: started CAT-2"/);
   }
 });
 

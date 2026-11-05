@@ -211,30 +211,43 @@ slot_take() {
   local fd busy held rc=1
   mkdir -p "$SLOTS"
   exec {fd}>>"$STATE/slots.lock"
-  flock "$fd"
+  # A lock held this long means a wedged job: no slot, rather than a hung tick.
+  if ! flock -w 60 "$fd"; then
+    exec {fd}>&-
+    SLOT_BUSY="?"
+    return 1
+  fi
   rm -f "$SLOTS/$SLOT_ID"
+  # As in every running() check: a failed systemctl must not end the job
+  # (set -e), and wc still prints a count. Anything but a number holds back.
   busy=$(running) || true
-  # A count systemctl didn't give is a full machine, never an empty one.
-  [[ $busy =~ ^[0-9]+$ ]] || busy=999
   held=$(find "$SLOTS" -maxdepth 1 -type f | wc -l)
-  SLOT_BUSY=$((busy + held))
-  if [ "$SLOT_BUSY" -lt "$CAP" ] 2>/dev/null; then
-    : >"$SLOTS/$SLOT_ID" && rc=0
-  elif [ "$held" -gt 0 ] && [ "$busy" -lt "$CAP" ] 2>/dev/null; then
-    rc=2
+  if [[ $busy =~ ^[0-9]+$ ]]; then
+    SLOT_BUSY=$((busy + held))
+    if [ "$SLOT_BUSY" -lt "$CAP" ] 2>/dev/null; then
+      : >"$SLOTS/$SLOT_ID" && rc=0
+    elif [ "$held" -gt 0 ] && [ "$busy" -lt "$CAP" ] 2>/dev/null; then
+      rc=2
+    fi
+  else
+    SLOT_BUSY="?"
   fi
   exec {fd}>&-
   return "$rc"
 }
 slot_give() { rm -f "$SLOTS/$SLOT_ID"; }
-# Takes a slot, waiting while other jobs hold the ones still free. 1: the cap is full.
+# Takes a slot, waiting while other jobs hold the ones still free, for at most
+# SLOT_WAIT_MAX seconds (a pick holds one for up to 300). 1: no slot.
+SLOT_WAIT_MAX=600
 slot_wait() {
-  local rc
+  local rc waited=0
   while :; do
     rc=0
     slot_take || rc=$?
     [ "$rc" = 2 ] || return "$rc"
+    [ "$waited" -lt "$SLOT_WAIT_MAX" ] || return 1
     sleep 2
+    waited=$((waited + 2))
   done
 }
 # A card key is a Linear identifier (CAT-123, LUM-45), lowercased for unit and
@@ -851,7 +864,7 @@ review_authors() {
 # the PR needs-conflict-call and pushes nothing. Tried once per (head sha, base
 # sha): the head as GitHub listed it, the base tip as fetched.
 resolve() {
-  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 basesha slug name wt rec busy retry= prev=
+  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 basesha slug name wt rec retry= prev=
   slug=$(reposlug "$dir")
   name=factory-conflict-$slug-pr-$number
   wt=$dir/.claude/worktrees/$name
@@ -882,10 +895,8 @@ resolve() {
   # Checked last, so the cap is named only when a free slot is all the PR waits
   # for; the price is the fetch above on every tick while the cap is full. A
   # full cap stops new sessions, not the sweep: later PRs' labels still clear
-  # their tries. `|| true`: a failed systemctl must not end the tick (set -e),
-  # and wc still prints a count, as in the other running() checks. Asked as
-  # "below the cap?", so a CAP that isn't a number holds sessions back, as there.
-  # CAT-1547: taken under the slot lock, so repos sweeping side by side share the cap.
+  # their tries. CAT-1547: the slot is taken under the slot lock, so repos
+  # sweeping side by side share the cap (slot_take says how it fails closed).
   if ! slot_wait; then
     echo "PR #$number in $dir conflicts; waiting for a free slot ($SLOT_BUSY/$CAP)"
     return 0
@@ -1330,7 +1341,7 @@ conflicts() {
 # head that carries its own fix (the 'Factory-CI-Fix: PR #<n>' trailer it is
 # told to write) labels the PR needs-ci-call instead of starting another one.
 fix_ci() {
-  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 key=$6 fails=$7 links=$8 slug name wt basewt fset rec list f tried msgs heads='' own='' note='' busy id retry= retries=0 tries prev=
+  local dir=$1 number=$2 sha=$3 branch=$4 base=$5 key=$6 fails=$7 links=$8 slug name wt basewt fset rec list f tried msgs heads='' own='' note='' id retry= retries=0 tries prev=
   slug=$(reposlug "$dir")
   name=factory-ci-$slug-pr-$number
   wt=$dir/.claude/worktrees/$name
@@ -2506,7 +2517,7 @@ human_edits() {
 # Linear call that isn't confirmed is retried next tick. Anything else gets a
 # reflect session, within the running cap.
 retros() {
-  local dir branch key id pr number state stamped url rec signals busy edits
+  local dir branch key id pr number state stamped url rec signals edits
   mkdir -p "$STATE/retro"
   while read -r dir branch key; do
     key=${key:-$(cardkey "$branch")}
@@ -2746,14 +2757,16 @@ repo_job() {
 # jobs, at most PARALLEL at once, and waits for all of them.
 repo_jobs() {
   local fn=$1 list=$2 dir project n=0
-  local -A slot_of=() names=()
+  local -A slot_of=() names=() dirs=()
   rm -rf "$SLOTS"
   while read -r dir project; do
     while [ "${#slot_of[@]}" -ge "$PARALLEL" ]; do reap_job; done
     n=$((n + 1))
-    repo_job "job-$n" "$dir" "$project" "$fn" &
+    # stdin from /dev/null: a job must never read the rest of the repo list.
+    repo_job "job-$n" "$dir" "$project" "$fn" </dev/null &
     slot_of[$!]=job-$n
     names[$!]=$(basename "$dir" | tr -c 'A-Za-z0-9._\n-' '_')
+    dirs[$!]=$dir
   done < <("$list")
   while [ "${#slot_of[@]}" -gt 0 ]; do reap_job; done
   rm -rf "$SLOTS"
@@ -2763,6 +2776,8 @@ reap_job() {
   local pid= rc=0
   wait -n -p pid "${!slot_of[@]}" || rc=$?
   if [ -z "$pid" ]; then
+    # wait gave no job back (interrupted): wait for all of them, never drop them.
+    wait "${!slot_of[@]}" 2>/dev/null || true
     slot_of=()
     return 0
   fi
@@ -2771,12 +2786,26 @@ reap_job() {
   if [ "$rc" != 0 ]; then
     echo "[${names[$pid]}] this repo's $fn ended with exit $rc; the other repos' went on" >&2
     JOBS_FAILED+=" ${names[$pid]}"
+    FAILED_DIRS+=("${dirs[$pid]}")
   fi
-  unset "slot_of[$pid]" "names[$pid]"
+  unset "slot_of[$pid]" "names[$pid]" "dirs[$pid]"
 }
+FAILED_DIRS=()
 # The sweeps' jobs: each repo line, then each folder a launched branch names
 # that is no longer a repo line (its PRs still get reviews, settles and merges).
 sweep_jobs() { { repos; launched | awk '{ print $1, "-" }'; } | awk '!seen[$1]++'; }
+# The pickup's jobs: each repo line once per Linear project (two lines for one
+# project would pick the same card side by side), minus a repo whose sweeps
+# failed this tick: it claims no new card until its sweeps run clean.
+pickup_jobs() {
+  repos | awk '!seen[$2]++' | while read -r dir project; do
+    if [ "${#FAILED_DIRS[@]}" -gt 0 ] && printf '%s\n' "${FAILED_DIRS[@]}" | grep -qxF -- "$dir"; then
+      echo "[$(basename "$dir")] its sweeps failed this tick, so no new card is picked there" >&2
+      continue
+    fi
+    echo "$dir $project"
+  done
+}
 repo_sweeps() {
   conflicts
   ci_fixes
@@ -2900,7 +2929,7 @@ if [ "$OFFSET" -gt 0 ] && [ "$(running)" -lt "$CAP" ]; then sleep "$OFFSET"; fi
 # CAT-1547: each repo picks in its own job; a slot is taken before its pick
 # claims a card, so the cap holds across repos.
 rm -f "$STATE/tick-started"
-repo_jobs repo_pickup repos
+repo_jobs repo_pickup pickup_jobs
 started=$(paste -sd' ' "$STATE/tick-started" 2>/dev/null || true)
 rm -f "$STATE/tick-started"
 [ -z "$started" ] || PASS_RESULT="ok: started $started"
