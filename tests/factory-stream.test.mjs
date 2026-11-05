@@ -18,6 +18,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FACTORY = join(ROOT, "factory");
 const STREAM = join(FACTORY, "bin", "claude-factory-stream");
 const DISPATCH = join(FACTORY, "bin", "claude-factory-dispatch");
+// CAT-1545: answers the dispatcher's REST PR reads from this file's gh stubs.
+const GH_REST = join(ROOT, "tests", "support");
 const require = createRequire(import.meta.url);
 const S = require(STREAM);
 const read = (f) => readFileSync(f, "utf8");
@@ -420,7 +422,7 @@ test("the heartbeat carries the machine's state and no env values or tokens", as
   const x = heartbeatHome(true);
   const b = board();
   await b.up();
-  const env = { HOME: x.home, PATH: `${x.bin}:/usr/bin:/bin`, FACTORY_INGEST_TOKEN: TOKEN, FACTORY_INGEST_URL: b.url(), SOME_SECRET: "zzzzzzzzzzzz" };
+  const env = { HOME: x.home, PATH: `${GH_REST}:${x.bin}:/usr/bin:/bin`, FACTORY_INGEST_TOKEN: TOKEN, FACTORY_INGEST_URL: b.url(), SOME_SECRET: "zzzzzzzzzzzz" };
   const code = await new Promise((res) => spawn(process.execPath, [STREAM, "heartbeat", "--once"], { env }).on("close", res));
   assert.equal(code, 0);
   assert.equal(b.bodies.length, 1);
@@ -458,7 +460,7 @@ test("the heartbeat posts again within a tick of a change, and not at all while 
     const b = board();
     await b.up();
     const env = {
-      HOME: x.home, PATH: `${x.bin}:/usr/bin:/bin`, FACTORY_INGEST_TOKEN: TOKEN, FACTORY_INGEST_URL: b.url(),
+      HOME: x.home, PATH: `${GH_REST}:${x.bin}:/usr/bin:/bin`, FACTORY_INGEST_TOKEN: TOKEN, FACTORY_INGEST_URL: b.url(),
       FACTORY_HEARTBEAT_TICK_MS: "100", FACTORY_HEARTBEAT_EVERY_MS: "600000",
     };
     const p = spawn(process.execPath, [STREAM, "heartbeat"], { env });
@@ -517,7 +519,7 @@ test("with a token, the dispatcher runs each session under claude-factory-stream
   const tick = (extra) => spawnSync("bash", [DISPATCH], {
     encoding: "utf8",
     // The stub streamer is a bash script, so "node" here is bash.
-    env: { HOME: x.home, PATH: `${x.bin}:${NODE_DIR}:/usr/bin:/bin`, CLAUDE_BIN: join(x.bin, "claude"), CLAUDE_FACTORY_STREAM: join(x.bin, "stream"), CLAUDE_FACTORY_NODE: "/bin/bash", PICK: "PICK CAT-3 kevin/cat-3-x",
+    env: { HOME: x.home, PATH: `${GH_REST}:${x.bin}:${NODE_DIR}:/usr/bin:/bin`, CLAUDE_BIN: join(x.bin, "claude"), CLAUDE_FACTORY_STREAM: join(x.bin, "stream"), CLAUDE_FACTORY_NODE: "/bin/bash", PICK: "PICK CAT-3 kevin/cat-3-x",
       // The board's control and stages calls go nowhere (a closed local port), never to the real board.
       CLAUDE_FACTORY_CONTROL_URL: "http://127.0.0.1:9/api/machines", CLAUDE_FACTORY_STAGES_URL: "http://127.0.0.1:9/api/factory/stages", ...extra },
   });
@@ -560,7 +562,7 @@ test("status --json shows per running card the last seq sent and the spool lengt
   const r = spawnSync("bash", [DISPATCH, "status", "--json"], {
     encoding: "utf8",
     env: {
-      HOME: x.home, PATH: `${x.bin}:/usr/bin:/bin`, CLAUDE_BIN: join(x.bin, "claude"),
+      HOME: x.home, PATH: `${GH_REST}:${x.bin}:/usr/bin:/bin`, CLAUDE_BIN: join(x.bin, "claude"),
       UNITS: "factory-cat-9.service loaded active running a\\nfactory-review-cat-2.service loaded active running b\\n",
     },
   });
@@ -769,7 +771,7 @@ test("the heartbeat without a token sends nothing and exits, so systemd restarts
   const x = heartbeatHome(true);
   const b = board();
   await b.up();
-  const env = { HOME: x.home, PATH: `${x.bin}:/usr/bin:/bin`, FACTORY_INGEST_URL: b.url(), FACTORY_HEARTBEAT_RESTART_MS: "50" };
+  const env = { HOME: x.home, PATH: `${GH_REST}:${x.bin}:/usr/bin:/bin`, FACTORY_INGEST_URL: b.url(), FACTORY_HEARTBEAT_RESTART_MS: "50" };
   assert.equal(await new Promise((res) => spawn(process.execPath, [STREAM, "heartbeat"], { env }).on("close", res)), 0);
   // A token the board refuses: it exits too (non-zero), after the restart wait.
   const refusing = board(() => 401);
@@ -1028,7 +1030,7 @@ test("state files record this boot's id next to the pid", async (t) => {
   writeFileSync(join(bin, "claude"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   const b = board();
   await b.up();
-  const env = { HOME: h, PATH: `${bin}:/usr/bin:/bin`, FACTORY_INGEST_TOKEN: TOKEN, FACTORY_INGEST_URL: b.url() };
+  const env = { HOME: h, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, FACTORY_INGEST_TOKEN: TOKEN, FACTORY_INGEST_URL: b.url() };
   const code = await new Promise((res) => spawn(process.execPath, [STREAM, "run", "--unit", "factory-cat-77", "--", "claude", "-p", "x"], { env }).on("close", res));
   assert.equal(code, 0);
   const s = JSON.parse(read(join(state, "stream", "factory-cat-77.json")));

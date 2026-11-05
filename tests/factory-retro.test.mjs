@@ -12,6 +12,8 @@ import { tmpdir } from "node:os";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DISPATCH = join(ROOT, "factory", "bin", "claude-factory-dispatch");
+// CAT-1545: answers the dispatcher's REST PR reads from this file's gh stubs.
+const GH_REST = join(ROOT, "tests", "support");
 const read = (f) => readFileSync(f, "utf8");
 
 function rig() {
@@ -105,7 +107,7 @@ esac
   launch([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   const run = (args = [], extra = {}) => spawnSync("bash", [...(process.env.XT ? ["-x"] : []), DISPATCH, ...args], {
     encoding: "utf8",
-    env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "20", ...extra },
+    env: { HOME: home, PATH: `${GH_REST}:${bin}:/usr/bin:/bin`, CLAUDE_BIN: join(bin, "claude"), CLAUDE_FACTORY_CAP: "20", ...extra },
   });
   const asked = () => { const c = read(calls); writeFileSync(calls, ""); return c.trim().split("\n").filter(Boolean); };
   const unitsStarted = () => (existsSync(units) ? read(units).trim().split("\n").filter(Boolean).sort() : []);

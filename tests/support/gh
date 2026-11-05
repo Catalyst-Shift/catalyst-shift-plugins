@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# CAT-1545 test support: the dispatcher reads PRs over REST (gh api -i, with
+# ETags), but most tests stub gh's GraphQL commands (gh pr list, gh pr view)
+# over a fixture. Put this folder first on PATH: it answers the REST reads from
+# the next gh on PATH (the test's own stub, which logs the call in its own
+# form) and passes every other call through. Each answer carries a fresh
+# updated_at, so the dispatcher's per-PR caches never hold across ticks here;
+# tests/factory-open-prs.test.mjs tests those caches with a REST stub of its own.
+set -u
+self=$(cd "$(dirname "$0")" && pwd)
+next=
+IFS=: read -ra dirs <<<"$PATH"
+for d in "${dirs[@]}"; do
+  [ "$(cd "$d" 2>/dev/null && pwd)" = "$self" ] && continue
+  if [ -x "$d/gh" ]; then next=$d/gh; break; fi
+done
+[ -n "$next" ] || { echo "tests/support/gh: no gh stub after it on PATH" >&2; exit 127; }
+[ "${1:-} ${2:-}" = "api -i" ] || exec "$next" "$@"
+
+shift 2
+inm=
+while [ $# -gt 1 ]; do
+  case $1 in -H) [[ $2 == If-None-Match:* ]] && inm=${2#If-None-Match: }; shift 2 ;; *) break ;; esac
+done
+path=$1
+now=$(date +%s%N)
+case $path in
+  'repos/{owner}/{repo}/pulls?state=open&'*)
+    out=$("$next" pr list --state open --limit 100 --json number,headRefOid,headRefName,baseRefName,mergeable,isDraft,author,labels,isCrossRepository,body,url --jq .) || exit 1
+    [ -n "$out" ] || out='[]'
+    body=$(jq -c --arg now "$now" '[.[] | {number, head: {sha: .headRefOid, ref: .headRefName, repo: {full_name: (if .isCrossRepository == true then "fork/repo" else "o/r" end)}},
+      base: {ref: .baseRefName, repo: {full_name: "o/r"}}, draft: (.isDraft == true), user: {login: (.author.login // "")},
+      labels: (.labels // []), body, html_url: .url, updated_at: $now}]' <<<"$out") || exit 1 ;;
+  'repos/{owner}/{repo}/pulls?head='*)
+    b=${path#*head=\{owner\}:}; b=${b%%&*}; b=$(printf '%b' "${b//%/\\x}")
+    out=$("$next" pr list --head "$b" --state all --limit 1 --json number,state,closedAt,url,headRefOid,body --jq .) || exit 1
+    [ -n "$out" ] || out='[]'
+    body=$(jq -c '[.[] | {number, state: (if .state == "OPEN" then "open" else "closed" end), merged_at: (if .state == "MERGED" then "merged" else null end),
+      closed_at: .closedAt, head: {sha: .headRefOid}, body, html_url: .url}]' <<<"$out") || exit 1 ;;
+  'repos/{owner}/{repo}/pulls/'*)
+    n=${path##*/}
+    out=$("$next" pr view "$n" --json number,headRefOid,mergeable --jq .) || exit 1
+    body=$(jq -c '{number, head: {sha: .headRefOid}, mergeable: (if .mergeable == "MERGEABLE" then true elif .mergeable == "CONFLICTING" then false else null end)}' <<<"$out") || exit 1 ;;
+  *) exec "$next" api -i "$path" ;;
+esac
+etag="\"$(md5sum <<<"$body" | cut -c1-32)\""
+if [ "$inm" = "$etag" ]; then
+  printf 'HTTP/2.0 304 Not Modified\nEtag: %s\n\n' "$etag"
+  echo "gh: HTTP 304" >&2
+  exit 1
+fi
+printf 'HTTP/2.0 200 OK\nEtag: %s\n\n%s\n' "$etag" "$body"
