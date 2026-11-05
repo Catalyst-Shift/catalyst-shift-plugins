@@ -2527,11 +2527,26 @@ waiting_now=$(waiting)
 REVIEW_WAITING=$waiting_now
 # Paused from the board: reviews, conflict and CI sessions above still ran; nothing new is claimed.
 if [ -n "$CTL_PAUSED_UNTIL" ]; then exit 0; fi
-# CAT-1540: rate limited, the waiting count can't be read, so nothing new starts.
+# CAT-1540: rate limited, the waiting count can't be read. CAT-1557: the count
+# from the last tick that could read it stands in for up to WAITING_COUNT_MAX_AGE
+# seconds (the waiting cap applies to it as usual); missing or older, nothing
+# new starts.
+WAITING_COUNT_MAX_AGE=600
 if [ -n "$OPEN_PRS_LIMITED" ]; then
-  echo "GitHub is rate limiting, so the PRs waiting on review can't be counted; no new pickups"
-  PASS_RESULT="holding: GitHub rate limited"
-  exit 0
+  stored_at= stored_n=
+  [ ! -f "$STATE/waiting-count" ] || read -r stored_at stored_n _ <"$STATE/waiting-count" || true
+  now_s=$(date +%s)
+  if [[ $stored_at =~ ^[0-9]+$ && $stored_n =~ ^[0-9]+$ ]] && [ "$stored_at" -le "$now_s" ] && [ $((now_s - stored_at)) -le "$WAITING_COUNT_MAX_AGE" ]; then
+    echo "GitHub rate limited; using the review-queue count from $(date -d "@$stored_at" +%H:%M:%S) ($stored_n waiting)"
+    waiting_now=$stored_n
+    REVIEW_WAITING=$waiting_now
+  else
+    echo "GitHub is rate limiting, so the PRs waiting on review can't be counted; no new pickups"
+    PASS_RESULT="holding: GitHub rate limited"
+    exit 0
+  fi
+else
+  printf '%s %s\n' "$(date +%s)" "$waiting_now" >"$STATE/waiting-count.tmp" && mv "$STATE/waiting-count.tmp" "$STATE/waiting-count" || true
 fi
 if [ "$waiting_now" -ge "$WAITING_CAP" ]; then
   echo "$waiting_now factory PRs waiting on review (cap $WAITING_CAP); no new pickups"

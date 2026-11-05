@@ -323,3 +323,59 @@ test("two repos with the same state name get no list, so neither reads the other
 test("no GraphQL open-PR list is left in the dispatcher", () => {
   assert.doesNotMatch(read(DISPATCH), /gh pr list --state open/);
 });
+
+// CAT-1557: a rate-limited tick can't count the waiting PRs, so it uses the
+// count the last good tick wrote to $STATE/waiting-count, up to 10 minutes old.
+const RATE_LIMITED = `echo "gh: API rate limit exceeded for user ID 1. (HTTP 403)" >&2; exit 1;`;
+const HOLD = /^GitHub is rate limiting, so the PRs waiting on review can't be counted; no new pickups$/m;
+const now = () => Math.floor(Date.now() / 1000);
+
+test("a tick that counts the waiting PRs writes the count and the time to waiting-count", () => {
+  const m = machine("count-write", ":;");
+  const before = now();
+  const r = m.tick();
+  assert.equal(r.status, 0, r.stderr);
+  const [at, n, ...rest] = read(join(m.state, "waiting-count")).trim().split(/\s+/);
+  assert.deepEqual(rest, []);
+  assert.equal(n, "1"); // Repo A's PR #7 is on this machine's launched list
+  assert.ok(Number(at) >= before && Number(at) <= now() + 1, at);
+});
+
+test("rate limited with a fresh stored count under the cap: the count is used, logged once, and pickups go on", () => {
+  const m = machine("count-fresh", RATE_LIMITED);
+  const at = now() - 120;
+  writeFileSync(join(m.state, "waiting-count"), `${at} 2\n`);
+  const r = m.tick();
+  assert.equal(r.status, 0, r.stderr);
+  const lines = r.stdout.split("\n").filter((l) => /review-queue count/.test(l));
+  assert.equal(lines.length, 1, r.stdout);
+  assert.match(lines[0], /^GitHub rate limited; using the review-queue count from \d\d:\d\d:\d\d \(2 waiting\)$/);
+  assert.doesNotMatch(r.stdout, HOLD);
+  assert.doesNotMatch(r.stdout, /factory PRs waiting on review \(cap/);
+  assert.doesNotMatch(read(join(m.state, "pass.json")), /holding/);
+  // A rate-limited tick does not refresh the stored count.
+  assert.equal(read(join(m.state, "waiting-count")), `${at} 2\n`);
+});
+
+test("rate limited with a fresh stored count at the cap: pickups are held by the waiting cap", () => {
+  const m = machine("count-cap", RATE_LIMITED);
+  writeFileSync(join(m.state, "waiting-count"), `${now() - 60} 3\n`);
+  const r = m.tick();
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^GitHub rate limited; using the review-queue count from \d\d:\d\d:\d\d \(3 waiting\)$/m);
+  assert.match(r.stdout, /^3 factory PRs waiting on review \(cap 3\); no new pickups$/m);
+  assert.match(read(join(m.state, "pass.json")), /"lastPassResult":"holding: 3 PRs waiting on review"/);
+});
+
+test("rate limited with a stale, missing or unreadable stored count: pickups hold as before", () => {
+  const bodies = [undefined, `${now() - 601} 0\n`, `${now() + 3600} 0\n`, "garbage\n", `${now()}\n`];
+  for (const [i, body] of bodies.entries()) {
+    const m = machine(`count-held-${i}`, RATE_LIMITED);
+    if (body !== undefined) writeFileSync(join(m.state, "waiting-count"), body);
+    const r = m.tick();
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, HOLD, String(body));
+    assert.doesNotMatch(r.stdout, /review-queue count/);
+    assert.match(read(join(m.state, "pass.json")), /"lastPassResult":"holding: GitHub rate limited"/);
+  }
+});
