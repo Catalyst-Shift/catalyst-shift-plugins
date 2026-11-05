@@ -39,7 +39,7 @@ only:** strategy, documents and Cowork sessions follow the three homes and
   drafts one with `/spec` and posts it. Kevin or Keith moves the card to
   Ready For Factory.
 - **The factory picks it up.** Kevin and Keith each run the factory on their own
-  Omarchy machine. A dispatcher checks Ready For Factory every 5 minutes and
+  Omarchy machine. A dispatcher checks Ready For Factory every 2 minutes and
   starts one unattended Claude Code session per card in its own worktree, up to
   a running cap. It starts nothing new while 3 factory PRs wait on review.
   Sessions are also started and steered by hand from Claude desktop or mobile

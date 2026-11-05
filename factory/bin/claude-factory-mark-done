@@ -36,4 +36,13 @@ case "${EXIT_CODE:-}.${EXIT_STATUS:-}" in
     ;;
 esac
 printf '%s\n' "$line" >"$f.tmp" && mv "$f.tmp" "$f"
+# A session just ended, so its PR may now need a review, a merge or the next
+# card: start a dispatcher tick in about 20 seconds (once this unit is gone)
+# instead of waiting for the timer. One pending kick is enough: a second
+# session ending meanwhile finds the unit name taken and does nothing.
+# CLAUDE_FACTORY_NO_KICK=1 turns it off (the tests set it).
+if [ -z "${CLAUDE_FACTORY_NO_KICK:-}" ] && command -v systemd-run >/dev/null 2>&1; then
+  systemd-run --user --quiet --collect --unit=claude-factory-kick --on-active=20 --timer-property=AccuracySec=1s \
+    systemctl --user start --no-block claude-factory.service </dev/null >/dev/null 2>&1 || true
+fi
 exit 0

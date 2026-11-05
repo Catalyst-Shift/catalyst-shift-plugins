@@ -11,7 +11,8 @@
 #
 # Both machines can list the same projects. Each picks cards assigned to its
 # owner or unassigned, and one machine waits before picking so they never
-# claim at the same moment: Kevin 0, Keith 150 (seconds).
+# claim at the same moment: Kevin 0, Keith 60 (seconds, under the timer's
+# 120-second interval).
 # offset 0
 #
 # Open PRs the factory didn't build are reviewed by the machine of whoever

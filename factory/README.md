@@ -1,6 +1,6 @@
 # factory/: the Claude dev factory dispatcher
 
-Every 5 minutes the dispatcher claims the top **Ready For Factory** card in each
+Every 2 minutes (and about 20 seconds after any factory session ends) the dispatcher claims the top **Ready For Factory** card in each
 Linear project you list, and starts one unattended Claude Code session for it in
 its own worktree. When that session has opened a PR, a fresh session reviews the
 PR and stamps it `Reviewed: <head sha>`. People merge, except for PRs whose risk
@@ -56,8 +56,12 @@ owner or unassigned, never cards assigned to the other person, and it re-checks
 the card before and after claiming it; the session it starts checks the
 assignee once more and ends without touching the card if the other machine won.
 To steer a card to one machine, assign it. Both timers fire at the same clock
-times (:00, :05, ...), and `offset 150` in Keith's repos.conf makes his machine
-pick about 2½ minutes later, so the two rarely look at the same card at once.
+times (:00, :02, :04, ...), and `offset 60` in Keith's repos.conf makes his machine
+pick about a minute later, so the two rarely look at the same card at once. An
+offset must be under 120 seconds (the timer's interval); a longer one is ignored.
+When a factory session ends, `claude-factory-mark-done` asks systemd for one
+extra tick about 20 seconds later (the transient unit `claude-factory-kick`), so
+a fresh PR's review, a merge or the next card doesn't wait for the clock.
 This needs both clocks synced (systemd-timesyncd or similar). Every Linear team
 the factory serves needs the statuses Ready For Factory, In Progress, In
 Review, Blocked and Done.
