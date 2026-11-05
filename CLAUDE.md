@@ -19,6 +19,7 @@ purpose: the block is byte-identical across surfaces and ends the file.
 | The dispatcher and installer are valid bash, hardcode no home path, and every `claude` / `systemd-run` call reads stdin from `/dev/null` | `tests/factory.test.mjs` | CAT-1298 |
 | A `factory-reflect` or `/correct` PR never touches a gate (`.github/`, rulesets, CODEOWNERS, required checks, the Ways of Working block, the ways-of-working skill) | `validate` step "A factory-reflect or /correct PR touches no gate", `scripts/retro-guard.mjs`, `tests/retro-guard.test.mjs` | CAT-1433 |
 | A merged factory PR is retro'd once: `retro: clean` or a `/reflect` session | `tests/factory-retro.test.mjs` | CAT-1433 |
+| Every dispatcher housekeeping model call names `$MODEL_HOUSEKEEPING` on its own line (no pinned call count, so parallel PRs don't conflict) | `tests/factory.test.mjs` "every builder and reviewer session passes --model" | CAT-1441 |
 
 ## Ways of Working — Catalyst Shift
 
